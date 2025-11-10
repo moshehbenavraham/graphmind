@@ -1,18 +1,19 @@
 # GraphMind Workflow System
 
-**Version**: 1.0
+**Version**: 1.1
 **Last Updated**: 2025-11-10
 
 ## Overview
 
-A 5-command workflow system for building GraphMind in context-sized chunks:
+A 7-command workflow system for building GraphMind in context-sized chunks:
 
 1. `/nextspec` - Analyze project, recommend next component
 2. `/spec` - Create user-focused specification
 3. `/design` - Create technical design
 4. `/tasks` - Generate implementation checklist
-5. `/validate` - Verify implementation completeness
-6. `/updateprd` - Sync PRD docs with reality
+5. `/implement` - Guide task-by-task implementation with AI assistance
+6. `/validate` - Verify implementation completeness
+7. `/updateprd` - Sync PRD docs with reality
 
 ## Setup for Claude Code
 
@@ -34,6 +35,7 @@ This enables the slash commands (`/nextspec`, `/spec`, `/design`, etc.) in your 
 | `/spec` | `NEXT_SPEC.md` | `specs/NNN/spec.md` | User-focused requirements |
 | `/design` | `spec.md` | `specs/NNN/design.md` | Technical architecture |
 | `/tasks` | `spec.md` + `design.md` | `specs/NNN/tasks.md` | Implementation checklist |
+| `/implement` | `tasks.md` | `implementation-notes.md` + updated `tasks.md` | AI-guided implementation |
 | `/validate` | Implemented code | `specs/NNN/validation.md` | Completion check |
 | `/updateprd` | `validation.md` | Updated PRD docs | Sync documentation |
 
@@ -52,7 +54,9 @@ This enables the slash commands (`/nextspec`, `/spec`, `/design`, etc.) in your 
     ↓
 /tasks → specs/001-component/tasks.md
     ↓
-IMPLEMENT (follow tasks.md)
+/implement → AI-guided task implementation
+    ↓         (updates tasks.md checkboxes)
+    ↓         (creates implementation-notes.md)
     ↓
 /validate → specs/001-component/validation.md
     ↓
@@ -71,6 +75,7 @@ graphmind/
 │       ├── spec.md
 │       ├── design.md
 │       ├── tasks.md
+│       ├── implement.md
 │       ├── validate.md
 │       └── updateprd.md
 ├── .workflow/
@@ -84,6 +89,7 @@ graphmind/
 │   │   ├── spec-template.md
 │   │   ├── design-template.md
 │   │   ├── tasks-template.md
+│   │   ├── implementation-notes-template.md
 │   │   └── validation-template.md
 │   └── README.md          # This file
 ├── docs/
@@ -99,6 +105,7 @@ graphmind/
     │   ├── spec.md
     │   ├── design.md
     │   ├── tasks.md
+    │   ├── implementation-notes.md  # Created by /implement
     │   ├── validation.md
     │   ├── contracts/     # API specifications
     │   └── checklists/    # Quality checklists
@@ -225,6 +232,12 @@ If you organize differently than `src/workers/`, `src/lib/`, etc.:
 
 ## Version History
 
+### v1.1 (2025-11-10)
+- Added `/implement` command for AI-guided task implementation
+- Added `implementation-notes-template.md` template
+- Updated workflow cycle to include /implement step
+- Now 7 commands total (was 6)
+
 ### v1.0 (2025-11-10)
 - Initial release
 - 6 commands: nextspec, spec, design, tasks, validate, updateprd
@@ -253,7 +266,7 @@ This workflow system is designed to:
 
 **Not designed for**:
 - ❌ Parallel feature development (single NEXT_SPEC at a time)
-- ❌ Automatic code generation (you still write the code)
+- ❌ Fully automatic code generation (AI assists, but you review and approve)
 - ❌ Testing code functionality (file existence only)
 - ❌ Team coordination (single developer focus)
 
