@@ -1,0 +1,20 @@
+{
+  "name": "graphmind",
+  "version": "0.1.0",
+  "description": "Voice-first personal knowledge assistant with GraphRAG on Cloudflare's edge network",
+  "private": true,
+  "author": "moshehbenavraham",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
