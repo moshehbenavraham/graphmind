@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.3.0] - 2025-11-10
+
+### Added
+
+- **Setup Spec Template** - New `setup-spec-template.md` for infrastructure work
+  - "Setup Goals" instead of forced "User Stories" format
+  - Better fit for foundational/prerequisite work (wrangler config, database setup, etc.)
+  - Sections: Configuration Requirements, Service Bindings, Data Schema
+
+- **Workflow State Tracking** - `.workflow/state.json` for simple state management
+  - Tracks NEXT_SPEC.md conversions to spec numbers
+  - Records spec status (tasks_generated, implemented, validated)
+  - Audit trail of workflow progression
+  - Eliminates need for grep searches to check state
+
+### Changed
+
+- **NEXT_SPEC Template Refactored** - 75% reduction in size, focused on scoping
+  - **Purpose**: Scoping and sequencing only, not full specification
+  - **Old**: 430 lines with full user stories, technical details, schemas
+  - **New**: 100 lines with scope boundaries and /spec feed data
+  - **Sections**: Why This Next, Scope Definition, What /spec Needs to Know, After This Spec
+  - **Removed**: Detailed user stories, implementation steps, complete schemas, token estimates
+
+- **Design Template Refactored** - Architectural focus, not literal code
+  - Focus on **decisions** ("Why this approach") not implementations
+  - **Patterns** over code ("Query strategy" not full Cypher queries)
+  - Added "Key Architectural Decisions" section
+  - Removed full code blocks (wrangler.toml, SQL schemas, Worker implementations)
+  - Shorter, higher-level content that won't drift from actual code
+
+### Removed
+
+- **Token Estimates** - Removed from all templates
+  - Unvalidated estimates removed from NEXT_SPEC header
+  - Token breakdown section removed
+  - Estimates created false expectations without validation
+
+### Philosophy Update
+
+**NEXT_SPEC.md Role Clarification**:
+- Analyzes project state → determines what's next
+- Validates scope → ensures single context window fit
+- Feeds /spec → provides expansion seeds
+- **NOT** a complete spec with full details
+
+**Workflow Separation of Concerns**:
+- `/nextspec`: "What's next and is it sized right?" (scoping)
+- `/spec`: "What are we building and why?" (requirements)
+- `/design`: "How are we building it?" (architecture)
+- `/tasks`: "Step-by-step implementation" (execution)
+
 ## [1.2.0] - 2025-11-10
 
 ### Added
@@ -66,6 +118,7 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 1.3.0   | 2025-11-10   | Workflow refinement - Setup spec template, state tracking, lighter NEXT_SPEC (scoping only), architectural design focus |
 | 1.2.0   | 2025-11-10   | Workflow system - Context-scoped development with 6 commands, automation scripts, templates, safeguards |
 | 1.1.0   | 2025-11-10   | Deployment simplification - FalkorDB Cloud only, removed self-hosted options, updated cost targets to ~$20/mo |
 | 1.0.0   | 2025-11-10   | Initial documentation suite - Complete PRD extraction: 15 docs, 8,500+ lines, phase guides, API specs, schemas |

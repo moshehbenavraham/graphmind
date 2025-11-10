@@ -28,6 +28,11 @@ Data Layer:
 Workers AI (Deepgram STT/TTS, Llama 3.1)
 ```
 
+**Key Architectural Decisions**:
+- [Decision 1: Why this approach over alternatives]
+- [Decision 2: Trade-offs made]
+- [Decision 3: Performance/cost considerations]
+
 ---
 
 ## Cloudflare Stack Decisions
@@ -35,118 +40,98 @@ Workers AI (Deepgram STT/TTS, Llama 3.1)
 ### Workers (API Endpoints)
 
 **Endpoints Required**:
+- `[METHOD] /api/[path]` - [Purpose and responsibility]
+- `[METHOD] /api/[path]` - [Purpose and responsibility]
 
-#### `POST /api/[endpoint-name]`
-- **Purpose**: [What this endpoint does]
-- **Auth**: Required/Optional (JWT)
-- **Rate Limit**: [X requests/minute]
-- **Request**: `{ "field": "type" }`
-- **Response**: `{ "field": "type" }`
+**Authentication Strategy**: [JWT validation approach, which endpoints require auth]
 
-#### `GET /api/[endpoint-name]`
-- **Purpose**: [What this endpoint does]
-- **Auth**: Required/Optional
-- **Cache**: KV cache (TTL: X seconds)
-- **Response**: `{ "field": "type" }`
+**Rate Limiting**: [Which endpoints, limits, strategy]
 
-**Additional endpoints**: [List any other endpoints]
+**Key Design Patterns**:
+- [Pattern 1: e.g., "Request validation at entry point"]
+- [Pattern 2: e.g., "Response normalization"]
 
 ---
 
 ### Durable Objects
 
-#### [DurableObjectClass] (if needed)
-- **Purpose**: [WebSocket session management / connection pooling / state coordination]
-- **State Managed**: [What state this DO maintains]
-- **Lifecycle**: [When created/destroyed]
-- **Concurrency**: [How many instances expected]
+**When to Use**:
+- WebSocket session management
+- Connection pooling (FalkorDB, external services)
+- State coordination across requests
 
-**Example**: `VoiceSessionManager` for WebSocket connections
+**[DurableObjectClass]** (if needed):
+- **Purpose**: [What state/connections this manages]
+- **Lifecycle**: [When created, when destroyed, max concurrency]
+- **State Persistence**: [What persists, what's ephemeral]
+- **Communication**: [How Workers communicate with this DO]
 
 ---
 
 ### D1 (SQLite)
 
-**Tables Used**:
+**Tables Required**:
+- `[table_name]` - [Purpose, key fields, relationships]
+- `[table_name]` - [Purpose, key fields, relationships]
 
-#### `[table_name]`
-```sql
-CREATE TABLE [table_name] (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  [field_name] TEXT,
-  created_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
+**Migration Strategy**:
+- Migration file: `migrations/[XXXX]_[description].sql`
+- [What's changing: new tables, columns, indexes]
+- [Rollback considerations]
 
-CREATE INDEX idx_[table]_user_id ON [table_name](user_id);
-```
+**Query Patterns**:
+1. **[Query Type]**: [Description, WHERE clauses, expected performance]
+2. **[Query Type]**: [Description, JOINs, indexes needed]
 
-**Queries for This Feature**:
-1. [Query description] - `SELECT ... FROM ... WHERE ...`
-2. [Query description] - `INSERT INTO ... VALUES ...`
-
-**Migrations Required**: Yes/No
-- If yes: [Description of what needs to be migrated]
+**Performance Considerations**:
+- Indexes: [Which fields, why]
+- Query optimization: [Specific patterns to avoid/use]
 
 ---
 
 ### KV (Key-Value Store)
 
-**Namespaces**: [GRAPHMIND_CACHE, GRAPHMIND_SESSIONS, etc.]
+**Caching Strategy**:
 
-**Keys Used**:
-- `entity:[entity_id]` - Entity cache (TTL: 1 hour)
-- `query:[query_hash]` - Query result cache (TTL: 1 hour)
-- `session:[session_id]` - Session data (TTL: 24 hours)
+**Keys**:
+- `[key_pattern]` - [What's cached, TTL, invalidation trigger]
+- `[key_pattern]` - [What's cached, TTL, invalidation trigger]
 
-**Cache Strategy**:
-- [When to cache]
-- [When to invalidate]
-- [Fallback behavior]
+**Cache Invalidation**:
+- [Event 1] → [Which keys to invalidate]
+- [Event 2] → [Which keys to invalidate]
+
+**Fallback Behavior**: [What happens on cache miss]
 
 ---
 
 ### R2 (Object Storage)
 
-**Buckets**: [graphmind-audio-dev, graphmind-audio-prod]
-
 **File Organization**:
 ```
-{user_id}/
-  audio/
-    notes/
-      {note_id}.mp3
-    queries/
-      {query_id}.mp3
+[bucket_name]/
+  {user_id}/
+    [category]/
+      {file_id}.[ext]
 ```
 
-**Access Pattern**: [How files are uploaded/retrieved]
-**Encryption**: [Yes/No and method]
+**Access Patterns**:
+- **Upload**: [When, by whom, validation]
+- **Retrieval**: [Signed URLs, expiration, who can access]
+- **Deletion**: [Lifecycle, user preference handling]
 
 ---
 
-## FalkorDB Schema
+## FalkorDB Schema Design
 
 ### Node Types
 
-#### :[NodeLabel]
-```cypher
-CREATE (:NodeLabel {
-  id: 'unique-id',
-  name: 'string',
-  user_id: 'string',  // For user data isolation
-  created_at: timestamp(),
-  [additional_properties]
-})
-```
+**:[NodeLabel]**
+- **Purpose**: [What this entity represents]
+- **Key Properties**: [Most important fields, validation rules]
+- **User Isolation**: [How user_id/namespace filtering works]
 
-**Properties**:
-- `id`: [Description]
-- `name`: [Description]
-- `user_id`: [Required for user isolation]
-
-**Indexes**:
+**Indexes Needed**:
 ```cypher
 CREATE INDEX FOR (n:NodeLabel) ON (n.user_id);
 CREATE INDEX FOR (n:NodeLabel) ON (n.name);
@@ -154,131 +139,62 @@ CREATE INDEX FOR (n:NodeLabel) ON (n.name);
 
 ### Relationships
 
-#### -[:RELATIONSHIP_TYPE]->
-```cypher
-CREATE (a:NodeA)-[:RELATIONSHIP_TYPE {
-  weight: float,
-  created_at: timestamp()
-}]->(b:NodeB)
-```
+**-[:RELATIONSHIP_TYPE]->**
+- **Semantics**: [What this relationship means]
+- **Direction**: [Why this direction vs bidirectional]
+- **Properties**: [Weight, timestamps, metadata]
 
-**Properties**: [Description of relationship properties]
+### Query Patterns
 
-### Key Cypher Queries
+**Pattern 1: [Use Case]**
+- **Goal**: [What information to retrieve]
+- **Cypher Strategy**: [MATCH pattern, traversal depth, RETURN format]
+- **Optimization**: [Indexes leveraged, LIMIT usage]
 
-#### Query 1: [Query Purpose]
-```cypher
-MATCH (n:NodeLabel {user_id: $userId})
-WHERE n.name CONTAINS $searchTerm
-RETURN n
-LIMIT 10
-```
-
-#### Query 2: [Query Purpose]
-```cypher
-MATCH (start:NodeA {id: $startId})-[:REL*1..3]->(related)
-WHERE start.user_id = $userId
-RETURN related
-```
-
-#### Query 3: Entity Extraction
-```cypher
-MERGE (e:Entity {name: $entityName, user_id: $userId})
-ON CREATE SET e.created_at = timestamp()
-ON MATCH SET e.updated_at = timestamp()
-RETURN e
-```
+**Pattern 2: Entity Extraction**
+- **Goal**: [Create/merge entities from transcript]
+- **Strategy**: [MERGE patterns, property updates]
+- **Conflict Resolution**: [How to handle duplicates/ambiguity]
 
 ### GraphRAG SDK Integration
 
 **Version**: graphrag_sdk v0.5+
 **Ontology**: Auto-detection (no manual setup)
-**Context Window**: [How much context to include in queries]
-**Caching**: Entity resolution in KV, query results in KV
+**Context Strategy**: [How much context to include, when to expand/prune]
 
 ---
 
-## Voice AI Pipeline
+## Voice AI Pipeline Design
 
-### Speech-to-Text
+*(Only if feature involves voice interaction)*
+
+### Speech-to-Text Flow
 
 **Model**: `@cf/deepgram/nova-3`
-**Configuration**:
-- Streaming: Yes/No
-- Language: en-US
-- Model tier: Nova-3 (highest accuracy)
+**Mode**: [Streaming vs batch, when to use each]
+**Error Handling**: [Poor audio quality, network interruption]
 
-**Latency Target**: <2 seconds (p95)
-**Error Handling**: [How to handle poor audio quality]
+### Text-to-Speech Flow
 
----
+**Model**: `@cf/deepgram/aura-2`
+**Streaming**: [Chunk size, buffer management]
+**Latency Optimization**: [Pre-generation, parallel processing]
 
-### Text-to-Speech
-
-**Model**: `@cf/deepgram/aura-1` or `aura-2`
-**Configuration**:
-- Voice: [Voice ID]
-- Streaming: Yes
-- Speed: 1.0
-
-**Latency Target**: <1 second to start playback
-**Error Handling**: [Fallback approach]
-
----
-
-### Entity Extraction
+### Entity Extraction Strategy
 
 **Model**: `@cf/meta/llama-3.1-8b-instruct`
-**Prompt**:
-```
-Extract entities and relationships from this transcript:
-[transcript]
+**Prompt Design**: [Key prompt structure, examples, constraints]
+**Batch vs Real-Time**: [When to batch, performance trade-offs]
 
-Return JSON format:
-{
-  "entities": [{"name": "...", "type": "..."}],
-  "relationships": [{"from": "...", "to": "...", "type": "..."}]
-}
-```
+### WebRTC Connection Management
 
-**Batch Processing**: [When to batch vs real-time]
-**Accuracy Target**: [Expected extraction quality]
+**Connection Flow**:
+1. [Step 1: Session request]
+2. [Step 2: Durable Object allocation]
+3. [Step 3: WebSocket establishment]
+4. [Step 4: Audio streaming begins]
 
----
-
-### Turn Detection
-
-**Pipecat Configuration**:
-- Model: `smart-turn-v2`
-- Silence threshold: [X ms]
-- Interruption handling: [Approach]
-
----
-
-### WebRTC Flow
-
-1. User opens app → Request session
-2. Worker creates Durable Object (VoiceSessionManager)
-3. WebSocket connection established
-4. Audio streaming begins (WebRTC)
-5. STT processes chunks → Transcript
-6. Entity extraction on transcript
-7. [Additional processing]
-8. TTS generates response
-9. Audio streams back to user
-
-**Connection Resilience**:
-- Reconnection strategy: [Automatic retry with exponential backoff]
-- Buffer size: [X seconds of audio]
-- Network error handling: [Graceful degradation]
-
----
-
-## API Contracts
-
-[Either inline specifications or references to files in contracts/ directory]
-
-See `contracts/[endpoint-name].md` for detailed specifications.
+**Resilience Strategy**: [Reconnection, buffering, graceful degradation]
 
 ---
 
@@ -286,81 +202,121 @@ See `contracts/[endpoint-name].md` for detailed specifications.
 
 ### Primary User Action: [Action Name]
 
-1. **User Input**: [User does X]
-2. **Frontend**: [Frontend sends Y to Z endpoint]
-3. **Worker**: [Worker validates and processes]
-4. **Durable Object** (if needed): [DO manages state]
-5. **D1**: [Store/retrieve data]
-6. **FalkorDB**: [Query/update graph]
-7. **KV**: [Cache results]
-8. **Response**: [Return data to user]
+**Happy Path**:
+1. User: [Action taken]
+2. Frontend: [HTTP/WebSocket request]
+3. Worker: [Validation, routing]
+4. [Durable Object]: [State management] *(if applicable)*
+5. [D1/FalkorDB]: [Data operation]
+6. [KV]: [Caching] *(if applicable)*
+7. Response: [Format, latency target]
 
-**Error Handling**:
-- Step 2 fails: [Fallback behavior]
-- Step 5 fails: [Fallback behavior]
-- Step 6 fails: [Fallback behavior]
-
----
-
-## Performance Targets
-
-[From success criteria in spec.md]
-
-- **Voice transcription**: <2s (p95)
-- **Entity extraction**: <3s
-- **Graph query**: <500ms uncached, <100ms cached
-- **Answer generation**: <2s
-- **TTS playback**: <1s to start
-- **Page load**: <2s
-
-**Optimization Strategy**:
-- KV caching for frequently accessed data
-- Connection pooling in Durable Objects
-- Batch processing where applicable
-- Edge caching for static assets
+**Error Scenarios**:
+- **[Failure Point]**: [Cause] → [Fallback behavior, user feedback]
+- **[Failure Point]**: [Cause] → [Retry strategy, degradation]
 
 ---
 
-## Security Considerations
+## Performance Targets & Strategy
 
-- **Authentication**: JWT validation on all protected endpoints
-- **User Isolation**:
-  - D1: Filter by `user_id`
-  - FalkorDB: Separate namespaces or `user_id` property filtering
-- **Input Validation**:
-  - Sanitize all user inputs
-  - Validate audio file sizes/formats
-- **Rate Limiting**: [X requests/minute per user]
-- **Secrets Management**: Environment variables in Wrangler, never hardcoded
-- **Audio Encryption** (if R2): [Encryption method]
+### Latency Targets
+- **[Operation 1]**: <[X]ms (p95)
+- **[Operation 2]**: <[X]s (p95)
 
----
-
-## Implementation Notes
-
-### Dependencies
-- [Other features this requires]
-- [External services]
-
-### Migration Path
-- [D1 migrations needed]
-- [FalkorDB schema updates]
-
-### Deployment Considerations
-- [Environment-specific configs]
-- [Rollout strategy]
-
-### Testing Approach
-- Unit tests: [What to test]
-- Integration tests: [What to test]
-- Voice quality testing: [How to validate]
-- Performance testing: [How to measure]
+### Optimization Strategies
+- **Caching**: [What to cache, when, TTL decisions]
+- **Connection Pooling**: [Which services, pool size]
+- **Batch Processing**: [When to batch, trade-offs]
+- **Edge Optimization**: [Cloudflare-specific patterns]
 
 ---
 
-## Open Questions
+## Security Design
 
-[Any unresolved technical decisions]
+### Authentication & Authorization
+- **Token Validation**: [Where, how, caching]
+- **User Isolation**: [D1 filtering, FalkorDB namespaces]
 
-1. [Question 1]
-2. [Question 2]
+### Input Validation
+- **[Endpoint/Feature]**: [Validation rules, sanitization]
+- **Audio Files**: [Size limits, format validation]
+
+### Secrets Management
+- **Environment Variables**: [Which secrets, rotation strategy]
+- **Wrangler Secrets**: [How to set, which environments]
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation
+- [What to build first and why]
+- [Minimal working version]
+
+### Phase 2: Core Feature
+- [Main functionality]
+- [Integration points]
+
+### Phase 3: Polish
+- [Error handling]
+- [Performance tuning]
+- [Edge cases]
+
+---
+
+## File Structure & Organization
+
+**New Files to Create**:
+```
+src/
+├── workers/api/[endpoint].js
+├── models/[entity].js
+├── services/[service].js
+└── lib/
+    ├── [category]/[utility].js
+```
+
+**Modified Files**:
+- `wrangler.toml` - [What bindings to add]
+- `migrations/[XXXX]_[name].sql` - [New migration]
+
+---
+
+## Testing Strategy
+
+### Unit Testing
+- **[Component]**: [What to test, mocking strategy]
+- **[Component]**: [Edge cases, validation]
+
+### Integration Testing
+- **[Flow]**: [End-to-end path, verification points]
+
+### Performance Testing
+- **[Metric]**: [How to measure, acceptable range]
+
+---
+
+## Deployment Considerations
+
+### Environment Differences
+- **Local**: [What's different in dev]
+- **Production**: [Additional configuration needed]
+
+### Migration Strategy
+- **Database**: [How to apply, rollback plan]
+- **Code**: [Deployment order, compatibility]
+
+---
+
+## Open Questions & Decisions Needed
+
+1. **[Question 1]**: [Options, recommendation, trade-offs]
+2. **[Question 2]**: [Options, recommendation, trade-offs]
+
+---
+
+## References
+
+- **Spec**: [Link to spec.md]
+- **PRD**: [Relevant sections]
+- **External Docs**: [Cloudflare, FalkorDB, etc.]

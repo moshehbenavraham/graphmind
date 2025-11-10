@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-11-10",
+  "next_spec_history": [
+    {
+      "date": "2025-11-10",
+      "next_spec_title": "Wrangler Configuration & Project Setup",
+      "converted_to_spec": "001-wrangler-setup",
+      "status": "tasks_generated",
+      "phase": "Phase 1 - Foundation"
+    }
+  ],
+  "current_spec": "001-wrangler-setup",
+  "completed_specs": []
+}
