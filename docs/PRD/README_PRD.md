@@ -23,13 +23,13 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 **Last Updated**: 2025-11-10
 **Current Phase**: Phase 1 - Foundation
-**Phase Progress**: 50%
+**Phase Progress**: 75%
 
 ### Implementation Progress
 
 | Phase | Status | Progress | Completion |
 |-------|--------|----------|------------|
-| Phase 1: Foundation | 🔄 In Progress | 50% | - |
+| Phase 1: Foundation | 🔄 In Progress | 75% | - |
 | Phase 2: Knowledge Graph | 🔲 Not Started | 0% | - |
 | Phase 3: Voice Query | 🔲 Not Started | 0% | - |
 | Phase 4: Polish & Features | 🔲 Not Started | 0% | - |
@@ -37,7 +37,19 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 ### Recent Completions
 
-- ✅ Wrangler Configuration & Project Setup (001-wrangler-setup) - Completed 2025-11-10
+- ✅ **Authentication System** ([002-auth-system](../../specs/002-auth-system)) - Deployed 2025-11-10
+  - User registration with JWT tokens
+  - Secure login with bcrypt password hashing
+  - Protected routes with authentication middleware
+  - Rate limiting (5 login attempts, 10 registrations)
+  - User data isolation (namespace per user)
+  - **Live in Production**: https://graphmind-api.apex-web-services-llc-0d4.workers.dev
+
+- ✅ **Wrangler Configuration & Project Setup** ([001-wrangler-setup](../../specs/001-wrangler-setup)) - Completed 2025-11-10
+  - Cloudflare Workers project initialized
+  - D1 database created (users, sessions, voice_notes tables)
+  - KV, R2, Workers AI bindings configured
+  - Basic Worker with health check endpoints
 
 ### In Progress
 
@@ -45,7 +57,11 @@ No features currently in progress.
 
 ### Next Up
 
-- 🎯 See [NEXT_SPEC.md](NEXT_SPEC.md) for next recommended component (Authentication System)
+**Next Recommended**: FalkorDB Connection & Setup
+
+After authentication is complete, the next priority is establishing FalkorDB connection utilities and testing the knowledge graph infrastructure before implementing voice capture.
+
+See [NEXT_SPEC.md](NEXT_SPEC.md) for detailed next spec recommendation (if available), or run `/nextspec` to generate it.
 
 ---
 

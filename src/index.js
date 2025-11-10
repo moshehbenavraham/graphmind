@@ -3,6 +3,12 @@
  * Voice-first personal knowledge assistant with GraphRAG
  */
 
+import { handleRegister } from './api/auth/register.js';
+import { handleLogin } from './api/auth/login.js';
+import { handleGetMe } from './api/auth/me.js';
+import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
+import { internalServerError } from './utils/errors.js';
+
 export default {
   /**
    * Fetch handler - processes all incoming HTTP requests
@@ -12,10 +18,33 @@ export default {
    * @returns {Response} HTTP response
    */
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
+      const method = request.method;
 
-    // Basic health check endpoint
-    if (url.pathname === '/') {
+      // T101: Handle CORS preflight requests
+      if (method === 'OPTIONS') {
+        return corsPreflightResponse();
+      }
+
+      // T100: Authentication Routes
+      if (url.pathname === '/api/auth/register' && method === 'POST') {
+        const response = await handleRegister(request, env);
+        return addCorsHeaders(response);
+      }
+
+      if (url.pathname === '/api/auth/login' && method === 'POST') {
+        const response = await handleLogin(request, env);
+        return addCorsHeaders(response);
+      }
+
+      if (url.pathname === '/api/auth/me' && method === 'GET') {
+        const response = await handleGetMe(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // Basic health check endpoint
+      if (url.pathname === '/') {
       return new Response(JSON.stringify({
         status: 'ok',
         service: 'graphmind-api',
@@ -86,16 +115,24 @@ export default {
       }
     }
 
-    // 404 handler for unknown routes
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      message: 'The requested endpoint does not exist',
-      path: url.pathname
-    }), {
-      status: 404,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+      // 404 handler for unknown routes
+      return new Response(JSON.stringify({
+        error: 'Not Found',
+        message: 'The requested endpoint does not exist',
+        path: url.pathname
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+    } catch (error) {
+      // T102: Global error handling
+      console.error('[Worker] Uncaught error:', error);
+
+      // Never expose internal errors or sensitive data
+      return internalServerError('An unexpected error occurred');
+    }
   }
 };

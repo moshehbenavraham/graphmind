@@ -12,6 +12,7 @@
 
 **Last Updated**: 2025-11-10
 **Current Phase**: Phase 1 - Foundation (50% complete)
+**Next Spec**: [Authentication System](NEXT_SPEC.md)
 
 ### Completed Components
 
@@ -40,7 +41,7 @@ No components currently in progress.
 
 **Database**:
 - D1 Tables: 3 tables (users, sessions, voice_notes)
-- FalkorDB Schema: Not yet implemented (planned)
+- FalkorDB Schema: Not yet implemented (planned for Phase 2)
 - Migrations Applied: 1 (0001_initial_schema.sql)
 
 **API Endpoints**:
@@ -58,7 +59,20 @@ No components currently in progress.
 
 ### Next Priority
 
-See [NEXT_SPEC.md](NEXT_SPEC.md) for the next recommended component to build: **Authentication System**
+**🎯 Authentication System** - [See NEXT_SPEC.md](NEXT_SPEC.md)
+
+Required before voice capture - enables user-scoped features and data isolation.
+
+**What's Next**:
+1. Run `/spec "Authentication System"` to create detailed spec
+2. Implement user registration and JWT-based login
+3. Add session middleware and rate limiting
+4. Assign FalkorDB namespaces per user
+
+**After Authentication**:
+- Voice capture system (WebRTC + Deepgram STT)
+- FalkorDB connection setup (Durable Objects)
+- Basic frontend UI (registration, login, recording)
 
 ---
 

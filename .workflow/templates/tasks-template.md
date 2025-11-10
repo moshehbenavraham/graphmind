@@ -287,3 +287,47 @@
 **Estimated Timeline**: [X] weeks
 - MVP (US1): [X] days
 - Full feature: [X] days
+
+---
+
+## Getting Started
+
+### Option 1: AI-Assisted Implementation (Recommended)
+
+Use the `/implement` command to work through tasks with AI assistance:
+
+```bash
+/implement
+```
+
+The `/implement` agent will:
+- Guide you through each task step-by-step
+- Provide code examples and explanations
+- Track progress automatically
+- Help debug issues as they arise
+- Validate completion against success criteria
+
+### Option 2: Manual Implementation
+
+Work through tasks manually:
+1. Start with Phase 1 (Setup): [First task]
+2. Follow task sequence (T001 → T[END])
+3. Test after each user story
+4. Run `/validate` when complete
+5. Run `/updateprd` to update PRD documentation
+
+**Recommendation**: Use `/implement` for faster, more reliable implementation with AI assistance.
+
+---
+
+## Complete Workflow
+
+```
+/nextspec   → Generate next recommended feature
+/spec       → Create detailed specification
+/design     → Create technical architecture
+/tasks      → Generate implementation checklist
+/implement  → AI-assisted implementation (recommended)
+/validate   → Validate against success criteria
+/updateprd  → Update PRD documentation
+```

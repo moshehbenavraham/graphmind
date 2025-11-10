@@ -24,11 +24,12 @@ id = "bc58a6761f474954aafd55c2c1616108"
 binding = "AUDIO_BUCKET"
 bucket_name = "graphmind-audio"
 
-# Durable Objects (configured but not implemented yet)
-[[durable_objects.bindings]]
-name = "VOICE_SESSION"
-class_name = "VoiceSessionManager"
-script_name = "graphmind-api"
+# Durable Objects (will be implemented in Phase 2 - Voice Features)
+# Commented out for Phase 1 deployment (Auth System only)
+# [[durable_objects.bindings]]
+# name = "VOICE_SESSION"
+# class_name = "VoiceSessionManager"
+# script_name = "graphmind-api"
 
 # Workers AI
 [ai]
