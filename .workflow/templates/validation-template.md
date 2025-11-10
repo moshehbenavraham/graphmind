@@ -523,10 +523,10 @@ wrangler deploy
 
 ### If Ready (✅):
 1. Review any P2/P3 issues for quick fixes
-2. Deploy to production: `wrangler deploy`
-3. Run post-deploy smoke tests
-4. Monitor Cloudflare analytics
-5. Gather user feedback
+2. Update PRD with implementation progress: `/updateprd`
+3. Generate next specification: `/nextspec`
+4. Begin implementing next feature
+5. Deploy when multiple features are ready
 
 ### If Issues Found (⚠️):
 1. Address all P1 blockers

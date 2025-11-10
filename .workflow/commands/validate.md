@@ -291,7 +291,11 @@ Output:
 4. [P2] Test graph query performance
 
 **Next Steps**:
-{If ready}: Deploy to production with `wrangler deploy`
+{If ready}:
+1. Update PRD with implementation progress: `/updateprd`
+2. Generate next specification: `/nextspec`
+3. Begin next feature implementation
+
 {If issues}: Address P1 issues, then re-run `/validate`
 ```
 
