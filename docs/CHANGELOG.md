@@ -11,6 +11,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.4.0] - 2025-11-10
+
+### Added
+
+- **Feature 001: Wrangler Configuration & Project Setup** - Complete foundational infrastructure
+  - Cloudflare Workers project initialized with wrangler.toml configuration
+  - D1 database `graphmind-db` created with complete schema (users, sessions, voice_notes)
+  - KV namespace `GRAPHMIND_KV` created and configured
+  - R2 bucket `graphmind-audio` configured for future audio storage
+  - Workers AI binding configured for future voice processing
+  - Durable Objects binding configured for future WebSocket sessions
+
+- **Worker Implementation** - Health check system in `src/index.js`
+  - `GET /` endpoint: Basic health with binding availability status
+  - `GET /api/health` endpoint: Detailed health with D1 connectivity test (13ms latency)
+  - 404 handler for unknown routes with helpful error messages
+  - Proper error handling and JSON responses
+
+- **Database Schema** - Complete D1 migration (0001_initial_schema.sql)
+  - `users` table: User accounts with FalkorDB namespace isolation
+  - `sessions` table: Session management with type and expiration tracking
+  - `voice_notes` table: Voice note transcripts with processing status
+  - 6 indexes for query optimization (email, user_id, expires_at, created_at)
+
+- **Developer Environment** - Complete local development setup
+  - npm scripts: dev, deploy, db:create, db:migrate:local, db:migrate, db:shell, kv:create
+  - .env.example with comprehensive setup instructions
+  - .gitignore updated with Node.js entries (node_modules/, npm logs)
+  - Project directories: src/, migrations/, tests/
+
+- **Documentation** - Updated README.md
+  - Comprehensive 8-step setup guide
+  - Prerequisites section (Node.js 18+, npm, Cloudflare account)
+  - Database setup instructions with copy/paste IDs
+  - Development commands reference
+  - Troubleshooting section (port conflicts, missing credentials, database issues)
+
+- **Implementation Tracking** - specs/001-wrangler-setup/
+  - Complete task checklist (73/73 tasks completed)
+  - Implementation notes with decisions and metrics
+  - Performance validation (dev server <5s, queries <100ms)
+
+### Changed
+
+- **Project Status** - Moved from "Pre-Implementation" to "Phase 1 - Foundation (In Progress)"
+  - First feature complete: Wrangler Configuration & Project Setup
+  - Local development environment fully operational
+  - Ready for next features (Authentication, FalkorDB, Voice Capture)
+
+### Performance
+
+- Dev server start time: <5 seconds (target: <5s) ✅
+- Database query latency: 0-13ms (target: <100ms) ✅
+- Setup time: <10 minutes (target: <10 min) ✅
+- Migration execution: 9 SQL commands, 0 errors ✅
+
+### Infrastructure
+
+- **Cloudflare Account**: Apex Web Services LLC
+- **D1 Database ID**: 5e0037ac-48c9-4e46-84ee-7aa41e517fc0 (region: EEUR)
+- **KV Namespace ID**: bc58a6761f474954aafd55c2c1616108
+- **Wrangler Version**: 4.46.0
+- **Node.js Version**: v22.19.0
+
 ## [1.3.0] - 2025-11-10
 
 ### Added
@@ -118,6 +182,7 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 1.4.0   | 2025-11-10   | Feature 001 complete - Wrangler config, D1 schema, KV namespace, Worker health checks, dev environment (73/73 tasks) |
 | 1.3.0   | 2025-11-10   | Workflow refinement - Setup spec template, state tracking, lighter NEXT_SPEC (scoping only), architectural design focus |
 | 1.2.0   | 2025-11-10   | Workflow system - Context-scoped development with 6 commands, automation scripts, templates, safeguards |
 | 1.1.0   | 2025-11-10   | Deployment simplification - FalkorDB Cloud only, removed self-hosted options, updated cost targets to ~$20/mo |

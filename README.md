@@ -24,33 +24,70 @@ GraphMind is an intelligent "second brain" that captures, organizes, and retriev
 
 ## Project Status
 
-**Current Phase:** Planning / Pre-Implementation
+**Current Phase:** Phase 1 - Foundation (In Progress)
 
-- Planning Complete
-- Phase 1 (Foundation): Not Started
+- ✅ Planning Complete
+- ✅ Wrangler Configuration & Project Setup (Feature 001) - Complete
+- 🚧 Phase 1 (Foundation): In Progress
 - Target MVP: 12 weeks from start
 
 See [Implementation Phases](docs/PRD/README_PRD.md#phases) for details.
 
-## Quick Start
+## Setup
 
-### For Developers
+### Prerequisites
 
-```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd graphmind
+Before starting, ensure you have:
+- **Node.js 18+** (verify with `node --version`)
+- **npm** or **pnpm** package manager
+- **Cloudflare account** with API token ([Get token here](https://dash.cloudflare.com/profile/api-tokens))
 
-# 2. Install dependencies
-npm install
+### Installation
 
-# 3. Set up Cloudflare credentials
-cp .env.example .env
-# Edit .env with your Cloudflare API token and account ID
+1. **Clone the repository**
+   ```bash
+   git clone <repo-url>
+   cd graphmind
+   ```
 
-# 4. Start local development
-npm run dev
-```
+2. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env and fill in:
+   # - CLOUDFLARE_API_TOKEN (from Cloudflare dashboard)
+   # - CLOUDFLARE_ACCOUNT_ID (from Cloudflare dashboard)
+   # - FalkorDB credentials (optional for now - future feature)
+   ```
+
+3. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+4. **Create D1 database**
+   ```bash
+   npm run db:create
+   ```
+   Copy the `database_id` from the output and paste it into `wrangler.toml` under `[[d1_databases]]`
+
+5. **Create KV namespace**
+   ```bash
+   npm run kv:create
+   ```
+   Copy the `id` from the output and paste it into `wrangler.toml` under `[[kv_namespaces]]`
+
+6. **Run database migrations**
+   ```bash
+   npm run db:migrate:local
+   ```
+
+7. **Start development server**
+   ```bash
+   npm run dev
+   ```
+
+8. **Verify setup**
+   Visit http://localhost:8787/ - you should see a JSON health check response with all bindings showing as available.
 
 See **[docs/SETUP.md](docs/SETUP.md)** for complete setup instructions.
 
@@ -114,20 +151,94 @@ Execute query → Results → Llama 3.1 answer generation
 Deepgram TTS → Audio response → Stream to user
 ```
 
-## Development Workflow
+## Development Commands
 
+### Local Development
 ```bash
-# Start local dev server
+# Start local dev server (with hot reload)
 npm run dev
-
-# Run tests (when implemented)
-npm test
 
 # Generate TypeScript types for Cloudflare bindings
 npm run cf-typegen
+```
 
-# Deploy to production
+### Database Management
+```bash
+# Create D1 database
+npm run db:create
+
+# Apply migrations locally
+npm run db:migrate:local
+
+# Apply migrations to remote database
+npm run db:migrate
+
+# Execute SQL against local database
+npm run db:shell "SELECT * FROM users;"
+```
+
+### Key-Value Store
+```bash
+# Create KV namespace
+npm run kv:create
+```
+
+### Deployment
+```bash
+# Deploy to production (requires configured wrangler.toml)
 npm run deploy
+```
+
+### Testing
+```bash
+# Run tests (when implemented)
+npm test
+```
+
+## Troubleshooting
+
+### Port Conflicts
+
+**Problem**: "Address already in use" error when starting dev server
+
+**Solution**:
+```bash
+# Find and kill process using port 8787
+lsof -ti:8787 | xargs kill -9
+
+# Or specify a different port
+npx wrangler dev --port 8788
+```
+
+### Missing Credentials
+
+**Problem**: "Authentication error" or "API token invalid"
+
+**Solution**:
+1. Verify your `.env` file exists and has correct values
+2. Get a new API token from https://dash.cloudflare.com/profile/api-tokens
+3. Ensure the token has proper permissions (Edit Cloudflare Workers)
+4. Check that `CLOUDFLARE_ACCOUNT_ID` matches your account
+
+### Database Not Found
+
+**Problem**: "Database not found" when running migrations
+
+**Solution**:
+1. Ensure you've created the database: `npm run db:create`
+2. Copy the `database_id` from output into `wrangler.toml`
+3. Try again: `npm run db:migrate:local`
+
+### Wrangler Configuration Invalid
+
+**Problem**: "Invalid configuration" error
+
+**Solution**:
+```bash
+# Verify wrangler.toml syntax
+npx wrangler whoami
+
+# Check for empty binding IDs - they should be filled in after service creation
 ```
 
 ## Cost Structure
@@ -150,10 +261,6 @@ This project is in early development. Contribution guidelines will be added once
 - [Pipecat](https://github.com/pipecat-ai/pipecat) - Voice AI framework
 - [Deepgram](https://deepgram.com/) - STT/TTS models
 - [Llama 3.1-8b](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct) - Entity extraction & Q&A
-
-## Author
-
-**moshehbenavraham**
 
 ## License
 

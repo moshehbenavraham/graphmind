@@ -1,13 +1,17 @@
 {
-  "name": "graphmind",
+  "name": "graphmind-api",
   "version": "0.1.0",
-  "description": "Voice-first personal knowledge assistant with GraphRAG on Cloudflare's edge network",
+  "description": "GraphMind Voice-First Knowledge Assistant API",
   "private": true,
-  "author": "moshehbenavraham",
   "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create graphmind-db",
+    "db:migrate:local": "wrangler d1 migrations apply graphmind-db --local",
+    "db:migrate": "wrangler d1 migrations apply graphmind-db",
+    "db:shell": "wrangler d1 execute graphmind-db --local --command",
+    "kv:create": "wrangler kv:namespace create GRAPHMIND_KV",
     "cf-typegen": "wrangler types",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
