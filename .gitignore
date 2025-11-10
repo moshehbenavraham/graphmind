@@ -215,6 +215,9 @@ __marimo__/
 # Project temporary files
 temp/
 
+# Workflow specs (local development artifacts)
+specs/
+
 # Claude Code
 # Claude Code local configuration and commands
 .claude/
