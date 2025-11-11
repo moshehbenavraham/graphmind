@@ -44,6 +44,27 @@ const RATE_LIMITS = {
     window: 60, // 10 requests per minute
     scope: 'user',
   },
+  // Entity extraction endpoints - per-user limits (Feature 005)
+  'entities:extract': {
+    limit: 10,
+    window: 60, // 10 requests per minute (manual extraction)
+    scope: 'user',
+  },
+  'entities:extract-batch': {
+    limit: 5,
+    window: 3600, // 5 requests per hour (batch extraction)
+    scope: 'user',
+  },
+  'entities:view': {
+    limit: 60,
+    window: 60, // 60 requests per minute (view extracted entities)
+    scope: 'user',
+  },
+  'entities:cache-lookup': {
+    limit: 120,
+    window: 60, // 120 requests per minute (entity resolution cache lookup)
+    scope: 'user',
+  },
   // Default limit for unlisted endpoints
   default: {
     limit: 100,

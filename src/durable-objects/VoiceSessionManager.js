@@ -23,6 +23,7 @@ import { validateAudioChunk, getValidationErrorMessage, isRecoverableValidationE
 import { getSession, updateSessionStatus } from '../lib/session/session-manager.js';
 import { insertVoiceNote } from '../lib/db/voice-notes-queries.js';
 import { createLogger } from '../utils/logger.js';
+import { enqueueExtractionJob } from '../services/extraction-job.service.js';
 
 /**
  * Maximum session duration in milliseconds (10 minutes)
@@ -544,6 +545,25 @@ export class VoiceSessionManager {
         word_count,
         transcript_length: sanitized.length
       });
+
+      // Trigger automatic entity extraction (Feature 005)
+      // Enqueue extraction job in background - don't block voice note completion
+      try {
+        await enqueueExtractionJob(
+          this.env,
+          note_id,
+          this.sessionMetadata.user_id,
+          sanitized
+        );
+        this.logger.info('Entity extraction job enqueued', { note_id });
+      } catch (extractionError) {
+        // Log error but don't fail voice note save if extraction enqueue fails
+        this.logger.error('Failed to enqueue entity extraction job', {
+          note_id,
+          error: extractionError.message
+        });
+        // Continue - extraction can be triggered manually later if needed
+      }
 
       return {
         note_id,

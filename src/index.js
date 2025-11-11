@@ -18,6 +18,7 @@ import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
 import { getSession } from './lib/session/session-manager.js';
+import { rateLimitMiddleware, addRateLimitHeaders } from './middleware/rateLimit.js';
 
 // Export Durable Objects
 export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
@@ -212,10 +213,17 @@ export default {
           return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
         }
 
-        const response = await extractEntitiesForNote(request, env, {
+        // Check rate limit (10 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'entities:extract', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await extractEntitiesForNote(request, env, {
           userId: claims.sub,
           noteId
         });
+        response = addRateLimitHeaders(response, request);
         return addCorsHeaders(response);
       }
 
@@ -237,10 +245,17 @@ export default {
           return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
         }
 
-        const response = await getEntitiesForNote(request, env, {
+        // Check rate limit (60 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'entities:view', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await getEntitiesForNote(request, env, {
           userId: claims.sub,
           noteId
         });
+        response = addRateLimitHeaders(response, request);
         return addCorsHeaders(response);
       }
 
@@ -259,9 +274,16 @@ export default {
           return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
         }
 
-        const response = await extractEntitiesBatch(request, env, {
+        // Check rate limit (5 requests/hour per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'entities:extract-batch', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await extractEntitiesBatch(request, env, {
           userId: claims.sub
         });
+        response = addRateLimitHeaders(response, request);
         return addCorsHeaders(response);
       }
 
@@ -283,10 +305,17 @@ export default {
           return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
         }
 
-        const response = await lookupEntityCache(request, env, {
+        // Check rate limit (120 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'entities:cache-lookup', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await lookupEntityCache(request, env, {
           userId: claims.sub,
           entityKey
         });
+        response = addRateLimitHeaders(response, request);
         return addCorsHeaders(response);
       }
 

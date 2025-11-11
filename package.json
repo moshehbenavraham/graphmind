@@ -13,9 +13,13 @@
     "db:shell": "wrangler d1 execute graphmind-db --local --command",
     "kv:create": "wrangler kv:namespace create GRAPHMIND_KV",
     "cf-typegen": "wrangler types",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "devDependencies": {
+    "@vitest/ui": "^4.0.8",
+    "vitest": "^4.0.8",
     "wrangler": "^4.0.0"
   },
   "engines": {
