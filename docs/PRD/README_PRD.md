@@ -23,17 +23,23 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 **Last Updated**: 2025-11-11
 **Current Phase**: Phase 2 - Knowledge Graph & Entity Extraction
-**Next Spec**: [NEXT_SPEC.md](./NEXT_SPEC.md) - Entity Extraction Pipeline
+**Phase Progress**: 25% complete
 
 ### Implementation Progress
 
 | Phase | Status | Progress | Completion |
 |-------|--------|----------|------------|
 | Phase 1: Foundation | ✅ Complete | 100% | 2025-11-11 |
-| Phase 2: Knowledge Graph | 🔄 In Progress | 25% (1 of 4 features) | - |
+| Phase 2: Knowledge Graph | 🔄 In Progress | 25% | - |
 | Phase 3: Voice Query | 🔲 Not Started | 0% | - |
 | Phase 4: Polish & Features | 🔲 Not Started | 0% | - |
 | Phase 5: Advanced Features | 🔲 Not Started | 0% | - |
+
+**Phase 2 Breakdown**:
+- ✅ Feature 004: Voice Note Capture & Transcription - Completed 2025-11-11
+- 🔄 Feature 005: Entity Extraction Pipeline - **In Progress** (38% complete, 49/128 tasks)
+- 🔲 Feature 006: Knowledge Graph Building - Not Started
+- 🔲 Feature 007: Basic Graph Visualization - Not Started
 
 ### Recent Completions
 
@@ -78,23 +84,35 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 ### In Progress
 
-No features currently in progress - Voice Note Capture implementation complete.
+- 🔄 **Entity Extraction Pipeline** ([005-entity-extraction](../../specs/005-entity-extraction)) - Started 2025-11-11
+  - **Status**: Core implementation complete (49/128 tasks), testing phase needed
+  - **Completed**: Services, models, API endpoints, queue consumer, utilities
+  - **Remaining**: Accuracy testing, performance benchmarking, rate limiting, integration tests
+  - **Blocker Issues**: 8 P1 items (testing, validation, production prep)
+  - **Validation**: ⚠️ Issues Found - 4-5 days to deployment readiness
+
+**Feature Scope**:
+- Llama 3.1-8b integration for entity extraction from voice transcripts
+- Entity types: Person, Project, Meeting, Topic, Technology, Location, Organization
+- Confidence scoring (0.8 threshold) and filtering
+- Entity resolution with fuzzy matching and KV caching
+- Background job processing via Cloudflare Queues (max 10 batch, 3 retries)
+- 4 REST API endpoints for manual/batch extraction and entity lookup
 
 ### Next Up
 
-🎯 **Next Feature**: Entity Extraction Pipeline (Feature 005)
+🎯 **Priority**: Complete Feature 005 (Entity Extraction Pipeline)
 
-**Feature Scope**:
-- Llama 3.1-8b integration for NLP entity extraction
-- Entity types: Person, Project, Meeting, Topic, Technology
-- Confidence scoring and validation
-- Entity resolution and caching
-- Background job processing for transcripts
+**Remaining Work** (4-5 days):
+1. Implement rate limiting (T077-T078) - 4 hours
+2. Add VoiceSessionManager extraction hook (T068) - 2 hours
+3. Create test dataset and accuracy testing (T033-T044) - 2-3 days
+4. Integration testing and performance benchmarking (T083-T096) - 1 day
+5. Apply production D1 migration and deploy (T097-T102) - 4 hours
 
-**Getting Started**:
-1. Run `/nextspec` to confirm next feature priority
-2. Review completed Feature 004 documentation for context
-3. Entity extraction will feed Feature 006 (Knowledge Graph Building)
+**After Feature 005**:
+- Run `/validate` to confirm ✅ Ready status
+- Feature 006: Knowledge Graph Building (will use extracted entities)
 
 ---
 

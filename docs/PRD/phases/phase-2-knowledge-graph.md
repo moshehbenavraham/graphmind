@@ -2,25 +2,33 @@
 
 ## ✅ Implementation Status
 
-**Phase Progress**: 0% complete
-**Status**: 🔲 Not Started
-**Last Updated**: 2025-11-10
+**Phase Progress**: 25% complete
+**Status**: 🔄 In Progress
+**Last Updated**: 2025-11-11
 
 ### Completed Items
 
-None yet.
+- ✅ **Voice Note Capture & Transcription** (Feature 004) - 2025-11-11
+  - VoiceSessionManager Durable Object with WebRTC/WebSocket
+  - Deepgram Nova-3 STT integration
+  - 4 REST API endpoints + WebSocket streaming
+  - Voice notes persistence in D1
 
 ### In Progress
 
-None yet.
+- 🔄 **Entity Extraction Pipeline** (Feature 005) - Started 2025-11-11, 38% complete (49/128 tasks)
+  - Core services implemented (Llama 3.1-8b, entity resolution, caching)
+  - 4 REST API endpoints (manual/batch extraction, entity lookup)
+  - Cloudflare Queues consumer for background processing
+  - **Remaining**: Accuracy testing, performance benchmarking, rate limiting, integration tests (4-5 days)
 
 ### Remaining
 
-- 🔲 Entity Extraction System
-- 🔲 FalkorDB GraphRAG SDK Integration
-- 🔲 Graph Schema Definition
-- 🔲 Entity Resolution & Caching
-- 🔲 Basic Graph Visualization
+- 🔲 **Knowledge Graph Building** (Feature 006)
+  - FalkorDB GraphRAG SDK Integration
+  - Graph schema creation from extracted entities
+  - Entity merge logic and relationship creation
+- 🔲 **Basic Graph Visualization** (Feature 007)
 
 ---
 

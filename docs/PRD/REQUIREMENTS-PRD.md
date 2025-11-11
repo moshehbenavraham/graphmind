@@ -11,8 +11,8 @@
 ## 📊 Implementation Status
 
 **Last Updated**: 2025-11-11
-**Current Phase**: Phase 2 - Knowledge Graph & Entity Extraction (0% complete)
-**Next Spec**: [Voice Note Capture & Transcription System](NEXT_SPEC.md)
+**Current Phase**: Phase 2 - Knowledge Graph & Entity Extraction (25% complete)
+**Next Priority**: [Complete Entity Extraction Pipeline](NEXT_SPEC.md)
 
 ### Completed Components
 
@@ -21,6 +21,7 @@
 | Wrangler Configuration & Project Setup | [001-wrangler-setup](../../specs/001-wrangler-setup) | 2025-11-10 | ✅ Production Ready |
 | Authentication System | [002-auth-system](../../specs/002-auth-system) | 2025-11-10 | ✅ Production Ready |
 | FalkorDB Connection & Pooling | [003-falkordb-connection](../../specs/003-falkordb-connection) | 2025-11-11 | ✅ Production Ready |
+| Voice Note Capture & Transcription | [004-voice-note-capture](../../specs/004-voice-note-capture) | 2025-11-11 | ✅ Production Ready |
 
 ### Phase 1 Complete ✅
 
@@ -32,9 +33,28 @@
 - Rate limiting and security middleware
 - Production deployment with health checks
 
+### Phase 2 In Progress 🔄
+
+**Voice Note Capture & Transcription** ✅ Complete:
+- VoiceSessionManager Durable Object with WebRTC/WebSocket support
+- Real-time Deepgram Nova-3 STT integration
+- 4 REST API endpoints + WebSocket for real-time transcription
+- Voice notes persistence in D1 with full metadata
+- 126/126 tasks complete (100%)
+
+**Entity Extraction Pipeline** 🔄 In Progress (49/128 tasks, 38%):
+- Core extraction services implemented (Llama 3.1-8b integration)
+- Entity resolution with fuzzy matching and KV caching
+- Cloudflare Queues consumer for background processing
+- 4 REST API endpoints (manual/batch extraction, entity lookup)
+- **Remaining**: Accuracy testing, performance benchmarking, rate limiting, integration tests
+- **Status**: ⚠️ Core complete, testing phase needed (4-5 days to deployment)
+
 ### In Progress
 
-No components currently in progress.
+| Component | Spec | Started | Status |
+|-----------|------|---------|--------|
+| Entity Extraction Pipeline | [005-entity-extraction](../../specs/005-entity-extraction) | 2025-11-11 | 🔄 38% (49/128 tasks) - Core implementation complete, testing pending |
 
 ### Codebase Overview
 
@@ -42,62 +62,79 @@ No components currently in progress.
 - ✅ `src/` - Worker source files (index.js, workers, lib, middleware)
 - ✅ `src/lib/auth/` - Authentication utilities (JWT, bcrypt, sessions)
 - ✅ `src/lib/falkordb/` - FalkorDB client library (client, namespace, operations, errors)
-- ✅ `src/durable-objects/` - FalkorDBConnectionPool for persistent connections
-- ✅ `src/workers/api/` - API endpoint handlers (auth, health, graph)
+- ✅ `src/lib/entity-utils/` - Entity extraction utilities (key generator, confidence filter, prompt builder)
+- ✅ `src/lib/db/` - D1 query helpers (voice notes, entity cache)
+- ✅ `src/lib/kv/` - KV cache utilities (entity resolution cache)
+- ✅ `src/durable-objects/` - FalkorDBConnectionPool, VoiceSessionManager
+- ✅ `src/workers/api/` - API endpoint handlers (auth, health, graph, notes, entities)
+- ✅ `src/workers/consumers/` - Queue consumers (entity extraction)
+- ✅ `src/services/` - Business logic (entity extraction, entity resolution, extraction jobs)
+- ✅ `src/models/` - Data models (entity, extraction job)
 - ✅ `src/middleware/` - Rate limiting and auth middleware
-- ✅ `migrations/` - D1 database migrations
-- ✅ `tests/` - FalkorDB connection tests
+- ✅ `migrations/` - D1 database migrations (3 applied)
+- ✅ `tests/` - Unit tests (entity-key-generator, confidence-filter)
+- ✅ `test-data/` - Sample transcripts for testing
 
 **Key Files**:
-- ✅ `wrangler.toml` - Complete Cloudflare configuration
+- ✅ `wrangler.toml` - Complete Cloudflare configuration (Workers, DO, Queues, D1, KV, R2, AI)
 - ✅ `package.json` - Dependencies (bcryptjs, jsonwebtoken, redis-on-workers)
-- ✅ `src/index.js` - Main Worker with complete routing
-- ✅ `migrations/0001_initial_schema.sql` - Complete database schema
+- ✅ `src/index.js` - Main Worker with complete routing (15 endpoints + WebSocket + queue consumer export)
+- ✅ `migrations/0003_entity_extraction.sql` - Entity extraction schema (voice_notes columns + entity_cache table)
 - ✅ `.env.example` - Environment variable template
 - ✅ `README.md` - Complete setup and deployment guide
-- ✅ `docs/FALKORDB_SETUP.md` - FalkorDB setup documentation
+- ✅ `CLAUDE.md` - Project guidance for Claude Code
 
 **Database**:
-- D1 Tables: 3 core tables (users, sessions, voice_notes)
+- D1 Tables: 4 tables (users, sessions, voice_notes with entity columns, entity_cache)
 - FalkorDB: Connection pool ready, user namespaces provisioned on demand
-- Migrations Applied: 1 (0001_initial_schema.sql)
+- Migrations Applied: 3 (0001_initial, 0002_voice_notes, 0003_entity_extraction)
 
 **API Endpoints**:
-- 7 REST endpoints implemented:
-  - `GET /` - Basic health check
-  - `GET /api/health` - D1 database health check
-  - `POST /api/auth/register` - User registration
-  - `POST /api/auth/login` - User login
-  - `POST /api/auth/logout` - User logout
-  - `GET /api/health/falkordb` - FalkorDB health check
-  - `POST /api/graph/init` - Initialize user graph namespace
+- 15 REST endpoints implemented:
+  - Authentication: register, login, logout, /me
+  - Health: /, /api/health, /api/health/falkordb
+  - Graph: /api/graph/init, /api/test/falkordb
+  - Voice Notes: POST /api/notes/start-recording, GET /api/notes, GET /api/notes/:id, DELETE /api/notes/:id
+  - Entity Extraction: POST /api/notes/:id/extract-entities, GET /api/notes/:id/entities, POST /api/entities/extract-batch, GET /api/entities/cache/:key
+- 1 WebSocket endpoint: GET /ws/notes/:session_id (voice transcription streaming)
 
 **Cloudflare Services Configured**:
 - ✅ Workers (graphmind-api) - Live in production
-- ✅ D1 Database (graphmind-db) - Deployed with schema
+- ✅ D1 Database (graphmind-db) - 3 migrations applied locally
 - ✅ KV Namespaces (GRAPHMIND_KV, RATE_LIMIT) - Active
 - ✅ R2 Bucket (graphmind-audio) - Ready for audio storage
-- ✅ Workers AI binding - Ready for Deepgram STT/TTS
-- ✅ Durable Objects (FalkorDBConnectionPool) - Production ready
+- ✅ Workers AI binding - Deepgram STT (used), Llama 3.1-8b (used)
+- ✅ Durable Objects (FalkorDBConnectionPool, VoiceSessionManager) - Production ready
+- ✅ Cloudflare Queues (entity-extraction-jobs with DLQ) - Configured, consumer implemented
 
 ### Next Priority
 
-**🎯 Voice Note Capture & Transcription System** - [See NEXT_SPEC.md](NEXT_SPEC.md)
+**🎯 Complete Entity Extraction Pipeline** - [See validation report](../../specs/005-entity-extraction/validation.md)
 
-First component of Phase 2 - enables users to record voice notes with real-time transcription.
+Core implementation complete (38%), testing phase needed (4-5 days to deployment).
 
-**What's Next**:
-1. Review [NEXT_SPEC.md](NEXT_SPEC.md) for complete specification
-2. Run `/spec "Voice Note Capture & Transcription"` to create detailed spec
-3. Implement VoiceSessionManager Durable Object
-4. Build WebRTC audio capture frontend
-5. Integrate Deepgram Nova-3 for real-time STT
-6. Create voice notes API endpoints
+**Remaining Work**:
+1. Implement rate limiting (T077-T078) - 4 hours
+2. Add VoiceSessionManager extraction hook (T068) - 2 hours
+3. Create test dataset and accuracy testing (T033-T044) - 2-3 days
+4. Integration testing and performance benchmarking (T083-T096) - 1 day
+5. Apply production D1 migration and deploy (T097-T102) - 4 hours
 
-**After Voice Capture**:
-- Entity extraction pipeline (Llama 3.1-8b)
-- Knowledge graph building (FalkorDB GraphRAG SDK)
-- Graph visualization UI
+**P1 Blockers** (must fix before deployment):
+- Unit tests missing for core services
+- No accuracy testing (>85% F1 score requirement)
+- No cache performance testing (70% hit rate requirement)
+- Rate limiting not implemented (security vulnerability)
+- Integration testing missing
+- VoiceSessionManager hook missing (automatic extraction)
+- Performance benchmarking not done (<3s latency requirement)
+- Production D1 migration not applied
+
+**After Entity Extraction Complete**:
+- Run `/validate` to confirm ✅ Ready status
+- Feature 006: Knowledge Graph Building in FalkorDB
+- Feature 007: Basic graph visualization UI
+- Phase 3: Voice query system
 
 ---
 

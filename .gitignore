@@ -224,6 +224,9 @@ temp/
 # Workflow specs (local development artifacts)
 specs/
 
+# Test data (sample transcripts, ground truth datasets)
+test-data/
+
 # Claude Code
 # Claude Code local configuration and commands
 .claude/

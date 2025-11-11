@@ -12,6 +12,8 @@ import { handleStartRecording } from './workers/api/notes/start-recording.js';
 import { handleListNotes } from './workers/api/notes/list.js';
 import { handleGetNote } from './workers/api/notes/get.js';
 import { handleDeleteNote } from './workers/api/notes/delete.js';
+import { extractEntitiesForNote, extractEntitiesBatch } from './workers/api/entity-extraction.js';
+import { getEntitiesForNote, lookupEntityCache } from './workers/api/entity-lookup.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -20,6 +22,9 @@ import { getSession } from './lib/session/session-manager.js';
 // Export Durable Objects
 export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
 export { VoiceSessionManager } from './durable-objects/VoiceSessionManager.js';
+
+// Export Queue Consumer
+export { default as queue } from './workers/consumers/entity-extraction-consumer.js';
 
 /**
  * Handle WebSocket upgrade for voice note recording
@@ -184,6 +189,104 @@ export default {
         const pathParts = url.pathname.split('/');
         const noteId = pathParts[pathParts.length - 1];
         const response = await handleDeleteNote(request, env, noteId);
+        return addCorsHeaders(response);
+      }
+
+      // Entity Extraction Routes (Feature 005)
+
+      // POST /api/notes/:note_id/extract-entities - Manual extraction trigger
+      if (url.pathname.match(/^\/api\/notes\/[^\/]+\/extract-entities$/) && method === 'POST') {
+        const pathParts = url.pathname.split('/');
+        const noteId = pathParts[3];
+
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        const response = await extractEntitiesForNote(request, env, {
+          userId: claims.sub,
+          noteId
+        });
+        return addCorsHeaders(response);
+      }
+
+      // GET /api/notes/:note_id/entities - View extracted entities
+      if (url.pathname.match(/^\/api\/notes\/[^\/]+\/entities$/) && method === 'GET') {
+        const pathParts = url.pathname.split('/');
+        const noteId = pathParts[3];
+
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        const response = await getEntitiesForNote(request, env, {
+          userId: claims.sub,
+          noteId
+        });
+        return addCorsHeaders(response);
+      }
+
+      // POST /api/entities/extract-batch - Batch extraction
+      if (url.pathname === '/api/entities/extract-batch' && method === 'POST') {
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        const response = await extractEntitiesBatch(request, env, {
+          userId: claims.sub
+        });
+        return addCorsHeaders(response);
+      }
+
+      // GET /api/entities/cache/:entity_key - Entity resolution lookup
+      if (url.pathname.startsWith('/api/entities/cache/') && method === 'GET') {
+        const pathParts = url.pathname.split('/');
+        const entityKey = pathParts[pathParts.length - 1];
+
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        const response = await lookupEntityCache(request, env, {
+          userId: claims.sub,
+          entityKey
+        });
         return addCorsHeaders(response);
       }
 

@@ -54,6 +54,19 @@ script_name = "graphmind-api"
 [ai]
 binding = "AI"
 
+# Cloudflare Queues (Feature 005 - Entity Extraction)
+# Producer binding for enqueueing extraction jobs
+[[queues.producers]]
+binding = "ENTITY_EXTRACTION_QUEUE"
+queue = "entity-extraction-jobs"
+
+# Consumer configuration for processing extraction jobs
+[[queues.consumers]]
+queue = "entity-extraction-jobs"
+max_batch_size = 10
+max_retries = 3
+dead_letter_queue = "entity-extraction-failed"
+
 # Environment variables (non-sensitive)
 [vars]
 ENVIRONMENT = "development"
