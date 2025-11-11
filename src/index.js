@@ -8,11 +8,110 @@ import { handleLogin } from './api/auth/login.js';
 import { handleGetMe } from './api/auth/me.js';
 import { handleFalkorDBHealth } from './workers/api/health/falkordb.js';
 import { handleGraphInit } from './workers/api/graph/init.js';
+import { handleStartRecording } from './workers/api/notes/start-recording.js';
+import { handleListNotes } from './workers/api/notes/list.js';
+import { handleGetNote } from './workers/api/notes/get.js';
+import { handleDeleteNote } from './workers/api/notes/delete.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
-import { internalServerError } from './utils/errors.js';
+import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
+import { verifyToken } from './lib/auth/crypto.js';
+import { getSession } from './lib/session/session-manager.js';
 
 // Export Durable Objects
 export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
+export { VoiceSessionManager } from './durable-objects/VoiceSessionManager.js';
+
+/**
+ * Handle WebSocket upgrade for voice note recording
+ *
+ * Validates the session_id, JWT token, and user authorization before
+ * upgrading to WebSocket and forwarding to VoiceSessionManager Durable Object.
+ *
+ * @param {Request} request - The incoming HTTP request
+ * @param {Object} env - Environment bindings
+ * @param {URL} url - Parsed URL object
+ * @returns {Promise<Response>} WebSocket response or error
+ */
+async function handleWebSocketUpgrade(request, env, url) {
+  try {
+    // T043: Check for WebSocket upgrade header
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+      return badRequestError('Expected Upgrade: websocket header');
+    }
+
+    // T044: Extract session_id from URL path
+    // URL format: /ws/notes/:session_id
+    const pathParts = url.pathname.split('/');
+    const sessionId = pathParts[pathParts.length - 1];
+
+    if (!sessionId || sessionId.length === 0) {
+      return badRequestError('Missing session_id in URL path');
+    }
+
+    // T045: Extract JWT token from query parameter
+    const token = url.searchParams.get('token');
+    if (!token) {
+      return unauthorizedError('Missing JWT token in query parameter');
+    }
+
+    // T046: Verify JWT token is valid
+    let claims;
+    try {
+      claims = verifyToken(token, env.JWT_SECRET);
+    } catch (error) {
+      console.error('[WebSocket] JWT verification failed:', error.message);
+      return unauthorizedError('Invalid or expired JWT token');
+    }
+
+    // Extract user_id from JWT claims
+    const userId = claims.sub;
+    if (!userId) {
+      return unauthorizedError('Invalid JWT token: missing user_id');
+    }
+
+    // T047: Verify session exists in KV
+    let sessionMetadata;
+    try {
+      sessionMetadata = await getSession(env, sessionId);
+    } catch (error) {
+      console.error('[WebSocket] Session retrieval failed:', error.message);
+      return internalServerError('Failed to validate session');
+    }
+
+    if (!sessionMetadata) {
+      return notFoundError('Session not found or expired');
+    }
+
+    // T048: Verify user_id from JWT matches session
+    if (sessionMetadata.user_id !== userId) {
+      console.warn(`[WebSocket] User ID mismatch: JWT=${userId}, Session=${sessionMetadata.user_id}`);
+      return unauthorizedError('Session does not belong to authenticated user');
+    }
+
+    // T049: Check session status is active
+    if (sessionMetadata.status !== 'active') {
+      return badRequestError(`Session is not active (status: ${sessionMetadata.status})`);
+    }
+
+    // T050: Get VoiceSessionManager Durable Object stub
+    // Use session_id as the DO name for deterministic routing
+    const doId = env.VOICE_SESSION.idFromName(sessionId);
+    const doStub = env.VOICE_SESSION.get(doId);
+
+    // T051: Forward WebSocket upgrade request to Durable Object
+    // The DO will handle the actual WebSocket upgrade and connection management
+    const doResponse = await doStub.fetch(request);
+
+    // T052: Return the DO response (should be 101 Switching Protocols with WebSocket)
+    return doResponse;
+
+  } catch (error) {
+    // T053: Handle unexpected errors during upgrade
+    console.error('[WebSocket] Upgrade error:', error);
+    return internalServerError('WebSocket upgrade failed');
+  }
+}
 
 export default {
   /**
@@ -45,6 +144,46 @@ export default {
 
       if (url.pathname === '/api/auth/me' && method === 'GET') {
         const response = await handleGetMe(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // T026-T032: Start recording endpoint
+      // Route: POST /api/notes/start-recording
+      if (url.pathname === '/api/notes/start-recording' && method === 'POST') {
+        const response = await handleStartRecording(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // T043-T053: WebSocket upgrade handler for voice note recording
+      // Route: GET /ws/notes/:session_id?token=<jwt>
+      if (url.pathname.startsWith('/ws/notes/') && method === 'GET') {
+        return await handleWebSocketUpgrade(request, env, url);
+      }
+
+      // T070-T074: List notes endpoint
+      // Route: GET /api/notes?limit=20&offset=0
+      if (url.pathname === '/api/notes' && method === 'GET') {
+        const response = await handleListNotes(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // T075-T078: Get note endpoint
+      // Route: GET /api/notes/:note_id
+      if (url.pathname.startsWith('/api/notes/') && method === 'GET') {
+        // Extract note_id from path
+        const pathParts = url.pathname.split('/');
+        const noteId = pathParts[pathParts.length - 1];
+        const response = await handleGetNote(request, env, noteId);
+        return addCorsHeaders(response);
+      }
+
+      // T079-T082: Delete note endpoint
+      // Route: DELETE /api/notes/:note_id
+      if (url.pathname.startsWith('/api/notes/') && method === 'DELETE') {
+        // Extract note_id from path
+        const pathParts = url.pathname.split('/');
+        const noteId = pathParts[pathParts.length - 1];
+        const response = await handleDeleteNote(request, env, noteId);
         return addCorsHeaders(response);
       }
 

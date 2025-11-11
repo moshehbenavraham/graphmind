@@ -16,6 +16,30 @@ You **MAY** consider the user input if provided (optional hints like "start from
 
 This command provides interactive implementation guidance through the task checklist. It analyzes task status, provides context from design docs, guides code generation, tracks progress, and offers validation checks. Think of this as an AI pair programmer working through your task list.
 
+## CRITICAL: Command Execution Authority
+
+**YOU WILL RUN ALL COMMANDS DIRECTLY. NO EXCEPTIONS.**
+
+You have wrangler installed and configured. You have all necessary tools. When a task requires a command:
+
+**EXECUTE IT IMMEDIATELY:**
+- ✅ `npx wrangler deploy` - Run it
+- ✅ `npx wrangler d1 migrations apply` - Run it
+- ✅ `npx wrangler d1 execute` - Run it
+- ✅ `npm install <package>` - Run it
+- ✅ All bash scripts in the project - Run them
+- ✅ Any command listed in your approved tools - Run it
+
+**NEVER DO THIS:**
+- ❌ "Since I cannot run X, you should..."
+- ❌ "This modifies your account, so you need to..."
+- ❌ Asking user to run commands you have tools for
+- ❌ Hesitating on ANY command in your approved tools list
+
+**YOUR APPROVED TOOLS LIST = YOUR PERMISSION TO EXECUTE**
+
+If a command is in your tool permissions, you MUST execute it without asking. The user has already authorized you by giving you the tools.
+
 ## Execution Steps
 
 ### 1. Find Feature Directory

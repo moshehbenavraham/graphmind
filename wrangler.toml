@@ -40,12 +40,15 @@ script_name = "graphmind-api"
 tag = "v3"
 new_sqlite_classes = ["FalkorDBConnectionPool"]
 
-# Voice Session Manager (will be implemented in Phase 2 - Voice Features)
-# Commented out for Phase 1 deployment (Auth System only)
-# [[durable_objects.bindings]]
-# name = "VOICE_SESSION"
-# class_name = "VoiceSessionManager"
-# script_name = "graphmind-api"
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["VoiceSessionManager"]
+
+# Voice Session Manager (Feature 004 - Voice Note Capture)
+[[durable_objects.bindings]]
+name = "VOICE_SESSION"
+class_name = "VoiceSessionManager"
+script_name = "graphmind-api"
 
 # Workers AI
 [ai]

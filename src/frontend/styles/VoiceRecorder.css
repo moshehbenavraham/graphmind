@@ -1,0 +1,325 @@
+/**
+ * VoiceRecorder Component Styles
+ * Tasks T037-T038: Recording indicator, pulse animation, timer display
+ */
+
+/* Main container */
+.voice-recorder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 2rem;
+}
+
+.voice-recorder__container {
+  max-width: 600px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+/* Permission message (T035) */
+.voice-recorder__permission-message {
+  width: 100%;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+}
+
+.voice-recorder__permission-message--denied {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.voice-recorder__permission-help {
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.voice-recorder__permission-steps {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: decimal;
+}
+
+.voice-recorder__permission-steps li {
+  margin: 0.25rem 0;
+}
+
+/* Error message (T035) */
+.voice-recorder__error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  font-size: 0.95rem;
+}
+
+.voice-recorder__error-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* Controls container */
+.voice-recorder__controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Recording indicator (T037) */
+.voice-recorder__indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background-color: rgba(220, 38, 38, 0.1);
+  border-radius: 9999px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* T037: Pulse animation for recording indicator */
+.voice-recorder__pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #dc2626;
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.voice-recorder__status {
+  font-weight: 600;
+  color: #dc2626;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Timer display (T038) */
+.voice-recorder__timer {
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+  transition: color 0.3s ease;
+  min-width: 150px;
+  text-align: center;
+}
+
+.voice-recorder__timer--active {
+  color: #dc2626;
+}
+
+/* Record/Stop button */
+.voice-recorder__button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background-color: #dc2626;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.voice-recorder__button:hover:not(:disabled) {
+  background-color: #b91c1c;
+  transform: scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.voice-recorder__button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.voice-recorder__button:disabled {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.voice-recorder__button--recording {
+  background-color: #7c3aed;
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+.voice-recorder__button--recording:hover:not(:disabled) {
+  background-color: #6d28d9;
+}
+
+@keyframes recordingPulse {
+  0%, 100% {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(124, 58, 237, 0.2), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.voice-recorder__icon {
+  width: 32px;
+  height: 32px;
+}
+
+/* Spinner for loading state */
+.voice-recorder__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Button label */
+.voice-recorder__label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+  text-align: center;
+}
+
+/* Hint message */
+.voice-recorder__hint {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+  padding: 1rem;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  width: 100%;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .voice-recorder {
+    padding: 1rem;
+  }
+
+  .voice-recorder__timer {
+    font-size: 2.5rem;
+  }
+
+  .voice-recorder__button {
+    width: 70px;
+    height: 70px;
+  }
+
+  .voice-recorder__icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .voice-recorder__permission-message {
+    padding: 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .voice-recorder__button {
+    border: 2px solid currentColor;
+  }
+
+  .voice-recorder__error,
+  .voice-recorder__permission-message {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .voice-recorder__pulse,
+  .voice-recorder__button--recording,
+  .voice-recorder__spinner {
+    animation: none;
+  }
+
+  .voice-recorder__pulse {
+    opacity: 1;
+  }
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  .voice-recorder__timer {
+    color: #9ca3af;
+  }
+
+  .voice-recorder__timer--active {
+    color: #ef4444;
+  }
+
+  .voice-recorder__label {
+    color: #d1d5db;
+  }
+
+  .voice-recorder__hint {
+    background-color: #1f2937;
+    color: #9ca3af;
+  }
+
+  .voice-recorder__permission-message {
+    background-color: #451a03;
+    border-color: #78350f;
+    color: #fbbf24;
+  }
+
+  .voice-recorder__permission-message--denied {
+    background-color: #450a0a;
+    border-color: #991b1b;
+    color: #fca5a5;
+  }
+
+  .voice-recorder__error {
+    background-color: #450a0a;
+    border-color: #991b1b;
+    color: #fca5a5;
+  }
+}

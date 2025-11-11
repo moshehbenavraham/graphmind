@@ -1,0 +1,214 @@
+/**
+ * Voice Recorder Component Styles
+ *
+ * These styles can be used instead of inline styles in VoiceRecorder.jsx
+ */
+
+:root {
+  /* Colors */
+  --primary-color: #007bff;
+  --primary-hover: #0056b3;
+  --success-color: #28a745;
+  --error-color: #dc3545;
+  --warning-color: #ffc107;
+  --warning-dark: #856404;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --border-color: #e0e0e0;
+  --background-light: #f8f9fa;
+  --background-gray: #f1f3f5;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Transitions */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+}
+
+/* Voice Recorder Container */
+.voice-recorder {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Recorder Controls */
+.recorder-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+.btn-start-recording,
+.btn-stop-recording {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 200px;
+}
+
+.btn-start-recording {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-start-recording:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.btn-start-recording:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-stop-recording {
+  background: var(--error-color);
+  color: white;
+}
+
+.btn-stop-recording:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+/* Recording Active State */
+.recording-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.recording-time {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-indicator {
+  color: var(--error-color);
+  font-size: 2rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Error Messages */
+.error-message {
+  padding: var(--spacing-md);
+  margin: var(--spacing-md) 0;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--error-color);
+}
+
+.error-message.recoverable {
+  background: #fff3cd;
+  border-color: var(--warning-color);
+  color: var(--warning-dark);
+}
+
+.error-message:not(.recoverable) {
+  background: #f8d7da;
+  border-color: var(--error-color);
+  color: #721c24;
+}
+
+.error-message strong {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Connecting Indicator */
+.connecting-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--background-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.connecting-indicator::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .recorder-controls {
+    padding: var(--spacing-md);
+  }
+
+  .btn-start-recording,
+  .btn-stop-recording {
+    min-width: 100%;
+    padding: var(--spacing-lg);
+    font-size: 1rem;
+  }
+
+  .recording-time {
+    font-size: 1.25rem;
+  }
+}
+
+/* Accessibility */
+.btn-start-recording:focus,
+.btn-stop-recording:focus {
+  outline: 3px solid rgba(0, 123, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+  .recorder-controls,
+  .error-message,
+  .connecting-indicator {
+    display: none;
+  }
+}

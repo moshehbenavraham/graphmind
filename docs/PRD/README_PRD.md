@@ -22,20 +22,35 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 ## 🎯 Current Status
 
 **Last Updated**: 2025-11-11
-**Current Phase**: Phase 1 - Foundation
-**Phase Progress**: 100% ✅
+**Current Phase**: Phase 2 - Knowledge Graph & Entity Extraction
+**Next Spec**: [NEXT_SPEC.md](./NEXT_SPEC.md) - Entity Extraction Pipeline
 
 ### Implementation Progress
 
 | Phase | Status | Progress | Completion |
 |-------|--------|----------|------------|
 | Phase 1: Foundation | ✅ Complete | 100% | 2025-11-11 |
-| Phase 2: Knowledge Graph | 🔲 Not Started | 0% | - |
+| Phase 2: Knowledge Graph | 🔄 In Progress | 25% (1 of 4 features) | - |
 | Phase 3: Voice Query | 🔲 Not Started | 0% | - |
 | Phase 4: Polish & Features | 🔲 Not Started | 0% | - |
 | Phase 5: Advanced Features | 🔲 Not Started | 0% | - |
 
 ### Recent Completions
+
+- ✅ **Voice Note Capture & Transcription** ([004-voice-note-capture](../../specs/004-voice-note-capture)) - Completed 2025-11-11
+  - VoiceSessionManager Durable Object (593 lines, full WebRTC + WebSocket support)
+  - 4 REST API endpoints (start-recording, list, get, delete)
+  - Real-time transcript streaming via WebSocket
+  - Deepgram Nova-3 STT integration via Workers AI
+  - Voice notes persistence in D1 with metadata (duration, word count)
+  - 5 production-grade frontend components (React)
+  - Audio utilities with validation and transcription support
+  - Session management and D1 query utilities
+  - Structured logging system
+  - D1 migration (0002_voice_notes_enhancements.sql)
+  - 5 comprehensive documentation files (API docs, deployment guide, test plan, logging guide, completion summary)
+  - **Metrics**: 126/126 tasks complete (100%), 38 implementation files, 10,000+ lines of code
+  - **Status**: ✅ READY FOR DEPLOYMENT
 
 - ✅ **FalkorDB Connection & Pooling** ([003-falkordb-connection](../../specs/003-falkordb-connection)) - Completed 2025-11-11
   - Durable Object connection pooling (10 connections, 5ms latency)
@@ -63,19 +78,23 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 ### In Progress
 
-No features currently in progress.
+No features currently in progress - Voice Note Capture implementation complete.
 
 ### Next Up
 
-🎯 **Phase 1 Complete!** Ready to move to Phase 2 - Knowledge Graph & Entity Extraction
+🎯 **Next Feature**: Entity Extraction Pipeline (Feature 005)
 
-**Recommended Next**: Run `/nextspec` to get the next feature recommendation
+**Feature Scope**:
+- Llama 3.1-8b integration for NLP entity extraction
+- Entity types: Person, Project, Meeting, Topic, Technology
+- Confidence scoring and validation
+- Entity resolution and caching
+- Background job processing for transcripts
 
-**Phase 2 Components**:
-- Voice note capture system (WebRTC, Deepgram STT)
-- Entity extraction pipeline (Llama 3.1-8b)
-- FalkorDB GraphRAG SDK integration
-- Knowledge graph schema definition
+**Getting Started**:
+1. Run `/nextspec` to confirm next feature priority
+2. Review completed Feature 004 documentation for context
+3. Entity extraction will feed Feature 006 (Knowledge Graph Building)
 
 ---
 

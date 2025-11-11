@@ -1,0 +1,325 @@
+/**
+ * TranscriptView Component Styles
+ *
+ * These styles can be used instead of inline styles in TranscriptView.jsx
+ */
+
+/* Transcript View Container */
+.transcript-view {
+  margin-top: var(--spacing-lg, 1.5rem);
+  border-radius: var(--radius-lg, 8px);
+  background: var(--background-light, #f8f9fa);
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.transcript-partial,
+.transcript-complete {
+  padding: var(--spacing-lg, 1.5rem);
+}
+
+/* Header */
+.transcript-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md, 1rem);
+}
+
+.transcript-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-primary, #333);
+  font-weight: 600;
+}
+
+/* Loading Indicator */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 0.5rem);
+  font-size: 0.875rem;
+  color: var(--text-secondary, #666);
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-top-color: var(--primary-color, #007bff);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Success Badge */
+.success-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 0.5rem);
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-md, 0.75rem);
+  background: var(--success-color, #28a745);
+  color: white;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.checkmark {
+  font-size: 1rem;
+}
+
+/* Transcript Content */
+.transcript-content {
+  min-height: 100px;
+  padding: var(--spacing-md, 1rem);
+  background: white;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-color, #e0e0e0);
+  line-height: 1.6;
+}
+
+.transcript-content.partial {
+  border-left: 3px solid var(--primary-color, #007bff);
+  background: linear-gradient(to right, rgba(0, 123, 255, 0.02), white);
+}
+
+.transcript-content.final {
+  border-left: 3px solid var(--success-color, #28a745);
+}
+
+.transcript-content p {
+  margin: 0;
+  color: var(--text-primary, #333);
+  font-size: 1rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.transcript-content .placeholder {
+  color: var(--text-muted, #999);
+  font-style: italic;
+}
+
+/* Delay Notice */
+.delay-notice {
+  margin-top: var(--spacing-md, 1rem);
+  padding: var(--spacing-md, 0.75rem);
+  background: #fff3cd;
+  border: 1px solid var(--warning-color, #ffc107);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--warning-dark, #856404);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Metadata */
+.transcript-metadata {
+  margin-top: var(--spacing-lg, 1.5rem);
+  padding: var(--spacing-md, 1rem);
+  background: var(--background-gray, #f1f3f5);
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.metadata-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm, 0.5rem) 0;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.metadata-row:last-child {
+  border-bottom: none;
+}
+
+.metadata-label {
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  font-size: 0.875rem;
+}
+
+.metadata-value {
+  color: var(--text-primary, #333);
+  font-size: 0.875rem;
+}
+
+.metadata-value.note-id {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.8rem;
+  background: var(--border-color, #e0e0e0);
+  padding: 0.2rem var(--spacing-sm, 0.5rem);
+  border-radius: var(--radius-sm, 3px);
+  user-select: all;
+}
+
+/* Actions */
+.transcript-actions {
+  display: flex;
+  gap: var(--spacing-md, 1rem);
+  margin-top: var(--spacing-lg, 1.5rem);
+}
+
+.btn-view-note,
+.btn-copy-transcript {
+  flex: 1;
+  padding: var(--spacing-md, 0.75rem) var(--spacing-md, 1rem);
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s ease);
+  text-align: center;
+}
+
+.btn-view-note {
+  background: var(--primary-color, #007bff);
+  color: white;
+}
+
+.btn-view-note:hover {
+  background: var(--primary-hover, #0056b3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.btn-copy-transcript {
+  background: white;
+  color: var(--text-primary, #333);
+  border: 1px solid #ccc;
+}
+
+.btn-copy-transcript:hover {
+  background: var(--background-light, #f8f9fa);
+  border-color: #999;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-view-note:active,
+.btn-copy-transcript:active {
+  transform: translateY(0);
+}
+
+/* Focus States for Accessibility */
+.btn-view-note:focus,
+.btn-copy-transcript:focus {
+  outline: 3px solid rgba(0, 123, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .transcript-partial,
+  .transcript-complete {
+    padding: var(--spacing-md, 1rem);
+  }
+
+  .transcript-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm, 0.5rem);
+  }
+
+  .transcript-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm, 0.5rem);
+  }
+
+  .btn-view-note,
+  .btn-copy-transcript {
+    width: 100%;
+  }
+
+  .metadata-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs, 0.25rem);
+  }
+
+  .metadata-value.note-id {
+    word-break: break-all;
+  }
+}
+
+/* Animation for Partial Text Updates */
+.transcript-content.partial p {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .transcript-actions,
+  .loading-indicator,
+  .delay-notice {
+    display: none;
+  }
+
+  .transcript-view {
+    box-shadow: none;
+    border: 1px solid var(--border-color, #e0e0e0);
+  }
+
+  .transcript-content {
+    border-left: none;
+    background: white;
+  }
+}
+
+/* Dark Mode Support (optional) */
+@media (prefers-color-scheme: dark) {
+  .transcript-view {
+    background: #1e1e1e;
+  }
+
+  .transcript-content {
+    background: #2d2d2d;
+    border-color: #404040;
+    color: #e0e0e0;
+  }
+
+  .transcript-content p {
+    color: #e0e0e0;
+  }
+
+  .transcript-metadata {
+    background: #2d2d2d;
+    border-color: #404040;
+  }
+
+  .metadata-label,
+  .metadata-value {
+    color: #b0b0b0;
+  }
+
+  .transcript-header h3 {
+    color: #e0e0e0;
+  }
+
+  .btn-copy-transcript {
+    background: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #404040;
+  }
+
+  .btn-copy-transcript:hover {
+    background: #3d3d3d;
+  }
+}

@@ -23,6 +23,27 @@ const RATE_LIMITS = {
     window: 60, // 10 requests per 60 seconds (1 minute)
     scope: 'user',
   },
+  // Voice notes endpoints - per-user limits (Feature 004)
+  'notes:start-recording': {
+    limit: 10,
+    window: 3600, // 10 requests per hour (3600 seconds)
+    scope: 'user',
+  },
+  'notes:list': {
+    limit: 60,
+    window: 60, // 60 requests per minute
+    scope: 'user',
+  },
+  'notes:get': {
+    limit: 60,
+    window: 60, // 60 requests per minute
+    scope: 'user',
+  },
+  'notes:delete': {
+    limit: 10,
+    window: 60, // 10 requests per minute
+    scope: 'user',
+  },
   // Default limit for unlisted endpoints
   default: {
     limit: 100,
