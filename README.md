@@ -56,8 +56,20 @@ Before starting, ensure you have:
    # Edit .env and fill in:
    # - CLOUDFLARE_API_TOKEN (from Cloudflare dashboard)
    # - CLOUDFLARE_ACCOUNT_ID (from Cloudflare dashboard)
-   # - FalkorDB credentials (optional for now - future feature)
+   # - FalkorDB credentials (see FalkorDB Setup below)
    ```
+
+2a. **FalkorDB Cloud Setup** (required for Feature 003+)
+    ```bash
+    # 1. Sign up at https://app.falkordb.cloud/
+    # 2. Create a database instance (free tier for development)
+    # 3. Copy your connection credentials
+    # 4. Add to .env:
+    FALKORDB_HOST=your-instance.falkordb.cloud
+    FALKORDB_PORT=6379
+    FALKORDB_USER=default
+    FALKORDB_PASSWORD=your-password-here
+    ```
 
 3. **Install dependencies**
    ```bash

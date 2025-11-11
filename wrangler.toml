@@ -14,17 +14,33 @@ binding = "DB"
 database_name = "graphmind-db"
 database_id = "5e0037ac-48c9-4e46-84ee-7aa41e517fc0"
 
-# KV Namespace
+# KV Namespaces
 [[kv_namespaces]]
 binding = "KV"
 id = "bc58a6761f474954aafd55c2c1616108"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "8da7913f421b47a88b723721946427de"
 
 # R2 Bucket
 [[r2_buckets]]
 binding = "AUDIO_BUCKET"
 bucket_name = "graphmind-audio"
 
-# Durable Objects (will be implemented in Phase 2 - Voice Features)
+# Durable Objects
+# FalkorDB Connection Pool (Feature 003)
+[[durable_objects.bindings]]
+name = "FALKORDB_POOL"
+class_name = "FalkorDBConnectionPool"
+script_name = "graphmind-api"
+
+# Durable Object Migrations
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["FalkorDBConnectionPool"]
+
+# Voice Session Manager (will be implemented in Phase 2 - Voice Features)
 # Commented out for Phase 1 deployment (Auth System only)
 # [[durable_objects.bindings]]
 # name = "VOICE_SESSION"

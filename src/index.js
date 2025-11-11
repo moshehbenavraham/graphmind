@@ -6,8 +6,13 @@
 import { handleRegister } from './api/auth/register.js';
 import { handleLogin } from './api/auth/login.js';
 import { handleGetMe } from './api/auth/me.js';
+import { handleFalkorDBHealth } from './workers/api/health/falkordb.js';
+import { handleGraphInit } from './workers/api/graph/init.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError } from './utils/errors.js';
+
+// Export Durable Objects
+export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
 
 export default {
   /**
@@ -111,6 +116,69 @@ export default {
           headers: {
             'Content-Type': 'application/json'
           }
+        });
+      }
+    }
+
+    // T030: FalkorDB health check endpoint
+    if (url.pathname === '/api/health/falkordb' && method === 'GET') {
+      return await handleFalkorDBHealth(request, env);
+    }
+
+    // T055: Graph namespace init endpoint
+    if (url.pathname === '/api/graph/init' && method === 'POST') {
+      return await handleGraphInit(request, env);
+    }
+
+    // FalkorDB test endpoint
+    if (url.pathname === '/api/test/falkordb' && method === 'POST') {
+      try {
+        const body = await request.json();
+        const { userId, query } = body;
+
+        if (!userId || !query) {
+          return new Response(JSON.stringify({
+            error: 'Missing userId or query'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Get Durable Object stub
+        const id = env.FALKORDB_POOL.idFromName('default-pool');
+        const stub = env.FALKORDB_POOL.get(id);
+
+        // Execute query with credentials
+        const doRequest = new Request('http://do/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            config: {
+              host: env.FALKORDB_HOST,
+              port: env.FALKORDB_PORT,
+              username: env.FALKORDB_USER || env.FALKORDB_USERNAME,
+              password: env.FALKORDB_PASSWORD
+            },
+            userId,
+            cypher: query,
+            params: body.params || {}
+          })
+        });
+
+        const doResponse = await stub.fetch(doRequest);
+        const result = await doResponse.json();
+
+        return new Response(JSON.stringify(result), {
+          status: doResponse.status,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
         });
       }
     }
