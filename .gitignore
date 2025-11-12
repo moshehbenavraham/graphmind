@@ -223,6 +223,7 @@ temp/
 
 # Workflow specs (local development artifacts)
 specs/
+.workflow/
 
 # Test data (sample transcripts, ground truth datasets)
 test-data/
