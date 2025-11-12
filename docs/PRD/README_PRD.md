@@ -101,7 +101,12 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 ### Next Up
 
-🎯 **Recommended**: Feature 006 - Knowledge Graph Building
+🎯 **Next Spec**: [Knowledge Graph Building (FalkorDB GraphRAG Integration)](./NEXT_SPEC.md)
+- Transform extracted entities into FalkorDB knowledge graph
+- Automatic relationship detection using GraphRAG SDK
+- Entity merge/deduplication with fuzzy matching
+- 6 REST API endpoints for graph operations
+- User namespace isolation in FalkorDB
 
 **Why This Feature**:
 - Consumes extracted entities from Feature 005
@@ -110,10 +115,11 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 - Enables intelligent graph queries in Phase 3
 
 **To Get Started**:
-1. Run `/nextspec` to generate Feature 006 specification
-2. Review generated spec and run `/design` for technical design
-3. Run `/tasks` to create implementation checklist
-4. Begin implementation with task tracking
+1. Review NEXT_SPEC.md for scope and requirements
+2. Run `/spec` to create detailed specification (Feature 006)
+3. Run `/design` for technical design
+4. Run `/tasks` to create implementation checklist
+5. Begin implementation with task tracking
 
 **Phase 2 Remaining** (after Feature 006):
 - Feature 007: Basic Graph Visualization (optional for MVP)

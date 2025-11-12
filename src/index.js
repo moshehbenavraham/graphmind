@@ -14,6 +14,18 @@ import { handleGetNote } from './workers/api/notes/get.js';
 import { handleDeleteNote } from './workers/api/notes/delete.js';
 import { extractEntitiesForNote, extractEntitiesBatch } from './workers/api/entity-extraction.js';
 import { getEntitiesForNote, lookupEntityCache } from './workers/api/entity-lookup.js';
+import { handleGetGraph } from './api/graph/get-graph.js';
+import { handleGetEntity } from './api/graph/get-entity.js';
+import { handleSearchEntities } from './api/graph/search-entities.js';
+import { handleGetGraphStats } from './api/graph/get-stats.js';
+import { handleMergeEntities } from './api/graph/merge-entities.js';
+import { handleTriggerGraphSync } from './api/test/trigger-graph-sync.js';
+import { handleTestGraphDirect } from './api/test/test-graph-direct.js';
+import { handleTestSimpleCypher } from './api/test/test-simple-cypher.js';
+import { handleTestRedisDirect } from './api/test/test-redis-direct.js';
+import { handleCheckPoolWarmup } from './api/test/check-pool-warmup.js';
+import { handleInitPool } from './api/test/init-pool.js';
+import { handleBenchmarkFalkorDB } from './api/test/benchmark-falkordb.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -24,8 +36,9 @@ import { rateLimitMiddleware, addRateLimitHeaders } from './middleware/rateLimit
 export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
 export { VoiceSessionManager } from './durable-objects/VoiceSessionManager.js';
 
-// Export Queue Consumer
-export { default as queue } from './workers/consumers/entity-extraction-consumer.js';
+// Import Queue Consumers
+import entityExtractionConsumer from './workers/consumers/entity-extraction-consumer.js';
+import graphSyncConsumer from './workers/consumers/graph-sync-consumer.js';
 
 /**
  * Handle WebSocket upgrade for voice note recording
@@ -319,6 +332,188 @@ export default {
         return addCorsHeaders(response);
       }
 
+      // GET /api/graph - Get knowledge graph (Feature 006)
+      if (url.pathname === '/api/graph' && method === 'GET') {
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        // Check rate limit (60 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'graph:read', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await handleGetGraph(request, env, { userId: claims.sub });
+        response = addRateLimitHeaders(response, request);
+        return addCorsHeaders(response);
+      }
+
+      // GET /api/graph/entity/:entity_id - Get entity with neighborhood (Feature 006)
+      if (url.pathname.match(/^\/api\/graph\/entity\/[^\/]+$/) && method === 'GET') {
+        const pathParts = url.pathname.split('/');
+        const entityId = pathParts[pathParts.length - 1];
+
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        // Check rate limit (60 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'graph:read', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await handleGetEntity(request, env, { userId: claims.sub }, entityId);
+        response = addRateLimitHeaders(response, request);
+        return addCorsHeaders(response);
+      }
+
+      // GET /api/graph/search - Search entities (Feature 006)
+      if (url.pathname === '/api/graph/search' && method === 'GET') {
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        // Check rate limit (20 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'graph:search', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await handleSearchEntities(request, env, { userId: claims.sub });
+        response = addRateLimitHeaders(response, request);
+        return addCorsHeaders(response);
+      }
+
+      // GET /api/graph/stats - Get graph statistics (Feature 006)
+      if (url.pathname === '/api/graph/stats' && method === 'GET') {
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        // Check rate limit (30 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'graph:stats', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await handleGetGraphStats(request, env, { userId: claims.sub });
+        response = addRateLimitHeaders(response, request);
+        return addCorsHeaders(response);
+      }
+
+      // POST /api/graph/merge-entities - Merge duplicate entities (Feature 006)
+      if (url.pathname === '/api/graph/merge-entities' && method === 'POST') {
+        // Extract userId from JWT
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing JWT token'));
+        }
+
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          return addCorsHeaders(unauthorizedError('Invalid or expired JWT token'));
+        }
+
+        // Check rate limit (10 requests/minute per user)
+        const rateLimitResponse = await rateLimitMiddleware(request, env, 'graph:merge', claims.sub);
+        if (rateLimitResponse) {
+          return addCorsHeaders(rateLimitResponse);
+        }
+
+        let response = await handleMergeEntities(request, env, { userId: claims.sub });
+        response = addRateLimitHeaders(response, request);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Manually trigger graph sync (T051)
+      // POST /api/test/trigger-graph-sync
+      if (url.pathname === '/api/test/trigger-graph-sync' && method === 'POST') {
+        const response = await handleTriggerGraphSync(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Test graph sync directly without queue
+      // POST /api/test/graph-direct
+      if (url.pathname === '/api/test/graph-direct' && method === 'POST') {
+        const response = await handleTestGraphDirect(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Test simple Cypher query
+      // POST /api/test/simple-cypher
+      if (url.pathname === '/api/test/simple-cypher' && method === 'POST') {
+        const response = await handleTestSimpleCypher(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Test direct Redis connection (bypass DO)
+      // POST /api/test/redis-direct
+      if (url.pathname === '/api/test/redis-direct' && method === 'POST') {
+        const response = await handleTestRedisDirect(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Check connection pool warmup status
+      // GET /api/test/check-pool-warmup
+      if (url.pathname === '/api/test/check-pool-warmup' && method === 'GET') {
+        const response = await handleCheckPoolWarmup(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Initialize connection pool with config
+      // POST /api/test/init-pool
+      if (url.pathname === '/api/test/init-pool' && method === 'POST') {
+        const response = await handleInitPool(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // TEST ENDPOINT: Benchmark FalkorDB performance (direct vs DO)
+      // GET /api/test/benchmark-falkordb
+      if (url.pathname === '/api/test/benchmark-falkordb' && method === 'GET') {
+        const response = await handleBenchmarkFalkorDB(request, env);
+        return addCorsHeaders(response);
+      }
+
       // Basic health check endpoint
       if (url.pathname === '/') {
       return new Response(JSON.stringify({
@@ -417,7 +612,7 @@ export default {
         }
 
         // Get Durable Object stub
-        const id = env.FALKORDB_POOL.idFromName('default-pool');
+        const id = env.FALKORDB_POOL.idFromName('pool');
         const stub = env.FALKORDB_POOL.get(id);
 
         // Execute query with credentials
@@ -472,6 +667,25 @@ export default {
 
       // Never expose internal errors or sensitive data
       return internalServerError('An unexpected error occurred');
+    }
+  },
+
+  /**
+   * Queue handler - processes queue messages
+   * @param {Object} batch - Batch of queue messages
+   * @param {Object} env - Environment bindings
+   * @param {Object} ctx - Execution context
+   */
+  async queue(batch, env, ctx) {
+    // Route messages to appropriate consumer based on queue name
+    const queueName = batch.queue;
+
+    if (queueName === 'entity-extraction-jobs') {
+      return entityExtractionConsumer.queue(batch, env, ctx);
+    } else if (queueName === 'graph-sync-jobs') {
+      return graphSyncConsumer.queue(batch, env, ctx);
+    } else {
+      console.error('[QueueRouter] Unknown queue:', queueName);
     }
   }
 };

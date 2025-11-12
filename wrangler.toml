@@ -67,6 +67,20 @@ max_batch_size = 10
 max_retries = 3
 dead_letter_queue = "entity-extraction-failed"
 
+# Cloudflare Queues (Feature 006 - Knowledge Graph Building)
+# Producer binding for enqueueing graph sync jobs
+[[queues.producers]]
+binding = "GRAPH_SYNC_QUEUE"
+queue = "graph-sync-jobs"
+
+# Consumer configuration for processing graph sync jobs
+[[queues.consumers]]
+queue = "graph-sync-jobs"
+max_batch_size = 5
+max_retries = 3
+max_batch_timeout = 5
+dead_letter_queue = "graph-sync-failed"
+
 # Environment variables (non-sensitive)
 [vars]
 ENVIRONMENT = "development"

@@ -35,7 +35,7 @@ export async function handleFalkorDBHealth(request, env) {
     const startTime = Date.now();
 
     // T031: Get Durable Object stub for connection pool
-    const id = env.FALKORDB_POOL.idFromName('default-pool');
+    const id = env.FALKORDB_POOL.idFromName('pool');
     const stub = env.FALKORDB_POOL.get(id);
 
     // T032: Execute health query

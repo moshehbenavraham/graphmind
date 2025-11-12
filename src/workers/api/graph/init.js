@@ -43,7 +43,7 @@ export async function handleGraphInit(request, env) {
     }
 
     // T057: Get Durable Object stub and call getOrCreateNamespace
-    const id = env.FALKORDB_POOL.idFromName('default-pool');
+    const id = env.FALKORDB_POOL.idFromName('pool');
     const stub = env.FALKORDB_POOL.get(id);
 
     // Call Durable Object with credentials

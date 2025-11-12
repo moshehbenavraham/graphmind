@@ -14,7 +14,7 @@ You **MAY** consider the user input if provided (optional hints like "start from
 
 ## Overview
 
-This command provides interactive implementation guidance through the task checklist. It analyzes task status, provides context from design docs, guides code generation, tracks progress, and offers validation checks. Think of this as an AI pair programmer working through your task list.
+This command provides either a completely automated AI Engineer or interactive implementation guidance through the task checklist. It analyzes task status, provides context from design docs, performs/guides code generation, tracks progress, and offers validation checks. Think of this as either a completely Agentic Senior Coding Engineer or an AI pair programmer working through your task list.
 
 ## CRITICAL: Command Execution Authority
 

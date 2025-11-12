@@ -1,4 +1,4 @@
-# Next Spec: Entity Extraction Pipeline
+# Next Spec: Knowledge Graph Building (FalkorDB GraphRAG Integration)
 
 **Generated**: 2025-11-11
 **Phase**: Phase 2 - Knowledge Graph & Entity Extraction
@@ -10,23 +10,29 @@
 ## Why This Next
 
 **Dependencies Satisfied**:
-- Phase 1 Foundation 100% complete (Auth, D1, FalkorDB connection, Workers setup)
+- Phase 1 Foundation 100% complete (Auth, D1, FalkorDB connection pooling, Workers setup)
 - Feature 004 Voice Note Capture & Transcription 100% complete
   - VoiceSessionManager Durable Object with WebRTC/WebSocket
   - Real-time Deepgram Nova-3 STT integration
   - Voice notes stored in D1 with transcripts
   - 4 REST API endpoints for note management
+- Feature 005 Entity Extraction Pipeline 100% complete
+  - Llama 3.1-8b entity extraction for 7 entity types
+  - Entity resolution with KV + D1 caching
+  - Background processing via Cloudflare Queues
+  - Extracted entities stored in D1 (entities_extracted JSON column)
+  - 4 REST API endpoints for entity management
 
 **Blocks Future Work**:
-- Knowledge Graph Building (Feature 006) - needs extracted entities
-- Graph Visualization (Feature 007) - needs entities to visualize
-- Voice Query System (Phase 3) - needs populated knowledge graph
-- All Phase 2 deliverables depend on entity extraction
+- Graph Visualization (Feature 007) - needs populated knowledge graph to visualize
+- Voice Query System (Phase 3) - needs knowledge graph to query against
+- Contextual retrieval and GraphRAG - requires structured knowledge graph
+- All Phase 3 deliverables depend on the knowledge graph being built
 
 **Phase Requirement**:
 - **Phase 2 Goal**: "Build knowledge graph from voice notes"
-- Entity extraction is the critical first step that transforms transcripts into structured knowledge
-- Enables automatic ontology population in FalkorDB
+- Knowledge Graph Building is the critical integration step that transforms extracted entities into queryable knowledge
+- Enables FalkorDB GraphRAG SDK's auto-ontology detection and relationship inference
 - Referenced in Phase 2 doc: [docs/PRD/phases/phase-2-knowledge-graph.md](phases/phase-2-knowledge-graph.md)
 
 ---
@@ -35,33 +41,35 @@
 
 ### ✅ Included
 
-- Llama 3.1-8b-instruct integration via Workers AI for NLP entity extraction
-- Entity extraction from voice note transcripts (7 entity types: Person, Project, Meeting, Topic, Technology, Location, Organization)
-- Confidence scoring for extracted entities (threshold: 0.8)
-- Entity resolution and caching (KV storage for fuzzy matching)
-- Background job processing for transcript entity extraction
-- API endpoints for triggering entity extraction and viewing results
-- D1 schema updates for entity metadata storage
+- FalkorDB GraphRAG SDK integration for automatic knowledge graph population
+- Create and update graph nodes from extracted entities (7 types: Person, Project, Meeting, Topic, Technology, Location, Organization)
+- Automatic relationship detection using FalkorDB GraphRAG SDK's built-in inference
+- Entity merge/deduplication logic with fuzzy matching (handle "Sarah" vs "Sarah Johnson")
+- Graph update triggers after entity extraction completion
+- API endpoints for graph operations (GET graph, create/update/delete nodes, manage relationships)
+- D1 schema updates for graph metadata tracking
+- User namespace isolation in FalkorDB (separate graphs per user)
 
 ### ❌ Excluded
 
-- Knowledge graph creation/updates in FalkorDB - Feature 006 (Knowledge Graph Building)
-- Graph visualization UI - Feature 007 (Graph Visualization)
-- Relationship extraction between entities - Feature 006 (will use FalkorDB GraphRAG SDK's auto relationship detection)
-- Entity merge/deduplication logic - Feature 006 (part of graph building)
-- User confirmation UI for ambiguous entities - Phase 4 polish feature
-- Audio file storage in R2 - Phase 4 (not needed for entity extraction)
+- Graph visualization UI - Feature 007 (Basic Graph Visualization)
+- Query generation and answer system - Phase 3 (Voice Query System)
+- Advanced graph analytics (PageRank, community detection) - Phase 5 (Advanced Features)
+- Manual entity creation UI - Phase 4 (Polish & Features)
+- Graph export/import functionality - Phase 5 (Advanced Features)
+- Audio file storage in R2 - Phase 4 (not needed for graph building)
 
 ### 📏 Size Check
 
-**Estimated Complexity**: Medium
+**Estimated Complexity**: Medium-High
 **Fits Single Context Window**: Yes
 
 **Breakdown**:
-- Entity extraction service (Workers AI integration, prompt engineering)
-- Entity storage and caching (D1 updates, KV caching)
-- API endpoints (extract entities, view extracted entities)
-- Background job processing (queue for async extraction)
+- FalkorDB GraphRAG SDK integration service (graph client, node creation, relationship management)
+- Entity-to-node mapper (transform D1 entity format to FalkorDB node properties)
+- Graph update orchestration (trigger after entity extraction, batch updates)
+- API endpoints (6 endpoints: graph retrieval, node CRUD, relationship CRUD)
+- Entity merge logic (fuzzy matching, relationship preservation)
 
 ---
 
@@ -70,79 +78,98 @@
 **Spec Type**: Feature
 
 **Core Goals** (will become full requirements in spec):
-1. Extract 7 entity types from voice note transcripts with >85% accuracy
-2. Score entity confidence and filter low-confidence extractions (<0.8 threshold)
-3. Cache entity resolutions in KV for fast fuzzy matching
-4. Process entity extraction asynchronously (background jobs)
-5. Store extracted entities in D1 with metadata
+1. Integrate FalkorDB GraphRAG SDK to automatically build knowledge graph from extracted entities
+2. Create and maintain graph nodes for all 7 entity types with automatic relationship detection
+3. Implement entity merge/deduplication with fuzzy matching and relationship preservation
+4. Provide REST API for graph queries, node management, and relationship management
+5. Ensure user namespace isolation (separate graphs per user in FalkorDB)
 
 **Key Components** (will be expanded in design):
 - **Cloudflare Services**:
-  - Workers (entity extraction service, API endpoints)
-  - Workers AI (Llama 3.1-8b-instruct for entity extraction)
-  - KV (entity resolution cache, fuzzy matching)
-  - D1 (entity metadata storage, entity_cache table)
-  - Queues (background job processing for extraction)
-- **FalkorDB**: No (not yet - Feature 006 will add to graph)
-- **Voice AI**: No (uses existing transcripts from Feature 004)
+  - Workers (graph service, API endpoints, orchestration)
+  - D1 (graph metadata, sync tracking between D1 entities and FalkorDB nodes)
+  - KV (graph query cache, entity resolution cache reuse from Feature 005)
+  - Durable Objects (FalkorDB connection pooling from Feature 003)
+- **FalkorDB**: Yes
+  - GraphRAG SDK integration for automatic ontology and relationship detection
+  - 7 node types (Person, Project, Meeting, Topic, Technology, Location, Organization)
+  - Automatic relationship inference (WORKED_WITH, DISCUSSED, USES_TECHNOLOGY, LOCATED_AT, etc.)
+  - Cypher query generation for complex retrieval
+- **Voice AI**: No (uses existing entity extraction from Feature 005)
 - **Frontend**: No (API-only feature, UI in Feature 007)
 
 **Success Criteria** (will become acceptance criteria):
-- Entity extraction accuracy >85% on test dataset (50 sample transcripts)
-- Entity extraction completes within 3 seconds per note
-- Confidence scores correctly filter low-quality entities (<0.8)
-- Entity cache reduces duplicate entity checks by 70%
-- All 7 entity types extracted correctly (Person, Project, Meeting, Topic, Technology, Location, Organization)
+- Knowledge graph successfully created from extracted entities (100% entity coverage)
+- Automatic relationship detection creates meaningful connections (>80% accuracy on manual review)
+- Entity merge logic handles duplicates correctly (fuzzy matching with >90% accuracy)
+- Graph updates complete within 5 seconds per voice note
+- Graph queries execute within 500ms (uncached) and 100ms (cached)
+- User namespace isolation verified (no cross-user data leakage)
+- Graph supports 1,000+ nodes per user without performance degradation
 
 ---
 
 ## After This Spec
 
 **Next Logical Steps** (in order):
-1. **Feature 006: Knowledge Graph Building** - Create/update entities in FalkorDB using extracted entities
-2. **Feature 007: Basic Graph Visualization** - Display entities and relationships in interactive graph
-3. **Phase 3: Voice Query System** - Query the populated knowledge graph via voice
+1. **Feature 007: Basic Graph Visualization** - Interactive graph UI to explore knowledge
+2. **Phase 3: Voice Query System** - Query the populated knowledge graph via voice
+3. **Phase 4: Polish & Features** - Manual entity creation, graph export, advanced UI features
 
 **Enables**:
-- Structured knowledge capture from unstructured voice notes
-- Automatic ontology population in FalkorDB (auto-detection from entities)
-- Foundation for Phase 2 knowledge graph building
-- Intelligent querying in Phase 3 (requires populated graph)
+- Visual exploration of personal knowledge graph (Feature 007)
+- Contextual voice queries with GraphRAG (Phase 3)
+- Intelligent answer generation based on graph context (Phase 3)
+- Foundation for advanced analytics and multi-source ingestion (Phase 5)
 
 ---
 
 ## References
 
 - **Phase Doc**: [docs/PRD/phases/phase-2-knowledge-graph.md](phases/phase-2-knowledge-graph.md)
-- **PRD Section**: [Section 3.2.2 Entity Extraction (FR-NC-002)](REQUIREMENTS-PRD.md#322-entity-extraction)
+- **PRD Section**: [Section 3.4 Knowledge Graph Management](REQUIREMENTS-PRD.md#34-knowledge-graph-management)
 - **Related Specs**:
-  - [specs/004-voice-note-capture](../../specs/004-voice-note-capture) - Provides transcripts for extraction
-  - [specs/003-falkordb-connection](../../specs/003-falkordb-connection) - FalkorDB ready for Feature 006
+  - [specs/003-falkordb-connection](../../specs/003-falkordb-connection) - FalkorDB connection pooling ready
+  - [specs/005-entity-extraction](../../specs/005-entity-extraction) - Provides extracted entities for graph building
 
 ---
 
 ## Notes
 
-**Entity Extraction Approach**:
-- Use Llama 3.1-8b-instruct via Workers AI (model: `@cf/meta/llama-3.1-8b-instruct`)
-- Structured prompt with JSON output schema
-- Extract 7 entity types with properties and confidence scores
-- Cache entity resolutions in KV for fuzzy matching (e.g., "Sarah" -> "Sarah Johnson")
+**FalkorDB GraphRAG SDK Approach**:
+- Use GraphRAG SDK v0.5+ (NOT deprecated GraphRAG-SDK-v2)
+- Leverage automatic ontology detection (no manual ontology setup required)
+- Use SDK's built-in relationship inference from entity context
+- Process each voice note's extracted entities into graph updates
+- Cache Cypher queries in KV for performance
+
+**Entity-to-Node Mapping**:
+- Transform D1 `voice_notes.entities_extracted` JSON to FalkorDB node creation
+- Map entity properties to node properties (e.g., Person.name, Project.description)
+- Preserve entity_id from D1 for traceability
+- Track sync status in D1 (entities_synced_to_graph column)
 
 **Performance Considerations**:
-- Background processing via Cloudflare Queues (async extraction)
-- Batch processing for multiple notes
-- KV caching to reduce duplicate LLM calls
-- Target: <3 seconds per note for entity extraction
+- Batch graph updates (process multiple entities in single transaction)
+- Reuse FalkorDB connection pool from Feature 003 (Durable Object)
+- Cache graph queries in KV (1-hour TTL)
+- Background processing via Cloudflare Queues (similar to entity extraction)
+- Target: <5 seconds per voice note for full graph update
 
 **Integration Points**:
-- Triggered automatically after voice note creation (webhook)
+- Triggered automatically after entity extraction completion (queue consumer hook)
 - Can be manually triggered via API for existing notes
-- Stores results in D1 `voice_notes.entities_extracted` JSON column
-- Creates entries in `entity_cache` table for fuzzy matching
+- Updates D1 `voice_notes.entities_synced_to_graph` column when complete
+- Reuses entity resolution cache from Feature 005 for merge logic
 
 **Quality Assurance**:
-- Confidence threshold of 0.8 to filter low-quality entities
-- Test dataset of 50 sample transcripts with manually labeled entities
-- Measure precision, recall, F1 score (target: >85% F1)
-- Iterative prompt engineering based on test results
+- Manual review of 50 sample graphs to verify relationship accuracy (>80% target)
+- Test entity merge logic with known duplicates (e.g., "JS" -> "JavaScript", "Sarah" -> "Sarah Johnson")
+- Verify user namespace isolation (query one user's graph, should not see other users' data)
+- Load test with 1,000+ nodes per user to ensure performance targets met
+
+**FalkorDB GraphRAG SDK Resources**:
+- GitHub: https://github.com/FalkorDB/GraphRAG-SDK
+- Documentation: https://docs.falkordb.com/
+- Examples: FalkorDB GraphRAG examples for Python
+- Version requirement: graphrag_sdk>=0.5.0
