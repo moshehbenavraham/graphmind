@@ -188,7 +188,9 @@ The "second brain" market is exploding in 2025:
 - Cloudflare Realtime Agents (Pipecat voice pipeline)
 
 **Data Storage:**
-- FalkorDB Cloud (managed knowledge graph)
+- FalkorDB (flexible deployment - see [deployment options](technical/falkordb-deployment.md))
+  - **Development**: Self-hosted Docker (localhost, sub-millisecond performance)
+  - **Production**: Self-hosted VPS or FalkorDB Cloud (TBD)
 - D1 (user metadata, sessions, light relational data)
 - R2 (audio recordings - optional)
 - KV (caching frequent queries)
@@ -1252,15 +1254,17 @@ LIMIT 20
 - Pages: FREE (500 builds/month) -> FREE
 - Durable Objects: Included in Workers Paid plan -> $0.15/million requests
 
-**FalkorDB Cloud**:
-- Starter tier: $15/mo (recommended for MVP, up to 10K entities)
-- Pro tier: $50/mo (for production scale)
+**FalkorDB Deployment** (see [deployment options](technical/falkordb-deployment.md)):
+- **Development**: Self-hosted Docker (localhost) - $0/month
+- **Production Option A**: Self-hosted VPS - $10-25/month (recommended for cost)
+- **Production Option B**: FalkorDB Cloud Starter - $15/month (recommended for managed service)
+- **Production Option C**: FalkorDB Cloud Pro - $50/month (for production scale)
 
 **Total Cost Estimate**:
-- **Local Development**: $0/month (Docker FalkorDB + Cloudflare free tiers + Workers AI free during beta)
-- **Staging/Production Light use**: $20/month (FalkorDB Cloud starter $15 + Cloudflare Workers Paid $5)
-- **Production Moderate use**: $20-30/month (same as above, scales with usage)
-- **Production Heavy use**: $55+/month (FalkorDB Cloud pro $50 + Cloudflare $5-20)
+- **Local Development**: $0/month (Self-hosted Docker + Cloudflare free tiers + Workers AI free during beta)
+- **Production Light (VPS)**: $15-30/month (Self-hosted VPS $10-25 + Cloudflare Workers Paid $5)
+- **Production Light (Managed)**: $20/month (FalkorDB Cloud Starter $15 + Cloudflare Workers Paid $5)
+- **Production Heavy (Managed)**: $55+/month (FalkorDB Cloud Pro $50 + Cloudflare $5-20)
 
 **Note**: Workers AI is currently **free during beta** (as of November 2025). Pricing will be announced when it exits beta. Cost estimates may change once Workers AI pricing is finalized.
 
@@ -1268,7 +1272,7 @@ LIMIT 20
 - Aggressive caching in KV (reduce FalkorDB queries)
 - Batch entity extraction (reduce LLM calls)
 - Voice storage optional (save R2 costs)
-- Start with FalkorDB Cloud starter tier ($15/mo)
+- Production deployment decision TBD (self-hosted VPS vs FalkorDB Cloud)
 
 ---
 

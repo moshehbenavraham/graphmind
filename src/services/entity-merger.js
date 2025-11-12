@@ -316,3 +316,133 @@ function calculateLevenshteinSimilarity(str1, str2) {
 
   return similarity;
 }
+
+/**
+ * Calculate similarity between two entity names (exported for testing)
+ * Uses hybrid approach: token matching + Levenshtein
+ *
+ * @param {string} name1 - First entity name
+ * @param {string} name2 - Second entity name
+ * @returns {number} Similarity score (0-1)
+ */
+export function calculateSimilarity(name1, name2) {
+  const normalized1 = (name1 || '').toLowerCase().trim();
+  const normalized2 = (name2 || '').toLowerCase().trim();
+
+  // Exact match
+  if (normalized1 === normalized2) return 1.0;
+
+  // Remove common prefixes/suffixes
+  const cleanedName1 = removeCommonPrefixes(normalized1);
+  const cleanedName2 = removeCommonPrefixes(normalized2);
+
+  // Token-based matching (better for names)
+  const tokenSim = calculateTokenSimilarity(cleanedName1, cleanedName2);
+
+  // Levenshtein distance (character-level)
+  const levSim = calculateLevenshteinSimilarity(cleanedName1, cleanedName2);
+
+  // Hybrid: weight token matching more heavily (70/30)
+  const hybrid = tokenSim * 0.7 + levSim * 0.3;
+
+  return hybrid;
+}
+
+/**
+ * Remove common prefixes and suffixes
+ */
+function removeCommonPrefixes(name) {
+  const prefixes = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'dr', 'mr', 'mrs', 'ms', 'prof'];
+  const suffixes = ['corporation', 'corp', 'corp.', 'inc', 'inc.', 'ltd', 'ltd.', 'llc', 'llc.', 'company', 'co', 'co.', 'project', 'city'];
+
+  let cleaned = name;
+
+  // Remove prefixes
+  for (const prefix of prefixes) {
+    if (cleaned.startsWith(prefix + ' ')) {
+      cleaned = cleaned.substring(prefix.length + 1).trim();
+    }
+  }
+
+  // Remove suffixes
+  for (const suffix of suffixes) {
+    if (cleaned.endsWith(' ' + suffix)) {
+      cleaned = cleaned.substring(0, cleaned.length - suffix.length - 1).trim();
+    }
+  }
+
+  return cleaned;
+}
+
+/**
+ * Calculate token-based similarity (better for names with abbreviations)
+ */
+function calculateTokenSimilarity(name1, name2) {
+  const tokens1 = name1.split(/\s+/).filter(t => t.length > 0);
+  const tokens2 = name2.split(/\s+/).filter(t => t.length > 0);
+
+  if (tokens1.length === 0 || tokens2.length === 0) return 0;
+
+  let matchCount = 0;
+  let totalTokens = Math.max(tokens1.length, tokens2.length);
+
+  // Track which tokens in tokens2 have been matched
+  const matched2 = new Set();
+
+  // Check for token matches (including abbreviations)
+  for (const token1 of tokens1) {
+    for (let i = 0; i < tokens2.length; i++) {
+      if (!matched2.has(i) && tokensMatch(token1, tokens2[i])) {
+        matchCount++;
+        matched2.add(i);
+        break;
+      }
+    }
+  }
+
+  // Bonus: if one has more tokens but all of the shorter match, score higher
+  const minTokens = Math.min(tokens1.length, tokens2.length);
+  if (matchCount >= minTokens) {
+    // All tokens from shorter name matched
+    return 0.9 + (0.1 * (matchCount / totalTokens));
+  }
+
+  return matchCount / totalTokens;
+}
+
+/**
+ * Check if two tokens match (handles abbreviations)
+ */
+function tokensMatch(token1, token2) {
+  // Exact match
+  if (token1 === token2) return true;
+
+  // Abbreviation match (e.g., "j." matches "john")
+  if (token1.endsWith('.') && token2.startsWith(token1.charAt(0))) return true;
+  if (token2.endsWith('.') && token1.startsWith(token2.charAt(0))) return true;
+
+  // Initial match (e.g., "j" matches "john")
+  if (token1.length === 1 && token2.startsWith(token1)) return true;
+  if (token2.length === 1 && token1.startsWith(token2)) return true;
+
+  // Substring match for longer tokens
+  if (token1.length >= 3 && token2.length >= 3) {
+    if (token1.includes(token2) || token2.includes(token1)) return true;
+  }
+
+  // Levenshtein similarity for close matches
+  const levSim = calculateLevenshteinSimilarity(token1, token2);
+  return levSim >= 0.85;
+}
+
+/**
+ * Check if two entity names match using fuzzy matching
+ *
+ * @param {string} name1 - First entity name
+ * @param {string} name2 - Second entity name
+ * @param {number} threshold - Similarity threshold (default 0.85)
+ * @returns {boolean} True if entities match
+ */
+export function fuzzyMatch(name1, name2, threshold = 0.85) {
+  return calculateSimilarity(name1, name2) >= threshold;
+}

@@ -5,15 +5,23 @@
 export async function handleTestSimpleCypher(request, env) {
   try {
     console.log('[TestSimpleCypher] Starting test...');
+    const body = await request.json();
+    const { userId, cypher } = body;
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Missing userId in request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const doId = env.FALKORDB_POOL.idFromName('pool');
     const doStub = env.FALKORDB_POOL.get(doId);
     console.log('[TestSimpleCypher] Got DO stub');
 
-    const userId = 'test-user';
-
-    // Test 1: Absolute simplest query - no parameters
+    // Use provided cypher or default test query
     const operations = [{
-      cypher: 'RETURN 1 as num',
+      cypher: cypher || 'RETURN 1 as num',
       params: {}
     }];
 

@@ -18,6 +18,7 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.1.0",
     "@vitest/ui": "^4.0.8",
     "vitest": "^4.0.8",
     "wrangler": "^4.0.0"
@@ -28,6 +29,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "falkordb": "^6.3.1",
     "jsonwebtoken": "^9.0.2",
     "react": "^19.2.0",

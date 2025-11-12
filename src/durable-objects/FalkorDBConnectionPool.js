@@ -78,25 +78,24 @@ export class FalkorDBConnectionPool {
   /**
    * Set connection configuration from incoming request
    * Persists to Durable Object storage for alarm handler access
+   * ALWAYS overwrites existing config to allow switching between local/cloud
    */
   async setConnectionConfig(config) {
-    if (!this.connectionConfig) {
-      this.connectionConfig = {
-        host: config.host,
-        port: config.port,
-        username: config.username,
-        password: config.password,
-      };
+    this.connectionConfig = {
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+    };
 
-      // Persist to storage for alarm handler
-      await this.state.storage.put('connectionConfig', this.connectionConfig);
+    // Persist to storage for alarm handler
+    await this.state.storage.put('connectionConfig', this.connectionConfig);
 
-      console.log('[ConnectionPool] Connection config set and persisted', {
-        host: config.host,
-        port: config.port,
-        username: config.username,
-      });
-    }
+    console.log('[ConnectionPool] Connection config set and persisted', {
+      host: config.host,
+      port: config.port,
+      username: config.username,
+    });
   }
 
   /**

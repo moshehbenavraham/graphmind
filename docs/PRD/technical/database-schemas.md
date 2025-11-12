@@ -11,6 +11,9 @@
 GraphMind uses multiple data stores optimized for different purposes:
 - **D1 (SQLite)**: User metadata, notes, sessions
 - **FalkorDB (Graph)**: Knowledge graph entities and relationships
+  - See [FalkorDB Deployment Options](falkordb-deployment.md) for configuration details
+  - **Development**: Self-hosted Docker (localhost, Redis protocol)
+  - **Production**: Self-hosted VPS or FalkorDB Cloud (TBD)
 - **KV**: Caching and session data
 - **R2**: Audio file storage
 

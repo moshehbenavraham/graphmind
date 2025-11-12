@@ -7,6 +7,7 @@
  */
 
 import { buildGetGraphStats } from '../../lib/graph/cypher-builder.js';
+import { executeStatsWithCache } from '../../lib/graph/stats-cache.js';
 
 /**
  * Handle GET /api/graph/stats request
@@ -18,61 +19,42 @@ import { buildGetGraphStats } from '../../lib/graph/cypher-builder.js';
  */
 export async function handleGetGraphStats(request, env, user) {
   try {
-    const startTime = Date.now();
+    // Use stats cache wrapper for automatic caching
+    const result = await executeStatsWithCache(env.KV, user.userId, async () => {
+      // Build Cypher query
+      const { cypher } = buildGetGraphStats();
 
-    // Check cache (5 minute TTL)
-    const cacheKey = `graph:stats:${user.userId}`;
-    const cached = await env.KV.get(cacheKey, { type: 'json' });
+      // Execute query via FalkorDB connection pool
+      const doId = env.FALKORDB_POOL.idFromName('pool');
+      const doStub = env.FALKORDB_POOL.get(doId);
 
-    if (cached) {
-      return new Response(JSON.stringify({
-        ...cached,
-        meta: {
-          ...cached.meta,
-          cached: true,
-          query_time_ms: Date.now() - startTime,
-        },
-      }), {
-        status: 200,
+      const response = await doStub.fetch('http://do/execute', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userId,
+          cypher,
+          params: { user_id: user.userId },
+          config: {
+            host: env.FALKORDB_HOST,
+            port: parseInt(env.FALKORDB_PORT),
+            username: env.FALKORDB_USER,
+            password: env.FALKORDB_PASSWORD,
+          },
+        }),
       });
-    }
 
-    // Build Cypher query
-    const { cypher } = buildGetGraphStats();
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`FalkorDB query failed: ${error}`);
+      }
 
-    // Execute query via FalkorDB connection pool
-    const doId = env.FALKORDB_POOL.idFromName('pool');
-    const doStub = env.FALKORDB_POOL.get(doId);
+      const queryResult = await response.json();
 
-    const response = await doStub.fetch('http://do/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.userId,
-        cypher,
-        params: { user_id: user.userId },
-        config: {
-          host: env.FALKORDB_HOST,
-          port: parseInt(env.FALKORDB_PORT),
-          username: env.FALKORDB_USER,
-          password: env.FALKORDB_PASSWORD,
-        },
-      }),
-    });
+      // Format stats
+      const [nodeCount, relCount, entityBreakdown, mostConnected] = queryResult.data?.[0] || [0, 0, [], []];
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`FalkorDB query failed: ${error}`);
-    }
-
-    const result = await response.json();
-
-    // Format response
-    const [nodeCount, relCount, entityBreakdown, mostConnected] = result.data?.[0] || [0, 0, [], []];
-
-    const responseData = {
-      data: {
+      return {
         node_count: nodeCount || 0,
         relationship_count: relCount || 0,
         entity_breakdown: (entityBreakdown || []).reduce((acc, item) => {
@@ -81,19 +63,10 @@ export async function handleGetGraphStats(request, env, user) {
         }, {}),
         most_connected: mostConnected || [],
         last_sync: new Date().toISOString(),
-      },
-      meta: {
-        query_time_ms: Date.now() - startTime,
-        cached: false,
-      },
-    };
-
-    // Cache result (5 minutes)
-    await env.KV.put(cacheKey, JSON.stringify(responseData), {
-      expirationTtl: 300, // 5 minutes
+      };
     });
 
-    return new Response(JSON.stringify(responseData), {
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

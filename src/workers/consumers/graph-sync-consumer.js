@@ -9,6 +9,7 @@
 
 import { processEntities } from '../../services/graph-rag.js';
 import { invalidateAllGraphCaches } from '../../lib/graph/cache-invalidator.js';
+import { createLogger, createPerformanceTracker } from '../../lib/utils/logger.js';
 
 /**
  * Queue consumer handler
@@ -20,27 +21,69 @@ import { invalidateAllGraphCaches } from '../../lib/graph/cache-invalidator.js';
  */
 export default {
   async queue(batch, env, ctx) {
-    console.log('[GraphSyncConsumer] Processing batch:', batch.messages.length);
+    // T139: Structured logging for queue consumer
+    const logger = createLogger('GraphSyncConsumer', {
+      batch_size: batch.messages.length,
+      queue: 'graph-sync-jobs',
+    });
+
+    logger.info('Processing batch started', {
+      messages_count: batch.messages.length,
+    });
+
+    let successCount = 0;
+    let failureCount = 0;
 
     for (const message of batch.messages) {
       try {
-        await processMessage(message, env);
+        await processMessage(message, env, logger);
         message.ack(); // Acknowledge successful processing
+        successCount++;
       } catch (error) {
-        console.error('[GraphSyncConsumer] Message processing failed:', error);
+        failureCount++;
+        logger.error('Message processing failed', error, {
+          message_id: message.id,
+          attempt: message.attempts,
+        });
 
-        // Retry with exponential backoff
+        // Retry with exponential backoff (T137 - Queue retry logic)
         if (message.attempts < 3) {
-          message.retry({
-            delaySeconds: Math.pow(2, message.attempts) * 5, // 5s, 10s, 20s
+          const delaySeconds = Math.pow(2, message.attempts) * 5; // 5s, 10s, 20s
+          logger.warn('Retrying message', {
+            message_id: message.id,
+            delay_seconds: delaySeconds,
+            attempt: message.attempts + 1,
+            max_attempts: 3,
           });
+          message.retry({ delaySeconds });
         } else {
-          // Send to dead letter queue after 3 retries
-          console.error('[GraphSyncConsumer] Max retries exceeded, sending to DLQ:', message.id);
-          message.ack(); // Remove from main queue (will go to DLQ automatically)
+          // Send to dead letter queue after 3 retries (T136 - DLQ handling)
+          logger.error('Max retries exceeded, sending to DLQ', null, {
+            message_id: message.id,
+            user_id: message.body.userId,
+            note_id: message.body.noteId,
+            error_message: error.message,
+            attempts: message.attempts,
+          });
+
+          // Store DLQ record for manual review
+          try {
+            await storeDLQRecord(env.DB, message, error);
+            logger.info('DLQ record stored', { message_id: message.id });
+          } catch (dlqError) {
+            logger.error('Failed to store DLQ record', dlqError);
+          }
+
+          message.ack(); // Remove from main queue (will go to DLQ automatically if configured)
         }
       }
     }
+
+    logger.info('Batch processing complete', {
+      success_count: successCount,
+      failure_count: failureCount,
+      total: batch.messages.length,
+    });
   },
 };
 
@@ -49,11 +92,20 @@ export default {
  *
  * @param {Object} message - Queue message
  * @param {Object} env - Worker environment bindings
+ * @param {Object} logger - Logger instance
  */
-async function processMessage(message, env) {
+async function processMessage(message, env, logger) {
   const { userId, noteId } = message.body;
 
-  console.log('[GraphSyncConsumer] Processing message:', { userId, noteId, attempt: message.attempts });
+  const msgLogger = logger.withContext({
+    user_id: userId,
+    note_id: noteId,
+    message_id: message.id,
+    attempt: message.attempts,
+  });
+
+  const perfTracker = createPerformanceTracker('processMessage', msgLogger);
+  msgLogger.info('Processing message started');
 
   // Update sync status to 'processing'
   await updateSyncStatus(env.DB, userId, noteId, 'processing');
@@ -75,13 +127,19 @@ async function processMessage(message, env) {
     const entities = entitiesData.entities || entitiesData; // Handle both {"entities": [...]} and [...] formats
 
     if (!Array.isArray(entities) || entities.length === 0) {
-      console.log('[GraphSyncConsumer] No entities to sync for note:', noteId);
+      msgLogger.info('No entities to sync, marking as completed');
       await updateSyncStatus(env.DB, userId, noteId, 'completed');
+      perfTracker.complete(true, { entities_count: 0 });
       return;
     }
 
+    perfTracker.checkpoint('entities_loaded', { count: entities.length });
+
     // Process entities using GraphRAG service with timeout
-    console.log('[GraphSyncConsumer] About to process', entities.length, 'entities with 60s timeout');
+    msgLogger.info('Processing entities', {
+      entities_count: entities.length,
+      timeout_seconds: 60,
+    });
 
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Graph sync timeout after 60 seconds')), 60000)
@@ -92,21 +150,26 @@ async function processMessage(message, env) {
       timeoutPromise
     ]);
 
-    console.log('[GraphSyncConsumer] processEntities completed successfully:', results);
+    perfTracker.checkpoint('entities_processed', results);
+    msgLogger.info('Entities processed successfully', results);
 
     // Store sync metadata in D1
     await storeSyncMetadata(env.DB, userId, noteId, results);
+    perfTracker.checkpoint('metadata_stored');
 
     // Update sync status to 'completed'
     await updateSyncStatus(env.DB, userId, noteId, 'completed', null);
 
     // Invalidate graph caches
     await invalidateAllGraphCaches(env.KV, userId);
+    perfTracker.checkpoint('caches_invalidated');
 
-    console.log('[GraphSyncConsumer] Successfully processed note:', noteId, results);
+    const finalMetrics = perfTracker.complete(true, results);
+    msgLogger.info('Message processing complete', finalMetrics);
 
   } catch (error) {
-    console.error('[GraphSyncConsumer] Error processing note:', noteId, error);
+    perfTracker.complete(false, { error: error.message });
+    msgLogger.error('Error processing note', error);
 
     // Update sync status to 'failed'
     await updateSyncStatus(env.DB, userId, noteId, 'failed', error.message);
@@ -199,4 +262,43 @@ async function storeSyncMetadata(db, userId, noteId, results) {
     results.relationshipsCreated || 0,
     results.processingTimeMs || 0
   ).run();
+}
+
+/**
+ * Store dead letter queue record for failed messages
+ * (T136 - Dead Letter Queue handling)
+ *
+ * @param {Object} db - D1 database binding
+ * @param {Object} message - Failed queue message
+ * @param {Error} error - Error that caused failure
+ */
+async function storeDLQRecord(db, message, error) {
+  const { userId, noteId } = message.body;
+
+  await db.prepare(`
+    INSERT INTO graph_sync_dlq (
+      user_id,
+      note_id,
+      message_id,
+      message_body,
+      error_message,
+      error_stack,
+      attempts,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(
+    userId,
+    noteId,
+    message.id,
+    JSON.stringify(message.body),
+    error.message,
+    error.stack || null,
+    message.attempts
+  ).run();
+
+  console.log('[GraphSyncConsumer] DLQ record stored for manual review:', {
+    userId,
+    noteId,
+    messageId: message.id,
+  });
 }

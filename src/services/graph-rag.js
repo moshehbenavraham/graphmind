@@ -11,6 +11,7 @@ import { mapEntitiesToNodes, extractEntityContext, filterEntitiesByConfidence } 
 import { inferRelationships } from '../lib/graph/relationship-inferrer.js';
 import { buildMergeNode, buildCreateRelationship } from '../lib/graph/cypher-builder.js';
 import { findDuplicateCandidates, mergeEntities } from './entity-merger.js';
+import { createLogger, createPerformanceTracker } from '../lib/utils/logger.js';
 
 /**
  * Process entities from a voice note and create graph nodes/relationships
@@ -22,61 +23,122 @@ import { findDuplicateCandidates, mergeEntities } from './entity-merger.js';
  * @returns {Promise<Object>} Processing results
  */
 export async function processEntities(env, userId, entities, transcript) {
-  const startTime = Date.now();
+  // T138: Structured logging for GraphRAG service
+  const logger = createLogger('GraphRAG', { userId, operation: 'processEntities' });
+  const perfTracker = createPerformanceTracker('processEntities', logger);
 
-  console.log('[GraphRAG] ========== PROCESS ENTITIES START ==========');
-  console.log('[GraphRAG] Input entities count:', entities.length);
-  console.log('[GraphRAG] Input entities:', JSON.stringify(entities).substring(0, 500));
-  console.log('[GraphRAG] User ID:', userId);
-  console.log('[GraphRAG] Transcript length:', transcript?.length || 0);
+  logger.info('Process entities started', {
+    input_entities_count: entities.length,
+    transcript_length: transcript?.length || 0,
+    entities_sample: JSON.stringify(entities.slice(0, 3)),
+  });
+
+  perfTracker.checkpoint('start');
 
   // Filter by confidence threshold
   const validEntities = filterEntitiesByConfidence(entities, 0.7);
-  console.log('[GraphRAG] Valid entities after filtering:', validEntities.length);
-  console.log('[GraphRAG] Filtered entities:', JSON.stringify(validEntities).substring(0, 500));
+  perfTracker.checkpoint('filter_entities', {
+    valid_count: validEntities.length,
+    filtered_out: entities.length - validEntities.length,
+  });
+
+  logger.info('Entities filtered by confidence', {
+    input_count: entities.length,
+    valid_count: validEntities.length,
+    threshold: 0.7,
+  });
 
   if (validEntities.length === 0) {
+    logger.info('No valid entities to process, skipping graph update');
+    perfTracker.complete(true, { reason: 'no_valid_entities' });
     return {
       nodesCreated: 0,
       nodesUpdated: 0,
       relationshipsCreated: 0,
       entitiesMerged: 0,
-      processingTimeMs: Date.now() - startTime,
+      processingTimeMs: perfTracker.complete(true).total_time_ms,
     };
   }
 
   // Map entities to nodes
   const nodes = mapEntitiesToNodes(validEntities);
-  console.log('[GraphRAG] Mapped nodes:', nodes.length);
+  perfTracker.checkpoint('map_entities_to_nodes', { nodes_count: nodes.length });
+  logger.info('Entities mapped to nodes', { nodes_count: nodes.length });
 
   // Check for duplicates and auto-merge (US2 - Entity Deduplication)
   const mergedEntities = await checkAndMergeDuplicates(env, userId, validEntities);
-  console.log('[GraphRAG] Entities merged:', mergedEntities);
+  perfTracker.checkpoint('check_duplicates', { merged_count: mergedEntities });
+  logger.info('Duplicate check complete', { entities_merged: mergedEntities });
 
   // Extract entity context for relationship inference
   const entityContext = extractEntityContext(transcript, validEntities);
+  perfTracker.checkpoint('extract_context');
 
   // Infer relationships
   const relationships = await inferRelationships(env.AI, validEntities, transcript, entityContext);
-  console.log('[GraphRAG] Inferred relationships:', relationships.length);
+  perfTracker.checkpoint('infer_relationships', { relationships_count: relationships.length });
+  logger.info('Relationships inferred', { count: relationships.length });
 
-  // Create nodes in FalkorDB
-  console.log('[GraphRAG] About to create nodes in FalkorDB, count:', nodes.length);
-  const nodeResults = await createNodes(env, userId, nodes);
-  console.log('[GraphRAG] Nodes created successfully:', nodeResults);
+  // Transaction-like processing with rollback support (T135)
+  let nodeResults = null;
+  let relResults = null;
+  const createdNodeIds = [];
 
-  // Create relationships in FalkorDB
-  console.log('[GraphRAG] About to create relationships in FalkorDB, count:', relationships.length);
-  const relResults = await createRelationships(env, userId, relationships);
-  console.log('[GraphRAG] Relationships created successfully:', relResults);
+  try {
+    // Create nodes in FalkorDB
+    logger.info('Creating nodes in FalkorDB', { count: nodes.length });
+    nodeResults = await createNodes(env, userId, nodes);
+    perfTracker.checkpoint('create_nodes', {
+      created: nodeResults.created,
+      updated: nodeResults.updated,
+    });
+    logger.info('Nodes created successfully', nodeResults);
 
-  const processingTimeMs = Date.now() - startTime;
+    // Track created node IDs for potential rollback
+    Object.keys(nodeResults.mappings || {}).forEach(id => createdNodeIds.push(id));
 
-  console.log('[GraphRAG] Processing complete:', {
-    nodesCreated: nodeResults.created,
-    nodesUpdated: nodeResults.updated,
-    relationshipsCreated: relResults.created,
-    processingTimeMs,
+    // Create relationships in FalkorDB
+    logger.info('Creating relationships in FalkorDB', { count: relationships.length });
+    relResults = await createRelationships(env, userId, relationships);
+    perfTracker.checkpoint('create_relationships', { created: relResults.created });
+    logger.info('Relationships created successfully', relResults);
+
+  } catch (error) {
+    logger.error('Transaction failed, attempting rollback', error, {
+      nodes_to_rollback: createdNodeIds.length,
+    });
+
+    // Attempt rollback: Delete any created nodes (relationships will cascade delete)
+    if (createdNodeIds.length > 0) {
+      try {
+        await rollbackNodes(env, userId, createdNodeIds);
+        logger.warn('Rollback successful', {
+          nodes_deleted: createdNodeIds.length,
+        });
+      } catch (rollbackError) {
+        logger.error('Rollback failed', rollbackError);
+        // Log but don't throw - original error is more important
+      }
+    }
+
+    perfTracker.complete(false, { error: error.message });
+    // Re-throw original error for queue retry logic
+    throw error;
+  }
+
+  const metrics = perfTracker.complete(true, {
+    nodes_created: nodeResults.created,
+    nodes_updated: nodeResults.updated,
+    relationships_created: relResults.created,
+    entities_merged: mergedEntities,
+  });
+
+  logger.info('Processing complete', {
+    nodes_created: nodeResults.created,
+    nodes_updated: nodeResults.updated,
+    relationships_created: relResults.created,
+    entities_merged: mergedEntities,
+    total_time_ms: metrics.total_time_ms,
   });
 
   return {
@@ -86,7 +148,7 @@ export async function processEntities(env, userId, entities, transcript) {
     entitiesMerged: mergedEntities,
     entityMappings: nodeResults.mappings,
     relationshipsData: relResults.relationships,
-    processingTimeMs,
+    processingTimeMs: metrics.total_time_ms,
   };
 }
 
@@ -384,4 +446,77 @@ export async function createRelationship(env, userId, fromEntityId, toEntityId, 
   });
 
   return response.ok;
+}
+
+/**
+ * Rollback transaction by deleting created nodes (T135 - Transaction rollback)
+ *
+ * Used when graph update fails partway through to maintain consistency.
+ * Deletes nodes created during failed transaction (relationships cascade delete).
+ *
+ * @param {Object} env - Worker environment bindings
+ * @param {string} userId - User ID
+ * @param {Array<string>} nodeIds - Entity IDs of nodes to delete
+ * @returns {Promise<number>} Number of nodes deleted
+ */
+async function rollbackNodes(env, userId, nodeIds) {
+  if (!nodeIds || nodeIds.length === 0) {
+    return 0;
+  }
+
+  console.log('[GraphRAG:Rollback] Starting rollback for', nodeIds.length, 'nodes');
+
+  const doId = env.FALKORDB_POOL.idFromName('pool');
+  const doStub = env.FALKORDB_POOL.get(doId);
+
+  let deleted = 0;
+
+  // Delete in batches of 10
+  const batchSize = 10;
+  for (let i = 0; i < nodeIds.length; i += batchSize) {
+    const batch = nodeIds.slice(i, i + batchSize);
+
+    const cypher = `
+      MATCH (n {user_id: $user_id})
+      WHERE n.entity_id IN $entity_ids
+      DETACH DELETE n
+      RETURN count(n) as deleted
+    `.trim();
+
+    try {
+      const response = await doStub.fetch('http://do/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          cypher,
+          params: {
+            user_id: userId,
+            entity_ids: batch,
+          },
+          config: {
+            host: env.FALKORDB_HOST,
+            port: parseInt(env.FALKORDB_PORT),
+            username: env.FALKORDB_USER,
+            password: env.FALKORDB_PASSWORD,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const batchDeleted = result.data?.[0]?.[0] || 0;
+        deleted += batchDeleted;
+        console.log(`[GraphRAG:Rollback] Deleted ${batchDeleted} nodes in batch`);
+      } else {
+        console.error('[GraphRAG:Rollback] Failed to delete batch:', await response.text());
+      }
+    } catch (error) {
+      console.error('[GraphRAG:Rollback] Error deleting batch:', error);
+      // Continue with next batch despite errors
+    }
+  }
+
+  console.log('[GraphRAG:Rollback] Rollback complete, deleted', deleted, 'nodes');
+  return deleted;
 }
