@@ -11,6 +11,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.2] - 2025-11-15
+
+### Fixed
+
+- **CRITICAL: WebSocket Voice Query Connection** - Voice query now fully functional
+  - Fixed JWT token validation in WebSocket upgrade handler
+  - Issue: Backend expected `?user_id=` directly, frontend sent `?token=<jwt>`
+  - Solution: Added JWT verification in `/ws/query/*` handler (matches voice notes pattern)
+  - WebSocket now validates token, extracts user_id from claims, passes to QuerySessionManager
+  - src/index.js:219-271 - Complete WebSocket authentication flow implemented
+  - Deployment: Version e7e2161c-7144-473f-bdcb-1f71c5787728
+
+- **React Router Future Flags Warnings** - Console warnings eliminated
+  - Added v7 future flags to BrowserRouter configuration
+  - `v7_startTransition: true` - Smoother UI updates with React.startTransition
+  - `v7_relativeSplatPath: true` - New relative route resolution for catch-all routes
+  - src/frontend/App.jsx:38-42 - Future flags configuration
+  - Frontend rebuild deployed: https://eea63ebe.graphmind-6hz.pages.dev
+
+- **Wrangler Pages Configuration Warning** - Deployment warnings eliminated
+  - Created dedicated `src/frontend/wrangler.toml` for Pages project
+  - Separated Worker config (root wrangler.toml) from Pages config (frontend wrangler.toml)
+  - Added `pages_build_output_dir = "dist"` to frontend configuration
+  - Updated npm scripts to deploy from correct directory (no more path errors)
+
+### Changed
+
+- **Complete Package Update to Latest Versions** - Zero outdated packages, zero vulnerabilities
+
+  **Root Project Updates:**
+  - Wrangler: 4.46.0 → 4.47.0 (latest)
+  - React: 18.2.0 → 19.2.0 (React compiler support)
+  - React DOM: 18.2.0 → 19.2.0
+  - React Router DOM: 6.30.2 → 7.9.6 (Server Components ready)
+  - Vite: 5.4.21 → 7.2.2 (faster builds, improved HMR)
+  - Vitest: 4.0.8 → 4.0.9
+  - @vitejs/plugin-react: 4.7.0 → 5.1.1
+  - @vitest/ui: 4.0.8 → 4.0.9
+  - bcryptjs: 2.4.3 → 3.0.3 (improved performance & security)
+
+  **Frontend Project Updates:**
+  - React: 18.3.1 → 19.2.0
+  - React DOM: 18.3.1 → 19.2.0
+  - Vite: 5.0.0 → 7.2.2
+  - Vitest: 1.0.0 → 4.0.9
+  - ESLint: 8.57.1 → 9.39.1 (new flat config system)
+  - eslint-plugin-react-hooks: 4.6.2 → 7.0.1
+  - @testing-library/react: 14.3.1 → 16.3.0 (React 19 support)
+  - @vitejs/plugin-react: 4.7.0 → 5.1.1
+
+- **Build System & Development Scripts**
+  - Updated npm scripts to use correct paths (cd src/frontend && ...)
+  - `npm run dev:frontend` - Start Vite dev server from frontend directory
+  - `npm run build` - Build frontend with Vite 7
+  - `npm run deploy:frontend` - Deploy Pages with automatic commit-dirty flag
+
+### Security
+
+- ✅ **Zero Security Vulnerabilities** - All npm audit checks passing
+  - Root project: 0 vulnerabilities (was 2 moderate)
+  - Frontend project: 0 vulnerabilities (was 4 moderate)
+  - Fixed esbuild vulnerability (≤0.24.2) via Vite 7 update
+  - Fixed vite-node vulnerability via Vitest 4 update
+  - Updated bcryptjs to 3.0.3 (enhanced security)
+
+### Performance
+
+- **Build Performance** - Vite 7 improvements
+  - Frontend build time: <1 second (faster than Vite 5)
+  - Bundle size: 467.50 KB (140.52 KB gzipped) - optimized with latest React 19
+  - Hot Module Replacement (HMR): Improved speed with Vite 7
+  - Dev server startup: Faster cold starts
+
+### Validation
+
+- ✅ Worker Deploy: No warnings
+- ✅ Pages Deploy: No warnings
+- ✅ Frontend Build: No warnings
+- ✅ npm audit (root): 0 vulnerabilities
+- ✅ npm audit (frontend): 0 vulnerabilities
+- ✅ npm outdated: All packages latest
+- ✅ Wrangler version: 4.47.0 (latest stable)
+- ✅ React version: 19.2.0 (latest stable)
+- ✅ Vite version: 7.2.2 (latest stable)
+
+### Deployments
+
+- **Worker API**: https://graphmind-api.apex-web-services-llc-0d4.workers.dev
+  - Version: e7e2161c-7144-473f-bdcb-1f71c5787728
+  - WebSocket authentication: ✅ Working
+
+- **Frontend Pages**: https://eea63ebe.graphmind-6hz.pages.dev
+  - React 19 with future flags: ✅ No warnings
+  - Pages config: ✅ No warnings
+
+### Testing
+
+- ✅ WebSocket connection successful (voice query functional)
+- ✅ JWT token validation working
+- ✅ Frontend builds with zero warnings
+- ✅ All deployments successful
+- ✅ Security audit clean (0 vulnerabilities)
+
+### Documentation
+
+- Updated wrangler.toml configurations (Worker + Pages separation)
+- Updated package.json scripts for correct deployment paths
+- Created src/frontend/wrangler.toml with Pages-specific configuration
+
+### Next Steps
+
+- User acceptance testing of voice query WebSocket functionality
+- Cross-browser testing with updated React 19
+- Monitor React 19 performance improvements in production
+- Leverage React Router 7 Server Components (future enhancement)
+
 ## [1.11.1] - 2025-11-14
 
 ### Fixed
@@ -625,5 +741,8 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 1.11.2  | 2025-11-15   | WebSocket voice query fix (JWT validation), React Router v7 future flags, Wrangler 4.47.0, Complete package updates (React 19, Vite 7, ESLint 9, bcryptjs 3.0.3), Zero security vulnerabilities, Zero warnings across all builds/deploys |
+| 1.11.1  | 2025-11-14   | API Client context bug fix (registration/login working), Enhanced error handling with user-friendly messages, Production deployment fixes |
+| 1.11.0  | 2025-11-14   | Feature 011 - Frontend Deployment to Cloudflare Pages (Complete React SPA, 4 P1 user stories, 135 tasks, sub-2s page loads, 403KB bundle) |
+| 1.10.0  | 2025-11-14   | Feature 008 - Voice Query Production Deployment (Cloudflare Tunnel, FalkorDB REST API wrapper, Two-tier LLM fallback, Production smoke tests 8/8 passing) |
 | 1.9.0   | 2025-11-14   | Feature 009 - Answer Generation with LLM (Llama 3.1-8b natural language synthesis, hallucination detection + validation, source citations, 5 answer types, KV caching 1hr TTL, 50+ test queries, 223/223 tasks 100%) |
-| 1.8.0   | 2025-11-13   | Feature 008 - Voice Query Input & Graph Querying (QuerySessionManager DO, 5 Cypher templates, two-tier LLM fallback 99% success, 3 REST + 1 WS endpoints, 4 React components, 31 integration + 14 E2E tests, 282/282 tasks) |

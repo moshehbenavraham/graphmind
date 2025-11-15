@@ -217,23 +217,57 @@ export default {
       }
 
       // WebSocket upgrade handler for voice query sessions
-      // Route: GET /ws/query/:session_id?user_id=<user_id>
+      // Route: GET /ws/query/:session_id?token=<jwt>
       if (url.pathname.startsWith('/ws/query/') && method === 'GET') {
+        // Check for WebSocket upgrade header
+        const upgradeHeader = request.headers.get('Upgrade');
+        if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+          return badRequestError('Expected Upgrade: websocket header');
+        }
+
         // Extract session_id from URL path
         const pathParts = url.pathname.split('/');
         const sessionId = pathParts[pathParts.length - 1];
-        const userId = url.searchParams.get('user_id');
 
-        if (!sessionId || !userId) {
-          return badRequestError('Missing session_id or user_id');
+        if (!sessionId || sessionId.length === 0) {
+          return badRequestError('Missing session_id in URL path');
+        }
+
+        // Extract JWT token from query parameter
+        const token = url.searchParams.get('token');
+        if (!token) {
+          return unauthorizedError('Missing JWT token in query parameter');
+        }
+
+        // Verify JWT token is valid
+        let claims;
+        try {
+          claims = verifyToken(token, env.JWT_SECRET);
+        } catch (error) {
+          console.error('[WebSocket Query] JWT verification failed:', error.message);
+          return unauthorizedError('Invalid or expired JWT token');
+        }
+
+        // Extract user_id from JWT claims
+        const userId = claims.sub;
+        if (!userId) {
+          return unauthorizedError('Invalid JWT token: missing user_id');
         }
 
         // Get QuerySessionManager Durable Object stub
         const doId = env.QUERY_SESSION_MANAGER.idFromName(sessionId);
         const doStub = env.QUERY_SESSION_MANAGER.get(doId);
 
+        // Build new URL with session_id and user_id as query params for the DO
+        const doUrl = new URL(request.url);
+        doUrl.searchParams.set('session_id', sessionId);
+        doUrl.searchParams.set('user_id', userId);
+
+        // Create new request with updated URL
+        const doRequest = new Request(doUrl.toString(), request);
+
         // Forward WebSocket upgrade to Durable Object
-        return await doStub.fetch(request);
+        return await doStub.fetch(doRequest);
       }
 
       // Entity Extraction Routes (Feature 005)
