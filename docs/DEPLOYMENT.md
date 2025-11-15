@@ -69,12 +69,25 @@ Create `.env.production` with the following variables:
 CLOUDFLARE_ACCOUNT_ID=your_account_id
 CLOUDFLARE_API_TOKEN=your_api_token
 
-# FalkorDB Configuration (Production Tier)
-FALKORDB_HOST=your-prod-instance.falkordb.cloud
-FALKORDB_PORT=6379
-FALKORDB_USER=default
-FALKORDB_PASSWORD=your_secure_password
-FALKORDB_USE_TLS=true
+# FalkorDB Configuration
+
+# Option A: Cloudflare Tunnel (Current Production Setup)
+# See docs/FALKORDB_TUNNEL.md for complete setup instructions
+FALKORDB_HOST=falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+# Note: FALKORDB_PORT, USER, PASSWORD already set as Cloudflare Secrets
+
+# Option B: FalkorDB Cloud (Alternative)
+# FALKORDB_HOST=your-prod-instance.falkordb.cloud
+# FALKORDB_PORT=6379
+# FALKORDB_USER=default
+# FALKORDB_PASSWORD=your_secure_password
+# FALKORDB_USE_TLS=true
+
+# Option C: Self-Hosted VPS (Alternative)
+# FALKORDB_HOST=your-vps-ip-address
+# FALKORDB_PORT=6379
+# FALKORDB_USER=default
+# FALKORDB_PASSWORD=your_secure_password
 
 # JWT Configuration
 JWT_SECRET=your_very_secure_jwt_secret_min_32_chars

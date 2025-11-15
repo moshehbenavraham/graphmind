@@ -6,7 +6,11 @@
   "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:frontend": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "deploy": "wrangler deploy",
+    "deploy:frontend": "wrangler pages deploy dist/ --project-name=graphmind",
     "db:create": "wrangler d1 create graphmind-db",
     "db:migrate:local": "wrangler d1 migrations apply graphmind-db --local",
     "db:migrate": "wrangler d1 migrations apply graphmind-db",
@@ -19,9 +23,12 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.1.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "@vitest/ui": "^4.0.8",
+    "vite": "^5.0.8",
     "vitest": "^4.0.8",
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.0.0",
+    "ws": "^8.18.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -34,6 +41,7 @@
     "jsonwebtoken": "^9.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^6.20.0",
     "redis": "^5.9.0",
     "redis-on-workers": "^0.4.1"
   }

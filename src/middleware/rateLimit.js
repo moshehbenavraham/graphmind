@@ -65,6 +65,22 @@ const RATE_LIMITS = {
     window: 60, // 120 requests per minute (entity resolution cache lookup)
     scope: 'user',
   },
+  // Voice query endpoints - per-user limits (Feature 008)
+  'query:start': {
+    limit: 30,
+    window: 3600, // 30 queries per hour (prevent abuse)
+    scope: 'user',
+  },
+  'query:history': {
+    limit: 60,
+    window: 3600, // 60 requests per hour (allow frequent browsing)
+    scope: 'user',
+  },
+  'query:get': {
+    limit: 120,
+    window: 3600, // 120 requests per hour (support UI refreshes)
+    scope: 'user',
+  },
   // Default limit for unlisted endpoints
   default: {
     limit: 100,

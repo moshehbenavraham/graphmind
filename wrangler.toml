@@ -44,10 +44,20 @@ new_sqlite_classes = ["FalkorDBConnectionPool"]
 tag = "v4"
 new_sqlite_classes = ["VoiceSessionManager"]
 
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["QuerySessionManager"]
+
 # Voice Session Manager (Feature 004 - Voice Note Capture)
 [[durable_objects.bindings]]
 name = "VOICE_SESSION"
 class_name = "VoiceSessionManager"
+script_name = "graphmind-api"
+
+# Query Session Manager (Feature 008 - Voice Query Input)
+[[durable_objects.bindings]]
+name = "QUERY_SESSION_MANAGER"
+class_name = "QuerySessionManager"
 script_name = "graphmind-api"
 
 # Workers AI
@@ -84,3 +94,8 @@ dead_letter_queue = "graph-sync-failed"
 # Environment variables (non-sensitive)
 [vars]
 ENVIRONMENT = "development"
+
+# Answer Generation Configuration (Feature 009)
+ANSWER_CACHE_TTL = "3600"
+ANSWER_MAX_TOKENS = "200"
+LLM_TEMPERATURE = "0.7"

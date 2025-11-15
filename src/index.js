@@ -26,6 +26,7 @@ import { handleTestRedisDirect } from './api/test/test-redis-direct.js';
 import { handleCheckPoolWarmup } from './api/test/check-pool-warmup.js';
 import { handleInitPool } from './api/test/init-pool.js';
 import { handleBenchmarkFalkorDB } from './api/test/benchmark-falkordb.js';
+import { handleQueryRequest } from './workers/api/query.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -35,6 +36,7 @@ import { rateLimitMiddleware, addRateLimitHeaders } from './middleware/rateLimit
 // Export Durable Objects
 export { FalkorDBConnectionPool } from './durable-objects/FalkorDBConnectionPool.js';
 export { VoiceSessionManager } from './durable-objects/VoiceSessionManager.js';
+export { QuerySessionManager } from './durable-objects/QuerySessionManager.js';
 
 // Import Queue Consumers
 import entityExtractionConsumer from './workers/consumers/entity-extraction-consumer.js';
@@ -204,6 +206,34 @@ export default {
         const noteId = pathParts[pathParts.length - 1];
         const response = await handleDeleteNote(request, env, noteId);
         return addCorsHeaders(response);
+      }
+
+      // Voice Query Routes (Feature 008)
+
+      // Query API routes: POST /api/query/start, GET /api/query/history, GET /api/query/:query_id
+      if (url.pathname.startsWith('/api/query')) {
+        const response = await handleQueryRequest(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // WebSocket upgrade handler for voice query sessions
+      // Route: GET /ws/query/:session_id?user_id=<user_id>
+      if (url.pathname.startsWith('/ws/query/') && method === 'GET') {
+        // Extract session_id from URL path
+        const pathParts = url.pathname.split('/');
+        const sessionId = pathParts[pathParts.length - 1];
+        const userId = url.searchParams.get('user_id');
+
+        if (!sessionId || !userId) {
+          return badRequestError('Missing session_id or user_id');
+        }
+
+        // Get QuerySessionManager Durable Object stub
+        const doId = env.QUERY_SESSION_MANAGER.idFromName(sessionId);
+        const doStub = env.QUERY_SESSION_MANAGER.get(doId);
+
+        // Forward WebSocket upgrade to Durable Object
+        return await doStub.fetch(request);
       }
 
       // Entity Extraction Routes (Feature 005)

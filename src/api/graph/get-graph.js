@@ -220,6 +220,12 @@ export async function handleGetGraph(request, env, user) {
       offset,
     });
   }
+  } catch (error) {
+    // Outer try-catch for parameter validation errors
+    return handleError(error, 'GetGraph', {
+      userId: user.userId,
+    });
+  }
 }
 
 /**
