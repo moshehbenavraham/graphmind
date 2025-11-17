@@ -17,6 +17,12 @@ const RATE_LIMITS = {
     window: 60, // 60 requests per 60 seconds (1 minute)
     scope: 'global',
   },
+  // Client log ingestion endpoint - global limit to prevent spam
+  'logs:ingest': {
+    limit: 120,
+    window: 60, // 120 requests per minute (sampled client logs)
+    scope: 'global',
+  },
   // Graph init endpoint - per-user limit
   'graph:init': {
     limit: 10,

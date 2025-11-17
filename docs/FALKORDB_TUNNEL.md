@@ -22,7 +22,7 @@ GraphMind uses **Cloudflare Tunnel** to securely expose a local FalkorDB instanc
 ```
 Production Cloudflare Workers
     ↓ HTTPS
-Cloudflare Tunnel (falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com)
+Cloudflare Tunnel (falkordb-tunnel.aiwithapex.com)
     ↓ HTTP (port 3001)
 Local REST API Wrapper (scripts/falkordb-rest-api.js)
     ↓ Redis Protocol (port 6380)
@@ -90,7 +90,7 @@ tunnel: <YOUR_TUNNEL_ID>
 credentials-file: /home/<YOUR_USERNAME>/.cloudflared/<YOUR_TUNNEL_ID>.json
 
 ingress:
-  - hostname: falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+  - hostname: falkordb-tunnel.aiwithapex.com
     service: http://localhost:3001
   - service: http_status:404
 ```
@@ -103,7 +103,7 @@ ingress:
 ### Step 5: Create DNS Route
 
 ```bash
-cloudflared tunnel route dns falkordb-tunnel falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+cloudflared tunnel route dns falkordb-tunnel falkordb-tunnel.aiwithapex.com
 ```
 
 **Replace** the hostname with your chosen subdomain.
@@ -112,7 +112,7 @@ cloudflared tunnel route dns falkordb-tunnel falkordb-tunnel.aiwithapex.workers.
 
 ```bash
 # Set FalkorDB tunnel hostname
-echo "falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com" | npx wrangler secret put FALKORDB_HOST
+echo "falkordb-tunnel.aiwithapex.com" | npx wrangler secret put FALKORDB_HOST
 
 # Generate and set JWT secret
 openssl rand -base64 32 | npx wrangler secret put JWT_SECRET
@@ -170,7 +170,7 @@ curl http://localhost:3001/health
 # Expected: {"status":"healthy","redis":"connected",...}
 
 # Check tunnel (replace with your tunnel hostname)
-curl https://falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com/health
+curl https://falkordb-tunnel.aiwithapex.com/health
 # Expected: Same as above (may take 30-60 seconds after tunnel start)
 
 # Check production Workers

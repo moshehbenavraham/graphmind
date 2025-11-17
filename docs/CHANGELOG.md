@@ -11,6 +11,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.5] - 2025-11-17
+
+### Added
+
+- **Frontend Logging/Debugging Runbook** - Documented thorough (non-lightweight) logging, error handling, and telemetry coverage, plus env toggles for intensive mode. See `docs/ongoing_projects/log-debug-error.md`.
+- **Logging Utility** - Added structured logger with global error/rejection handlers and WebSocket/API/audio instrumentation hooks.
+
+### Changed
+
+- **Debug Flags** - Added `VITE_DEBUG`, `VITE_DEBUG_VERBOSE`, and `VITE_DEBUG_REMOTE` to `.env` and `.env.example` to enable/disable intensive client-side logging and optional remote log shipping without code changes.
+
+## [1.11.6] - 2025-11-17
+
+### Changed
+
+- **Seed Data Endpoint** - Documented fix for JWT claim parsing and Durable Object routing (`pool` stub) so `/api/seed-data` returns success instead of 500.
+- **FalkorDB Tunnel Host** - Updated deployment docs to use live hostname `falkordb-tunnel.aiwithapex.com` and health check URL.
+- **Deployment Record** - Refreshed Feature 011 deployment notes with current Pages URL and API version (d972a723-b029-48cf-9910-2e2680b21b3f).
+
+## [1.11.4] - 2025-11-17
+
+### Changed
+
+- **Voice Transcription Docs** - Updated Feature 011 documentation to reflect Whisper raw-byte payload alignment and removed duplicate failure summaries.
+  - `specs/011-frontend-deployment/tasks.md`: Added verification checklist for Whisper binary payload and clarified status placement.
+  - `specs/011-frontend-deployment/FAILURE_LOG.md`: Consolidated summaries, added current snapshot (post-Session 6), and noted pending production verification.
+  - `specs/011-frontend-deployment/ROOT_CAUSE_ANALYSIS.md`: Noted raw-byte implementation in the immediate path forward.
+- **Cloudflare Tunnel** - Added DNS route and health confirmation.
+  - Tunnel host: `https://falkordb-tunnel.aiwithapex.com`
+  - Health: 200 OK `{"status":"healthy","redis":"connected", ...}` as of 2025-11-17 07:51 UTC.
+
+### Next Steps
+
+- Deploy latest Worker and run production smoke test (record → transcribe → Cypher → answer) while tailing logs; if Whisper still fails, pivot to WebSocket streaming (Solution B).
+
+## [1.11.3] - 2025-11-16
+
+### Changed
+
+- **Audio Transcription Flow** - Buffer reassembly for Whisper
+  - QuerySessionManager now reassembles buffered base64 WebM/Opus chunks into a single payload before calling Whisper.
+  - Transcription utility now converts large buffers to base64 in slices and logs decoded byte size (reduces stack issues).
+
+### Deployment
+
+- **Worker API**: https://graphmind-api.apex-web-services-llc-0d4.workers.dev  
+  - Version: 1ade029c-b850-4d64-8a73-8f9b161f1797 (clean rebuild, cache cleared)
+- **Frontend Pages**: https://d513d98b.graphmind-6hz.pages.dev  
+  - Built from fresh `npm run build` with cache clear; deployed via `wrangler pages deploy src/frontend/dist --project-name=graphmind --commit-dirty=true`
+
+### Observations (Browser Console, prod)
+
+- Auth + session: Login succeeded; Query session established and recording started with MediaRecorder `audio/webm;codecs=opus`, 1s chunks.
+- Errors surfaced:
+  - `AUDIO_VALIDATION_ERROR` — "Audio chunk too small: 82 bytes (minimum: 100 bytes)" (likely final flush chunk).
+  - `QUERY_EXECUTION_FAILED` — "Unable to search your knowledge graph right now. Please try again." after Cypher generation succeeded.
+- Transcription still returned final text ("Thank you.") despite above small-chunk warning.
+
+### Known Issues
+
+- Occasional sub-100-byte chunk during stop/flush triggers validation error; needs tolerance or filtering of final tiny chunk when overall payload is valid.
+- Query execution failing post-Cypher generation in production (investigate FalkorDB data/permissions/empty graph handling).
+
 ## [1.11.2] - 2025-11-15
 
 ### Fixed

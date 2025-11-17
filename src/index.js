@@ -20,6 +20,7 @@ import { handleSearchEntities } from './api/graph/search-entities.js';
 import { handleGetGraphStats } from './api/graph/get-stats.js';
 import { handleMergeEntities } from './api/graph/merge-entities.js';
 import { handleTriggerGraphSync } from './api/test/trigger-graph-sync.js';
+import { handleClientLogs } from './api/logs/ingest-client-logs.js';
 import { handleTestGraphDirect } from './api/test/test-graph-direct.js';
 import { handleTestSimpleCypher } from './api/test/test-simple-cypher.js';
 import { handleTestRedisDirect } from './api/test/test-redis-direct.js';
@@ -27,6 +28,7 @@ import { handleCheckPoolWarmup } from './api/test/check-pool-warmup.js';
 import { handleInitPool } from './api/test/init-pool.js';
 import { handleBenchmarkFalkorDB } from './api/test/benchmark-falkordb.js';
 import { handleQueryRequest } from './workers/api/query.js';
+import { handleSeedData } from './workers/api/seed-data.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -168,6 +170,13 @@ export default {
         return addCorsHeaders(response);
       }
 
+      // Client log ingestion endpoint
+      // Route: POST /api/logs
+      if (url.pathname === '/api/logs' && method === 'POST') {
+        const response = await handleClientLogs(request, env);
+        return addCorsHeaders(response);
+      }
+
       // T026-T032: Start recording endpoint
       // Route: POST /api/notes/start-recording
       if (url.pathname === '/api/notes/start-recording' && method === 'POST') {
@@ -213,6 +222,14 @@ export default {
       // Query API routes: POST /api/query/start, GET /api/query/history, GET /api/query/:query_id
       if (url.pathname.startsWith('/api/query')) {
         const response = await handleQueryRequest(request, env);
+        return addCorsHeaders(response);
+      }
+
+      // Seed Data Route (Testing/Demo)
+      // Route: POST /api/seed-data
+      // Adds test knowledge graph data to authenticated user's namespace
+      if (url.pathname === '/api/seed-data' && method === 'POST') {
+        const response = await handleSeedData(request, env);
         return addCorsHeaders(response);
       }
 

@@ -1,22 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { createLogger } from '../utils/logger';
 import { login as apiLogin, register as apiRegister, getMe } from '../utils/api';
 
 // Create authentication context
 const AuthContext = createContext(null);
-
-// Enhanced logging
-const LOG_PREFIX = '[useAuth]';
-const DEBUG = import.meta.env.DEV || import.meta.env.VITE_DEBUG === 'true';
-
-function log(...args) {
-  if (DEBUG) {
-    console.log(LOG_PREFIX, ...args);
-  }
-}
-
-function logError(...args) {
-  console.error(LOG_PREFIX, ...args);
-}
+const logger = createLogger('useAuth');
 
 // AuthProvider component - wraps app to provide auth state
 export function AuthProvider({ children }) {
@@ -26,20 +14,20 @@ export function AuthProvider({ children }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    log('Initializing auth state...');
+    logger.debug('init', 'Initializing auth state');
     const token = localStorage.getItem('jwt_token');
 
     if (token) {
-      log('Found existing JWT token, validating...');
+      logger.debug('token.present', 'Found existing JWT token, validating');
       // Validate token by fetching user data
       getMe()
         .then(userData => {
-          log('Token valid, user authenticated:', userData.user?.email);
+          logger.info('token.valid', 'User authenticated', { user: userData.user?.email });
           setUser(userData.user || userData);
           setError(null);
         })
         .catch((err) => {
-          logError('Token validation failed:', err.message);
+          logger.warn('token.invalid', 'Token validation failed', { message: err.message });
           // Token invalid or expired, clear it
           localStorage.removeItem('jwt_token');
           setUser(null);
@@ -48,20 +36,20 @@ export function AuthProvider({ children }) {
           setLoading(false);
         });
     } else {
-      log('No existing token found');
+      logger.debug('token.absent', 'No existing token found');
       setLoading(false);
     }
   }, []);
 
   // Login function
   const login = async (email, password) => {
-    log('Login attempt for:', email);
+    logger.info('login.start', 'Login attempt', { email });
     try {
       setError(null);
 
       if (!email || !password) {
         const error = new Error('Email and password are required');
-        logError('Login validation failed:', error.message);
+        logger.warn('login.validation', 'Validation failed', { message: error.message });
         setError(error.message);
         throw error;
       }
@@ -70,19 +58,19 @@ export function AuthProvider({ children }) {
 
       if (!response || !response.token || !response.user) {
         const error = new Error('Invalid response from server');
-        logError('Login failed - invalid response:', response);
+        logger.error('login.invalid_response', 'Login failed - invalid response', { response });
         setError(error.message);
         throw error;
       }
 
       // Store JWT token
-      log('Login successful, storing token');
+      logger.info('login.success', 'Login successful, storing token', { user: response.user?.email });
       localStorage.setItem('jwt_token', response.token);
       setUser(response.user);
 
       return response;
     } catch (err) {
-      logError('Login error:', err.message);
+      logger.error('login.error', 'Login error', { message: err.message });
       setError(err.message);
       throw err;
     }
@@ -90,13 +78,13 @@ export function AuthProvider({ children }) {
 
   // Register function
   const register = async (email, password) => {
-    log('Registration attempt for:', email);
+    logger.info('register.start', 'Registration attempt', { email });
     try {
       setError(null);
 
       if (!email || !password) {
         const error = new Error('Email and password are required');
-        logError('Registration validation failed:', error.message);
+        logger.warn('register.validation', 'Validation failed', { message: error.message });
         setError(error.message);
         throw error;
       }
@@ -105,19 +93,19 @@ export function AuthProvider({ children }) {
 
       if (!response || !response.token || !response.user) {
         const error = new Error('Invalid response from server');
-        logError('Registration failed - invalid response:', response);
+        logger.error('register.invalid_response', 'Registration failed - invalid response', { response });
         setError(error.message);
         throw error;
       }
 
       // Store JWT token
-      log('Registration successful, storing token');
+      logger.info('register.success', 'Registration successful, storing token', { user: response.user?.email });
       localStorage.setItem('jwt_token', response.token);
       setUser(response.user);
 
       return response;
     } catch (err) {
-      logError('Registration error:', err.message);
+      logger.error('register.error', 'Registration error', { message: err.message });
       setError(err.message);
       throw err;
     }
@@ -125,7 +113,7 @@ export function AuthProvider({ children }) {
 
   // Logout function
   const logout = () => {
-    log('User logging out');
+    logger.info('logout', 'User logging out');
     localStorage.removeItem('jwt_token');
     setUser(null);
     setError(null);

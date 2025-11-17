@@ -40,7 +40,7 @@ import { formatResultsAsBulletList } from '../lib/graph/context-formatter.js';
 // Text-to-Speech (Feature 010)
 import { createTTSSynthesizer } from '../services/tts-synthesizer.js';
 import { createAudioCache } from '../lib/audio/audio-cache.js';
-import { chunkAudio, createChunkMessage } from '../lib/audio/audio-chunker.js';
+import { base64ToChunk, chunkAudio, createChunkMessage, reassembleChunks } from '../lib/audio/audio-chunker.js';
 
 /**
  * Maximum session duration in milliseconds (5 minutes)
@@ -263,7 +263,44 @@ export class QuerySessionManager {
    */
   async handleMessage(event) {
     try {
-      const message = JSON.parse(event.data);
+      // Log raw message data for debugging
+      this.logger.info('Raw WebSocket message received', {
+        data_type: typeof event.data,
+        data_length: event.data?.length || event.data?.byteLength || 0,
+        is_array_buffer: event.data instanceof ArrayBuffer,
+        is_string: typeof event.data === 'string',
+        data_preview: typeof event.data === 'string'
+          ? event.data.substring(0, 100)
+          : '[binary data]'
+      });
+
+      // Convert event.data to string if it's binary (ArrayBuffer or Blob)
+      let messageText;
+      if (typeof event.data === 'string') {
+        // Already a string - use directly
+        messageText = event.data;
+      } else if (event.data instanceof ArrayBuffer) {
+        // ArrayBuffer - decode to string
+        const decoder = new TextDecoder('utf-8');
+        messageText = decoder.decode(event.data);
+        this.logger.info('Decoded ArrayBuffer to string', {
+          original_byte_length: event.data.byteLength,
+          decoded_length: messageText.length,
+          decoded_preview: messageText.substring(0, 100)
+        });
+      } else {
+        throw new Error(`Unsupported message type: ${typeof event.data}`);
+      }
+
+      const message = JSON.parse(messageText);
+
+      this.logger.info('Parsed WebSocket message', {
+        type: message.type,
+        has_chunk: !!message.chunk,
+        has_data: !!message.data,
+        sequence: message.sequence,
+        timestamp: message.timestamp
+      });
 
       switch (message.type) {
         case 'audio_chunk':
@@ -286,7 +323,14 @@ export class QuerySessionManager {
           this.logger.warn(`Unknown message type: ${message.type}`);
       }
     } catch (error) {
-      this.logger.error('Error handling message', error);
+      this.logger.error('Error handling message', {
+        error_message: error.message,
+        error_stack: error.stack,
+        raw_data_type: typeof event.data,
+        raw_data_preview: typeof event.data === 'string'
+          ? event.data.substring(0, 200)
+          : '[binary data]'
+      });
       this.sendError('MESSAGE_PARSE_ERROR', 'Invalid message format', false);
     }
   }
@@ -296,13 +340,31 @@ export class QuerySessionManager {
    * @param {Object} message - Audio chunk message
    */
   async handleAudioChunk(message) {
-    const { data, sequence, timestamp } = message;
+    const { chunk, sequence, timestamp } = message;
+
+    // Log extracted chunk details for debugging
+    this.logger.info('Audio chunk extracted from message', {
+      has_chunk: !!chunk,
+      chunk_type: typeof chunk,
+      chunk_length: chunk?.length || 0,
+      chunk_preview: typeof chunk === 'string' ? chunk.substring(0, 50) + '...' : '[not a string]',
+      sequence,
+      timestamp
+    });
 
     // Validate audio chunk
-    const validation = validateAudioChunk(data, sequence);
+    const validation = validateAudioChunk(message);
     if (!validation.valid) {
-      const errorMessage = getValidationErrorMessage(validation.error);
-      const recoverable = isRecoverableValidationError(validation.error);
+      // Log validation failure details
+      this.logger.error('Audio chunk validation failed', {
+        errors: validation.errors,
+        message_keys: Object.keys(message),
+        has_chunk: !!message.chunk,
+        chunk_type: typeof message.chunk
+      });
+
+      const errorMessage = getValidationErrorMessage(validation);
+      const recoverable = isRecoverableValidationError(validation);
 
       this.sendError('AUDIO_VALIDATION_ERROR', errorMessage, recoverable);
 
@@ -312,48 +374,49 @@ export class QuerySessionManager {
       return;
     }
 
+    this.logger.info('Audio chunk validation passed');
+
     // Update session metadata
     this.sessionMetadata.chunk_count++;
     this.sessionMetadata.last_chunk_time = Date.now();
 
     // Buffer audio chunk
-    this.audioBuffer.push({ data, sequence, timestamp });
+    this.audioBuffer.push({ chunk, sequence, timestamp });
 
-    // Transcribe audio chunk
     if (!this.performanceMetrics.transcription_start) {
       this.performanceMetrics.transcription_start = Date.now();
     }
+  }
+
+  /**
+   * Reassemble buffered base64 chunks and transcribe once with Whisper
+   * This ensures Workers AI receives a complete WebM/Opus payload with headers.
+   * @returns {Promise<Object>} Transcription result
+   */
+  async transcribeBufferedAudio() {
+    if (!this.audioBuffer.length) {
+      throw new Error('No audio chunks available for transcription');
+    }
+
+    // Sort chunks to guarantee ordering before reassembly
+    const sortedChunks = [...this.audioBuffer].sort((a, b) => a.sequence - b.sequence);
 
     try {
-      const transcription = await transcribeAudioChunk(this.env.AI, data, {
-        language: 'en',
-        streaming: true,
-        interim_results: true
+      const uint8Chunks = sortedChunks.map(entry => base64ToChunk(entry.chunk));
+
+      const reassembled = reassembleChunks(uint8Chunks);
+
+      this.logger.info('Audio reassembled for transcription', {
+        chunk_count: uint8Chunks.length,
+        byte_length: reassembled.byteLength
       });
 
-      // Handle partial transcript
-      if (transcription.is_final === false) {
-        this.partialTranscript = transcription.text;
-
-        this.sendToClient({
-          type: 'transcript_update',
-          partial_text: transcription.text,
-          is_final: false,
-          confidence: transcription.confidence || 0
-        });
-      } else {
-        // Final transcript
-        this.transcript += (this.transcript ? ' ' : '') + transcription.text;
-        this.transcriptConfidence = transcription.confidence || 0;
-
-        this.logger.info('Final transcript received', {
-          text: transcription.text,
-          confidence: transcription.confidence
-        });
-      }
+      return await transcribeAudioChunk(reassembled, this.env, { language: 'en' });
     } catch (error) {
-      this.logger.error('Transcription error', error);
-      this.sendError('TRANSCRIPTION_ERROR', 'Failed to transcribe audio. Please try again.', true);
+      this.logger.error('Failed to reassemble audio for transcription', {
+        error: error.message
+      });
+      throw error;
     }
   }
 
@@ -361,7 +424,26 @@ export class QuerySessionManager {
    * Handle stop recording - finalize transcript and process query
    */
   async handleStopRecording() {
-    this.performanceMetrics.transcription_end = Date.now();
+    if (!this.performanceMetrics.transcription_start) {
+      this.performanceMetrics.transcription_start = Date.now();
+    }
+
+    let transcription;
+
+    try {
+      transcription = await this.transcribeBufferedAudio();
+      this.performanceMetrics.transcription_end = Date.now();
+    } catch (error) {
+      this.performanceMetrics.transcription_end = Date.now();
+      this.sendError('TRANSCRIPTION_ERROR', 'Failed to transcribe audio. Please try again.', true);
+      this.cleanup();
+      return;
+    }
+
+    this.transcript = (transcription.text || '').trim();
+    this.transcriptConfidence = transcription.confidence || 1;
+    this.partialTranscript = '';
+    this.audioBuffer = [];
 
     // Check transcript confidence
     if (this.transcriptConfidence < MIN_CONFIDENCE_THRESHOLD) {
@@ -511,7 +593,7 @@ export class QuerySessionManager {
       this.performanceMetrics.query_execution_start = Date.now();
 
       // Get FalkorDBConnectionPool Durable Object
-      const poolId = this.env.FALKORDB_POOL.idFromName('default');
+      const poolId = this.env.FALKORDB_POOL.idFromName('pool');
       const poolStub = this.env.FALKORDB_POOL.get(poolId);
 
       // Execute query via connection pool

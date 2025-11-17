@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { createLogger } from '../utils/logger';
 
 /**
  * Custom hook for managing WebSocket connections with automatic reconnection
@@ -33,18 +34,19 @@ export const useWebSocket = (url, options = {}) => {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const shouldReconnectRef = useRef(true);
+  const logger = createLogger('useWebSocket', { url });
 
   /**
    * Connect to WebSocket
    */
   const connect = useCallback((attemptNumber = 0) => {
     if (!url) {
-      console.error('WebSocket URL is required');
+      logger.error('connect.invalid_url', 'WebSocket URL is required');
       return;
     }
 
     if (attemptNumber >= maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      logger.error('connect.max_attempts', 'Max reconnection attempts reached', { attemptNumber });
       setIsConnecting(false);
       onError?.({
         code: 'MAX_RECONNECT_ATTEMPTS',
@@ -60,7 +62,7 @@ export const useWebSocket = (url, options = {}) => {
       const ws = new WebSocket(url);
 
       ws.onopen = (event) => {
-        console.log('WebSocket connected');
+        logger.info('open', 'WebSocket connected', { attemptNumber });
         setIsConnected(true);
         setIsConnecting(false);
         setReconnectAttempt(0);
@@ -72,18 +74,23 @@ export const useWebSocket = (url, options = {}) => {
           const data = JSON.parse(event.data);
           onMessage?.(data);
         } catch (err) {
-          console.error('Failed to parse WebSocket message:', err);
+          logger.warn('message.parse_failed', 'Failed to parse WebSocket message', {
+            message: err.message
+          });
           onMessage?.(event.data); // Pass raw data if JSON parsing fails
         }
       };
 
       ws.onerror = (event) => {
-        console.error('WebSocket error:', event);
+        logger.error('error', 'WebSocket error', { event });
         onError?.(event);
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
+        logger.info('close', 'WebSocket closed', {
+          code: event.code,
+          reason: event.reason
+        });
         setIsConnected(false);
         setIsConnecting(false);
         wsRef.current = null;
@@ -93,7 +100,11 @@ export const useWebSocket = (url, options = {}) => {
         // Attempt reconnection if enabled
         if (shouldReconnectRef.current && attemptNumber < maxReconnectAttempts) {
           const delay = baseReconnectDelay * Math.pow(2, attemptNumber);
-          console.log(`Reconnecting in ${delay}ms (attempt ${attemptNumber + 1}/${maxReconnectAttempts})`);
+          logger.info('reconnect.schedule', 'Scheduling reconnect', {
+            delay_ms: delay,
+            attempt: attemptNumber + 1,
+            max: maxReconnectAttempts
+          });
 
           reconnectTimeoutRef.current = setTimeout(() => {
             connect(attemptNumber + 1);
@@ -103,7 +114,7 @@ export const useWebSocket = (url, options = {}) => {
 
       wsRef.current = ws;
     } catch (err) {
-      console.error('Failed to create WebSocket:', err);
+      logger.error('connect.exception', 'Failed to create WebSocket', { message: err.message });
       setIsConnecting(false);
       onError?.(err);
     }
@@ -135,16 +146,17 @@ export const useWebSocket = (url, options = {}) => {
    */
   const send = useCallback((data) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not connected');
+      logger.warn('send.disconnected', 'WebSocket is not connected');
       return false;
     }
 
     try {
       const message = typeof data === 'string' ? data : JSON.stringify(data);
       wsRef.current.send(message);
+      logger.trace('send.sent', 'WebSocket message sent', { bytes: message.length });
       return true;
     } catch (err) {
-      console.error('Failed to send WebSocket message:', err);
+      logger.error('send.failed', 'Failed to send WebSocket message', { message: err.message });
       return false;
     }
   }, []);

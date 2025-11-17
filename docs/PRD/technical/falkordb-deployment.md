@@ -95,7 +95,7 @@ Deployed Cloudflare Workers
          |
          ↓
 Cloudflare Tunnel (free)
-  https://falkordb-tunnel.aiwithapex.workers.dev
+  https://falkordb-tunnel.aiwithapex.com
          |
          | Tunnel to localhost
          |
@@ -119,7 +119,7 @@ tunnel: b158953e-c943-4619-b920-2c0bb2945f07
 credentials-file: /home/aiwithapex/.cloudflared/[tunnel-id].json
 
 ingress:
-  - hostname: falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+  - hostname: falkordb-tunnel.aiwithapex.com
     service: http://localhost:3001
   - service: http_status:404
 ```
@@ -265,7 +265,7 @@ FALKORDB_HOST=localhost
 FALKORDB_PORT=6380
 
 # To:
-FALKORDB_HOST=falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+FALKORDB_HOST=falkordb-tunnel.aiwithapex.com
 FALKORDB_PORT=443  # HTTPS
 ```
 
@@ -337,7 +337,7 @@ FALKORDB_PORT=443  # HTTPS
 ### Cloudflare Tunnel
 
 **Tunnel ID:** `b158953e-c943-4619-b920-2c0bb2945f07`
-**Hostname:** `falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com`
+**Hostname:** `falkordb-tunnel.aiwithapex.com`
 **Status:** Active (configured, tested)
 
 ---

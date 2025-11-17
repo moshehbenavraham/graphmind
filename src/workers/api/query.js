@@ -63,10 +63,14 @@ function handleCorsPreflightRequest(origin) {
 
 /**
  * Generate a unique session ID
- * @returns {string} Session ID in format "sess_" + UUID
+ * @returns {string} Session ID in format "sess_" + UUID + timestamp
+ *
+ * Note: Timestamp suffix ensures each session gets a fresh Durable Object instance
+ * with the latest deployed code. This is critical for development when code changes
+ * frequently, as old DO instances can persist for 70-140 seconds.
  */
 function generateSessionId() {
-  return `sess_${crypto.randomUUID()}`;
+  return `sess_${crypto.randomUUID()}-${Date.now()}`;
 }
 
 /**
@@ -111,10 +115,11 @@ export async function startQuerySession(request, env) {
     const doStub = env.QUERY_SESSION_MANAGER.get(doId);
 
     // 5. Build WebSocket URL
-    // Note: In production, use the actual domain
+    // Note: Client will append JWT token as ?token= parameter
+    // DO NOT embed user_id in URL (security risk - can be faked)
     const url = new URL(request.url);
     const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const websocketUrl = `${protocol}//${url.host}/ws/query/${sessionId}?user_id=${user_id}`;
+    const websocketUrl = `${protocol}//${url.host}/ws/query/${sessionId}`;
 
     logger.info('WebSocket URL generated', { websocket_url: websocketUrl });
 

@@ -29,5 +29,12 @@ export default defineConfig({
         ws: true
       }
     }
+  },
+  test: {
+    environment: 'node',
+    include: [
+      '**/*.{test,spec}.{js,jsx,ts,tsx}',
+      'tests/**/*.{test,spec}.{js,jsx,ts,tsx}'
+    ]
   }
 });

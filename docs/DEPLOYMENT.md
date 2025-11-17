@@ -73,7 +73,7 @@ CLOUDFLARE_API_TOKEN=your_api_token
 
 # Option A: Cloudflare Tunnel (Current Production Setup)
 # See docs/FALKORDB_TUNNEL.md for complete setup instructions
-FALKORDB_HOST=falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com
+FALKORDB_HOST=falkordb-tunnel.aiwithapex.com
 # Note: FALKORDB_PORT, USER, PASSWORD already set as Cloudflare Secrets
 
 # Option B: FalkorDB Cloud (Alternative)
