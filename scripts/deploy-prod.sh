@@ -78,14 +78,19 @@ fi
 docker run -d \
   --name falkordb-local \
   -p 6380:6379 \
-  -v "$PROJECT_ROOT/falkordb-data:/data" \
+  -v "$PROJECT_ROOT/falkordb-data:/var/lib/falkordb/data" \
   falkordb/falkordb:latest
 
 echo "  - Waiting for FalkorDB to be ready..."
 sleep 5
 
+# Configure persistence (save every 60s if 1+ change, enable AOF)
+echo "  - Configuring persistence..."
+docker exec falkordb-local redis-cli CONFIG SET save "60 1" >/dev/null
+docker exec falkordb-local redis-cli CONFIG SET appendonly yes >/dev/null
+
 if docker ps | grep -q falkordb-local; then
-    echo -e "${GREEN}✔ FalkorDB running on port 6380${NC}"
+    echo -e "${GREEN}✔ FalkorDB running on port 6380 with persistence enabled${NC}"
 else
     echo -e "${RED}✖ FalkorDB failed to start${NC}"
     exit 1

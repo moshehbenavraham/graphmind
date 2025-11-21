@@ -33,14 +33,20 @@ else
     docker run -d \
         --name falkordb-local \
         -p 6380:6379 \
-        -v "$(pwd)/falkordb-data:/data" \
+        -v "$(pwd)/falkordb-data:/var/lib/falkordb/data" \
         falkordb/falkordb:latest
     echo -e "${GREEN}✅ FalkorDB container created and started${NC}"
 fi
 
 # Wait for FalkorDB to be ready
 echo -e "${YELLOW}Waiting for FalkorDB to be ready...${NC}"
-sleep 2
+sleep 3
+
+# Configure persistence (save every 60s if 1+ change, enable AOF)
+echo -e "${YELLOW}Configuring FalkorDB persistence...${NC}"
+docker exec falkordb-local redis-cli CONFIG SET save "60 1" >/dev/null
+docker exec falkordb-local redis-cli CONFIG SET appendonly yes >/dev/null
+echo -e "${GREEN}✅ Persistence enabled (RDB every 60s + AOF)${NC}"
 
 # Step 2: Start REST API wrapper
 echo -e "${YELLOW}[2/3]${NC} Starting FalkorDB REST API wrapper..."
