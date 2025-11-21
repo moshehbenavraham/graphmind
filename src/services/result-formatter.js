@@ -204,7 +204,12 @@ export function formatEmptyResults(metadata = {}) {
       cached: metadata.cached || false,
       template_used: metadata.template_used || null,
       query_id: metadata.query_id || null,
-      message: 'No results found'
+      message: `No results found. Debug: ${metadata.cypher_query || 'N/A'} (Namespace: ${metadata.user_namespace || 'N/A'})`,
+      debug_info: {
+        cypher_query: metadata.cypher_query || 'N/A',
+        user_namespace: metadata.user_namespace || 'N/A',
+        user_id: metadata.user_id || 'N/A'
+      }
     }
   };
 }

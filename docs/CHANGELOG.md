@@ -11,6 +11,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.8] - 2025-11-21
+
+### Fixed
+
+- **Graph Query Entity Resolution**
+  - Fixed a critical bug where `resolveEntity` failed to find entities in D1 `entity_cache` due to UUID format mismatch (dashes vs. no dashes).
+  - Updated `src/services/cypher-generator.js` to normalize `userId` by removing dashes before SQL comparison.
+
+- **Graph Namespace Consistency**
+  - Fixed inconsistent graph naming in `QuerySessionManager.js` by replacing a local helper with the canonical `generateGraphName` from `src/lib/falkordb/namespace.js`.
+  - Ensures consistent use of `user_{uuid}_graph` (with dashes in UUID) across the application.
+
+### Added
+
+- **Debug Information in UI**
+  - Updated `src/services/result-formatter.js` to append generated Cypher query and namespace to the "No results found" message.
+  - Updated `QuerySessionManager.js` to pass debug metadata (`cypher_query`, `user_namespace`, `user_id`) to the result formatter.
+  - This allows for immediate diagnosis of query failures directly from the frontend.
+
+- **Documentation**
+  - Created `docs/ongoing_projects/debugging_graph_query_failures.md` to track the investigation and fix for the "No results found" issue.
+
+### Changed
+
+- **Project Structure**
+  - Moved root-level scripts `seed_data.js` and `debug_production_failure.js` to `scripts/` directory for better organization.
+
+## [1.11.7] - 2025-11-19
+
+### Fixed
+
+- **Graph Query Error Reporting**
+  - Fixed generic "Database error occurred" messages by exposing specific error details from FalkorDB.
+  - Made `normalizeError` idempotent to prevent double normalization of error objects.
+  - Updated `FalkorDBConnectionPool` to include `originalMessage` in error responses.
+
+- **Multi-Statement Query Regression**
+  - Fixed "Query with more than one statement is not supported" error.
+  - Implemented aggressive sanitization in `CypherGenerator` to split generated Cypher by semicolon and take only the first statement.
+  - Updated LLM prompt to explicitly exclude `USE GRAPH` statements.
+  - Removed `USE GRAPH` enforcement and injection from `CypherValidator`.
+
+### Changed
+
+- **Natural Language Understanding**
+  - Expanded `RELATIONSHIP_MAPPINGS` in `cypher-templates.js` with a comprehensive list of phrases:
+    - `WORKS_ON`: 'works at', 'employed by', 'developer for', 'contributes to'
+    - `LEADS`: 'leads', 'led by', 'manages', 'managed by', 'manager of', 'head of', 'director of', 'owner of', 'runs'
+    - `ATTENDED`: 'attended', 'went to', 'was at', 'participant in', 'present at'
+    - `DISCUSSED`: 'discussed', 'talked about', 'covered', 'regarding'
+    - `USES_TECHNOLOGY`: 'uses', 'built with', 'written in', 'powered by', 'stack includes', 'depends on'
+    - `WORKED_WITH`: 'worked with', 'collaborated with', 'knows', 'colleague of', 'teammate of'
+    - `KNOWS_ABOUT`: 'knows about', 'expert in', 'familiar with', 'skills in', 'proficient in'
+    - `HAS_TASK`: 'has task', 'todo for', 'action item for', 'tasks for'
+    - `HAS_DECISION`: 'decided', 'decision for', 'rationale for', 'decisions made in'
+  - Updated `selectCypherTemplate` regex to match all new phrases.
+
+- **Schema Definition**
+  - Added `Task` and `Decision` node types to the LLM schema prompt.
+  - Added `HAS_TASK` and `HAS_DECISION` relationship types to the LLM schema prompt.
+
+### Deployment
+
+- **Worker API**: https://graphmind-api.apex-web-services-llc-0d4.workers.dev
+  - Version: aa0ed520-042a-4d3c-8cee-25f0c463f77c (deployed 2025-11-19 12:10 UTC)
+
 ## [1.11.5] - 2025-11-17
 
 ### Added

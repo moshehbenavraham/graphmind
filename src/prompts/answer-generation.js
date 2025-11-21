@@ -110,16 +110,39 @@ export function generateEmptyResponse(question) {
  * @returns {string} - Entity name or "that"
  */
 function extractEntityName(question) {
+  // Common question words to ignore
+  const STOP_WORDS = new Set([
+    'who', 'what', 'where', 'when', 'why', 'how',
+    'is', 'are', 'was', 'were', 'do', 'does', 'did',
+    'can', 'could', 'should', 'would',
+    'tell', 'me', 'about', 'list', 'show', 'find',
+    'the', 'a', 'an', 'it'
+  ]);
+
   // Simple heuristic: extract capitalized words or quoted phrases
   const quoted = question.match(/"([^"]+)"/);
   if (quoted) return quoted[1];
 
-  const capitalized = question.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/);
-  if (capitalized) return capitalized[1];
+  // Find all capitalized words
+  const words = question.split(/\s+/);
+  for (const rawWord of words) {
+    const word = rawWord.replace(/[^\w]/g, ''); // Remove punctuation
+    if (word.length > 1 &&
+      word[0] === word[0].toUpperCase() &&
+      !STOP_WORDS.has(word.toLowerCase())) {
+      return word;
+    }
+  }
 
-  // Extract after "about", "who is", "what is"
+  // Extract after "about", "who is", "what is" if no capitalized word found
   const aboutMatch = question.match(/(?:about|who is|what is)\s+([^?.!,]+)/i);
-  if (aboutMatch) return aboutMatch[1].trim();
+  if (aboutMatch) {
+    const potentialEntity = aboutMatch[1].trim();
+    // Check if the extracted part is just a stop word
+    if (!STOP_WORDS.has(potentialEntity.toLowerCase())) {
+      return potentialEntity;
+    }
+  }
 
   return 'that';
 }

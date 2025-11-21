@@ -282,9 +282,15 @@ export async function getQueryById(request, env, queryId) {
       LIMIT 1
     `;
 
+    // Execute query
+    console.log(`[DEBUG] Executing Cypher: ${query}`); // Assuming 'cypher' refers to the SQL query here
+    console.log(`[DEBUG] Params: ${JSON.stringify([queryId, user_id])}`); // Assuming 'parameters' refers to the bind arguments
+
     const result = await env.DB.prepare(query)
       .bind(queryId, user_id)
       .first();
+
+    console.log(`[DEBUG] Raw DB Result: ${JSON.stringify(result)}`);
 
     // 4. Check if query exists
     if (!result) {

@@ -23,6 +23,7 @@ function QueryPage() {
   const sessionMetaRef = useRef({});
   const audioMetricsRef = useRef(null);
   const startupTimerRef = useRef(null);
+  const stoppingRef = useRef(false); // Track if we're waiting for final audio chunk
 
   // Cleanup on unmount
   useEffect(() => {
@@ -260,6 +261,14 @@ function QueryPage() {
                 audioMetricsRef.current.totalBytes += event.data.size;
                 audioMetricsRef.current.lastChunkAt = nowMs();
               }
+
+              // If we're stopping, send stop_recording AFTER audio chunk is sent
+              if (stoppingRef.current && ws.readyState === WebSocket.OPEN) {
+                logger.debug('ws.stop', 'Sending stop_recording message after audio chunk');
+                const stopMessage = { type: 'stop_recording' };
+                ws.send(JSON.stringify(stopMessage));
+                stoppingRef.current = false; // Reset flag
+              }
             } catch (err) {
               logger.error('media.chunk.failed', 'Failed to send audio chunk', { message: err.message });
               setError('Failed to send audio data');
@@ -315,16 +324,19 @@ function QueryPage() {
         };
       }
 
-      // Start recording with 1-second chunks (1000ms)
-      // Larger chunks work better with Whisper's batch processing model
-      // vs. the previous 100ms chunks which were too small
-      mediaRecorder.start(1000); // Send chunks every 1 second
-      logger.info('media.start', 'Recording started with 1-second chunks', {
+      // Start recording without timeslice parameter
+      // This makes MediaRecorder emit data only when stop() is called
+      // This ensures we send a complete, valid WebM file to Whisper
+      // Previously we were chunking every 1s which created multiple WebM files
+      // that couldn't be properly reassembled
+      mediaRecorder.start(); // No timeslice = complete file on stop
+      logger.info('media.start', 'Recording started (complete file on stop)', {
         mimeType,
-        chunk_ms: 1000
+        strategy: 'complete_file'
       });
       setIsRecording(true);
       chunkSequenceRef.current = 0; // Reset sequence counter
+      stoppingRef.current = false; // Reset stopping flag
 
     } catch (err) {
       startupTimerRef.current = null;
@@ -353,9 +365,12 @@ function QueryPage() {
   const stopRecording = () => {
     logger.info('recording.stop', 'Stopping recording');
 
+    // Set flag to send stop_recording after audio chunk arrives
+    stoppingRef.current = true;
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      logger.debug('media.stop', 'MediaRecorder stopped');
+      logger.debug('media.stop', 'MediaRecorder stopped - waiting for final audio chunk');
     }
 
     if (audioStreamRef.current) {
@@ -363,20 +378,20 @@ function QueryPage() {
       logger.debug('media.tracks_stopped', 'Audio stream tracks stopped');
     }
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const message = { type: 'stop_recording' };
-      logger.debug('ws.stop', 'Sending stop_recording message');
-      try {
-        wsRef.current.send(JSON.stringify(message));
-      } catch (err) {
-        logger.error('ws.stop_failed', 'Failed to send stop_recording', { message: err.message });
+    // Set a timeout fallback to send stop_recording if no audio chunk arrives
+    // This handles cases where recording was too short or failed
+    setTimeout(() => {
+      if (stoppingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+        logger.warn('ws.stop_fallback', 'Sending stop_recording (no audio chunk received)');
+        const message = { type: 'stop_recording' };
+        try {
+          wsRef.current.send(JSON.stringify(message));
+          stoppingRef.current = false;
+        } catch (err) {
+          logger.error('ws.stop_failed', 'Failed to send stop_recording', { message: err.message });
+        }
       }
-    } else {
-      logger.warn('ws.stop_skipped', 'Cannot send stop_recording - WebSocket not open', {
-        exists: !!wsRef.current,
-        readyState: wsRef.current?.readyState
-      });
-    }
+    }, 2000); // Wait 2 seconds for audio chunk
 
     setIsRecording(false);
     setStatus('processing');

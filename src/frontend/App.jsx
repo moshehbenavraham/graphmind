@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import QueryPage from './pages/QueryPage';
 import HistoryPage from './pages/HistoryPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import DebugPanel from './components/DebugPanel';
 
 // Protected route wrapper - redirects to login if not authenticated
 function ProtectedRoute({ children }) {
@@ -75,6 +76,9 @@ function App() {
             {/* Fallback - redirect to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+
+          {/* Debug Panel - Always available (Ctrl+Shift+D to toggle) */}
+          <DebugPanel />
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>

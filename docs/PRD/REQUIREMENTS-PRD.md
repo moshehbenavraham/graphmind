@@ -137,7 +137,7 @@ Core implementation complete (38%), testing phase needed (4-5 days to deployment
 
 ### 1.1 Vision
 
-**GraphMind** is an open-source, voice-first personal knowledge assistant that runs entirely on Cloudflare's edge network. It combines real-time voice AI (Pipecat) with graph-based retrieval-augmented generation (FalkorDB GraphRAG) to create an intelligent "second brain" that captures, organizes, and retrieves your personal knowledge through natural conversation.
+**GraphMind** is an open-source, voice-first personal knowledge assistant that runs entirely on Cloudflare's edge network. It combines real-time voice AI (custom Durable Object pipeline with Workers AI) with graph-based retrieval-augmented generation (FalkorDB GraphRAG) to create an intelligent "second brain" that captures, organizes, and retrieves your personal knowledge through natural conversation.
 
 **The Problem:** Traditional note-taking and knowledge management tools require typing, organizing, and searching manually. Voice notes get lost. Information silos form. Retrieval is difficult.
 
@@ -177,9 +177,8 @@ The "second brain" market is exploding in 2025:
 
 **Backend:**
 - Cloudflare Workers (API + orchestration)
-- Cloudflare Durable Objects (voice sessions + FalkorDB connection pool)
-- Workers AI (Deepgram STT, `@cf/meta/llama-3.1-8b-instruct` for entity extraction)
-- Cloudflare Realtime Agents (Pipecat voice pipeline)
+- Cloudflare Durable Objects (custom QuerySessionManager for voice sessions + FalkorDB connection pool)
+- Workers AI (Deepgram Nova-3 STT, Deepgram Aura-2 TTS, `@cf/meta/llama-3.1-8b-instruct` for entity extraction)
 
 **Data Storage:**
 - FalkorDB (flexible deployment - see [deployment options](technical/falkordb-deployment.md))
@@ -190,10 +189,13 @@ The "second brain" market is exploding in 2025:
 - KV (caching frequent queries)
 
 **Voice AI:**
-- Pipecat patterns (via Cloudflare Realtime Agents)
-- Deepgram Nova-3 (speech-to-text) via Workers AI
-- Deepgram Aura-1 (text-to-speech) via Workers AI
-- Pipecat smart-turn-v2 (turn detection)
+- Custom WebSocket voice pipeline (QuerySessionManager Durable Object)
+- Deepgram Nova-3 (speech-to-text) via Workers AI (`@cf/deepgram/nova-3`)
+- Deepgram Aura-2 (text-to-speech) via Workers AI (`@cf/deepgram/aura-2`)
+- 8-event WebSocket protocol for real-time audio streaming
+- Optional: Pipecat smart-turn-v2 model available (not currently implemented)
+
+**Architecture Note**: See `docs/architecture/ADR-001-voice-pipeline-implementation.md` for why custom Durable Object implementation was chosen over Cloudflare Realtime Agents SDK.
 
 **Knowledge Graph:**
 - FalkorDB GraphRAG SDK (Python)
@@ -221,18 +223,13 @@ The "second brain" market is exploding in 2025:
               Cloudflare Edge Network (Global)                
                                                                
     
-             Cloudflare Realtime Agents                    
-    - WebRTC transport                                     
-    - Voice pipeline orchestration                         
-    - STT/TTS coordination                                 
-    
-                                                             
-   
-     Durable Objects      |                               
-         
-      VoiceSessionManager                              
-      - WebSocket state                                
-      - Audio buffering                                
+     Durable Objects      |
+
+      QuerySessionManager (Custom Implementation)
+      - WebSocket connections & protocol (8 events)
+      - Audio chunking & buffering (WebM)
+      - Workers AI integration (STT/TTS)
+      - Session state management
       - FalkorDB connection pool                       
          
    
@@ -248,11 +245,11 @@ The "second brain" market is exploding in 2025:
    
                                                              
    
-     Workers AI           |                               
-    - Deepgram Nova-3 (STT)                               
-    - Deepgram Aura-1/Aura-2 (TTS)                        
-    - @cf/meta/llama-3.1-8b-instruct (entity, Q&A)        
-    - Pipecat smart-turn-v2 (turn detection)             
+     Workers AI           |
+    - Deepgram Nova-3 (STT)
+    - Deepgram Aura-2 (TTS)
+    - @cf/meta/llama-3.1-8b-instruct (entity, Q&A)
+    - Optional: @cf/pipecat/smart-turn-v2 (not implemented)             
    
                                                              
    
@@ -285,11 +282,11 @@ The "second brain" market is exploding in 2025:
 ### 2.2 Data Flow: Voice Note Capture
 
 ```
-User speaks -> WebRTC capture
+User speaks -> WebSocket connection
        |
-Cloudflare Realtime Agent
+QuerySessionManager (Durable Object)
        |
-Deepgram STT (Workers AI) -> "I met with Sarah about the Python FastAPI project"
+Deepgram Nova-3 STT (Workers AI) -> "I met with Sarah about the Python FastAPI project"
        |
 @cf/meta/llama-3.1-8b-instruct entity extraction -> Entities: [Person: Sarah, Project: Python FastAPI, Topic: Meeting]
        |
@@ -406,9 +403,10 @@ Stream back to user via WebRTC
 - Audio stops automatically after 3 seconds silence
 - User can cancel without saving
 
-**Reference Implementations**:
-- Cloudflare Realtime Agents: https://blog.cloudflare.com/cloudflare-realtime-voice-ai/
-- Pipecat Quickstart: https://github.com/pipecat-ai/pipecat-quickstart
+**Implementation Reference**:
+- Durable Objects: https://developers.cloudflare.com/durable-objects/
+- Workers AI (Deepgram): https://developers.cloudflare.com/workers-ai/models/
+- WebSocket API: https://developers.cloudflare.com/workers/runtime-apis/websockets/
 
 ---
 
@@ -2087,19 +2085,11 @@ Response: {
 - Workers AI Docs: https://developers.cloudflare.com/workers-ai/
 - Durable Objects Docs: https://developers.cloudflare.com/durable-objects/
 
-**Pipecat Resources**:
-- Pipecat Quickstart: https://github.com/pipecat-ai/pipecat-quickstart
-- Pipecat Examples: https://github.com/pipecat-ai/pipecat-examples
-- Pipecat Docs: https://docs.pipecat.ai/
-
 **Workers AI Models**:
 - Deepgram Nova-3 (STT): `@cf/deepgram/nova-3`
-- Deepgram Aura-1 (TTS): `@cf/deepgram/aura-1`
-- Deepgram Aura-2 (TTS - newer): `@cf/deepgram/aura-2`
-- Deepgram Flux (Voice agents): Available with promotional free pricing
+- Deepgram Aura-2 (TTS): `@cf/deepgram/aura-2`
 - Llama 3.1-8b (Text generation): `@cf/meta/llama-3.1-8b-instruct`
-- Llama 3.1-8b (Faster variant): `@cf/meta/llama-3.1-8b-instruct-fast`
-- Pipecat turn detection: `smart-turn-v2` (WebSocket)
+- Optional: Pipecat turn detection model `@cf/pipecat/smart-turn-v2` (not currently implemented)
 
 **Performance**:
 - Total latency: 800ms (40ms input + 300ms STT + 400ms LLM + 150ms TTS)
@@ -2200,7 +2190,7 @@ jobs:
 - **WebRTC**: Real-time communication protocol for audio/video in browsers
 - **STT**: Speech-to-text (voice transcription)
 - **TTS**: Text-to-speech (voice synthesis)
-- **Pipecat**: Open-source framework for voice AI pipelines
+- **Pipecat**: Open-source Python framework for voice AI pipelines (not compatible with Cloudflare Workers; only the smart-turn-v2 model is available via Workers AI)
 - **Second Brain**: Personal knowledge management system (Tiago Forte concept)
 
 ---
@@ -2222,6 +2212,7 @@ jobs:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-11-10 | Development Team | Initial draft |
+| 1.1 | 2025-11-18 | Development Team | Updated architecture documentation to reflect actual implementation (custom Durable Object pipeline instead of Cloudflare Realtime Agents). See ADR-001 for rationale. |
 
 ---
 

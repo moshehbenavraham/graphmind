@@ -156,21 +156,6 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  const response1 = await poolStub.fetch('http://internal/execute', {
-    method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        cypher: query1,
-        params: {}
-      })
-    });
-
-  if (!response1.ok) {
-    throw new Error(`Failed to create initial data: ${response1.statusText}`);
-  }
-
   // Step 2: Add meetings and topics
   const query2 = `
     MATCH
@@ -198,21 +183,6 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  const response2 = await poolStub.fetch('http://internal/execute', {
-    method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        cypher: query2,
-        params: {}
-      })
-    });
-
-  if (!response2.ok) {
-    throw new Error(`Failed to create meetings and topics: ${response2.statusText}`);
-  }
-
   // Step 3: Add tasks and decisions
   const query3 = `
     MATCH
@@ -239,38 +209,90 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  const response3 = await poolStub.fetch('http://internal/execute', {
+  // Execute all operations in a single batch request
+  const response = await poolStub.fetch('http://internal/execute-batch', {
     method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        cypher: query3,
-        params: {}
-      })
-    });
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      config,
+      userId,
+      operations: [
+        { cypher: query1, params: {} },
+        { cypher: query2, params: {} },
+        { cypher: query3, params: {} }
+      ]
+    })
+  });
 
-  if (!response3.ok) {
-    throw new Error(`Failed to create tasks and decisions: ${response3.statusText}`);
+  if (!response.ok) {
+    throw new Error(`Failed to add seed data: ${response.statusText}`);
   }
 
   // Get final count
   const countResponse = await poolStub.fetch('http://internal/execute', {
     method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        cypher: 'MATCH (n) RETURN labels(n) as type, count(n) as count ORDER BY count DESC',
-        params: {}
-      })
-    });
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      config,
+      userId,
+      cypher: 'MATCH (n) RETURN labels(n) as type, count(n) as count ORDER BY count DESC',
+      params: {}
+    })
+  });
 
   const countResult = await countResponse.json();
 
+  // Step 4: Populate Entity Cache (D1)
+  // This is critical for fuzzy matching (e.g. "GraftMind" -> "GraphMind")
+  const entitiesToCache = [
+    { name: "Alice Johnson", type: "Person" },
+    { name: "Bob Smith", type: "Person" },
+    { name: "Carol White", type: "Person" },
+    { name: "GraphMind", type: "Project" },
+    { name: "Mobile App", type: "Project" },
+    { name: "Cloudflare Workers", type: "Technology" },
+    { name: "FalkorDB", type: "Technology" },
+    { name: "React", type: "Technology" },
+    { name: "Voice AI", type: "Topic" },
+    { name: "Knowledge Graph", type: "Topic" },
+    { name: "User Interface", type: "Topic" }
+  ];
+
+  console.log('[SeedData] Populating entity cache...');
+
+  // We need to import createEntity dynamically or assume it's available. 
+  // Since this is a module, we should have imported it at the top.
+  // But for now, let's just run raw SQL inserts to avoid import issues if the lib isn't fully compatible with this worker context yet.
+  // Actually, let's try to use the D1 binding directly for simplicity and reliability in this seed script.
+
+  const stmt = env.DB.prepare(`
+    INSERT OR REPLACE INTO entity_cache (
+      entity_key, user_id, canonical_name, entity_type, 
+      aliases, properties, confidence, mention_count, 
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `);
+
+  const batch = [];
+  for (const entity of entitiesToCache) {
+    const key = `${entity.type}:${entity.name} `.toLowerCase().replace(/[^a-z0-9]/g, '');
+    batch.push(stmt.bind(
+      key,
+      userId,
+      entity.name,
+      entity.type,
+      '[]', // aliases
+      '{}', // properties
+      1.0,  // confidence
+      1     // mention_count
+    ));
+  }
+
+  await env.DB.batch(batch);
+
   return {
     success: true,
-    message: 'Test data successfully added to your knowledge graph',
+    message: 'Test data successfully added to your knowledge graph and entity cache',
     data: countResult.data || []
   };
 }

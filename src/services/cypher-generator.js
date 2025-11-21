@@ -24,7 +24,7 @@ import { validateAndSanitize } from '../lib/graph/cypher-validator.js';
  * @param {Object} env - Environment bindings (for entity resolution)
  * @returns {Promise<Object>} { cypher, parameters, templateUsed, entities }
  */
-export async function generateCypherQuery(question, userNamespace, env) {
+export async function generateCypherQuery(question, userNamespace, userId, env) {
   // 1. Select template based on question pattern
   const entities = extractEntityReferences(question);
   const template = selectCypherTemplate(question, entities);
@@ -40,11 +40,11 @@ export async function generateCypherQuery(question, userNamespace, env) {
 
   switch (template) {
     case 'entity_lookup':
-      params = await buildEntityLookupParams(question, entities, env, userNamespace);
+      params = await buildEntityLookupParams(question, entities, env, userNamespace, userId);
       break;
 
     case 'relationship_query':
-      params = await buildRelationshipParams(question, entities, env, userNamespace);
+      params = await buildRelationshipParams(question, entities, env, userNamespace, userId);
       break;
 
     case 'temporal_query':
@@ -81,7 +81,7 @@ export async function generateCypherQuery(question, userNamespace, env) {
  * Build parameters for entity lookup query
  * Pattern: "Who is Sarah?" → MATCH (n:Person {name: 'Sarah'})
  */
-async function buildEntityLookupParams(question, entities, env, userNamespace) {
+async function buildEntityLookupParams(question, entities, env, userNamespace, userId) {
   if (entities.length === 0) {
     throw new Error('No entities found in question');
   }
@@ -90,7 +90,7 @@ async function buildEntityLookupParams(question, entities, env, userNamespace) {
   const entityRef = entities[0];
 
   // Resolve entity (try to find canonical name)
-  const resolvedEntity = await resolveEntity(entityRef.text, env, userNamespace);
+  const resolvedEntity = await resolveEntity(entityRef.text, userId, env);
 
   return {
     userNamespace,
@@ -104,23 +104,35 @@ async function buildEntityLookupParams(question, entities, env, userNamespace) {
  * Build parameters for relationship query
  * Pattern: "What projects did Sarah work on?"
  */
-async function buildRelationshipParams(question, entities, env, userNamespace) {
+async function buildRelationshipParams(question, entities, env, userNamespace, userId) {
   if (entities.length === 0) {
     throw new Error('No entities found in question');
   }
 
   // Resolve source entity
-  const sourceEntity = await resolveEntity(entities[0].text, env, userNamespace);
+  const sourceEntity = await resolveEntity(entities[0].text, userId, env);
 
   // Detect relationship type from question
   const lowerQuestion = question.toLowerCase();
   let relType = 'RELATED_TO';
   let targetType = '*';
+  let direction = 'outgoing';
 
   for (const [phrase, mapping] of Object.entries(RELATIONSHIP_MAPPINGS)) {
     if (lowerQuestion.includes(phrase)) {
       relType = mapping.type;
-      targetType = mapping.target;
+
+      // Determine direction based on entity type match
+      // If the resolved entity matches the mapping's TARGET, we are looking for the SOURCE (Incoming)
+      if (sourceEntity.type && mapping.target && sourceEntity.type.toLowerCase() === mapping.target.toLowerCase()) {
+        direction = 'incoming';
+        targetType = mapping.source || '*'; // We are looking for the source
+      } else {
+        // Default or if matches Source
+        direction = 'outgoing';
+        targetType = mapping.target || '*';
+      }
+
       break;
     }
   }
@@ -131,7 +143,8 @@ async function buildRelationshipParams(question, entities, env, userNamespace) {
     sourceName: sourceEntity.name,
     source_name: sourceEntity.name,
     relType,
-    targetType
+    targetType,
+    direction
   };
 }
 
@@ -337,7 +350,42 @@ async function callLLMModel(env, modelName, prompt, timeoutMs, userNamespace, en
   generatedCypher = generatedCypher
     .replace(/```cypher\n?/g, '')
     .replace(/```\n?/g, '')
+    .replace(/USE GRAPH.*?;/gi, '') // Strip USE GRAPH statements
     .trim();
+
+  // Aggressive sanitization: Take only the first statement
+  // This prevents "Multi-statement queries are not allowed" errors if the LLM
+  // generates multiple queries or adds explanations after the query.
+  // We use the same logic as the validator to safely split by semicolon
+  const cleanCypher = generatedCypher
+    .replace(/'[^']*'/g, "''")
+    .replace(/"[^"]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+
+  const statements = cleanCypher.split(';');
+  if (statements.length > 1) {
+    // If multiple statements detected, find the index of the first semicolon
+    // that is NOT inside a string
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inBacktick = false;
+    let splitIndex = -1;
+
+    for (let i = 0; i < generatedCypher.length; i++) {
+      const char = generatedCypher[i];
+      if (char === "'" && !inDoubleQuote && !inBacktick) inSingleQuote = !inSingleQuote;
+      else if (char === '"' && !inSingleQuote && !inBacktick) inDoubleQuote = !inDoubleQuote;
+      else if (char === '`' && !inSingleQuote && !inDoubleQuote) inBacktick = !inBacktick;
+      else if (char === ';' && !inSingleQuote && !inDoubleQuote && !inBacktick) {
+        splitIndex = i;
+        break;
+      }
+    }
+
+    if (splitIndex !== -1) {
+      generatedCypher = generatedCypher.substring(0, splitIndex).trim();
+    }
+  }
 
   if (!generatedCypher) {
     throw new Error('LLM returned empty Cypher query');
@@ -371,15 +419,15 @@ function buildLLMPrompt(question, userNamespace, entities) {
   return `Convert this natural language question to a valid FalkorDB Cypher query.
 
 User's Knowledge Graph Schema:
-- Node Types: Person, Project, Meeting, Topic, Technology, Location, Organization, Date, Note
-- Relationship Types: WORKS_ON, ATTENDED, DISCUSSED, USES_TECHNOLOGY, WORKED_WITH, KNOWS_ABOUT, MENTIONS, HAPPENED_ON, ABOUT
+- Node Types: Person, Project, Meeting, Topic, Technology, Location, Organization, Date, Note, Task, Decision
+- Relationship Types: WORKS_ON, LEADS, ATTENDED, DISCUSSED, USES_TECHNOLOGY, WORKED_WITH, KNOWS_ABOUT, MENTIONS, HAPPENED_ON, ABOUT, HAS_TASK, HAS_DECISION
 
 User Namespace: ${userNamespace}
 Question: "${question}"
 Detected Entities: ${entityList}
 
 Important Rules:
-1. Always start with: USE GRAPH ${userNamespace};
+1. Do NOT include USE GRAPH statement (it is handled automatically)
 2. Use MATCH for queries, never CREATE, DELETE, DROP, or MERGE
 3. Include LIMIT clause (max 100 results)
 4. Return node properties with properties(n) as props
@@ -389,21 +437,23 @@ Important Rules:
 Example Queries:
 
 Q: "What projects did Sarah work on?"
-A: USE GRAPH ${userNamespace};
-MATCH (p:Person {name: 'Sarah Johnson'})-[:WORKS_ON]->(proj:Project)
+A: MATCH (p:Person {name: 'Sarah Johnson'})-[:WORKS_ON]->(proj:Project)
 RETURN p, proj, properties(proj) as props
 LIMIT 100;
 
+Q: "Who leads GraphMind?"
+A: MATCH (p:Person)-[:LEADS]->(proj:Project {name: 'GraphMind'})
+RETURN p, proj, properties(p) as props
+LIMIT 100;
+
 Q: "Who attended meetings last week?"
-A: USE GRAPH ${userNamespace};
-MATCH (p:Person)-[:ATTENDED]->(m:Meeting)
+A: MATCH (p:Person)-[:ATTENDED]->(m:Meeting)
 WHERE m.date >= date() - duration('P7D')
 RETURN DISTINCT p, properties(p) as props
 LIMIT 100;
 
 Q: "What technologies does the FastAPI project use?"
-A: USE GRAPH ${userNamespace};
-MATCH (proj:Project {name: 'FastAPI'})-[:USES_TECHNOLOGY]->(tech:Technology)
+A: MATCH (proj:Project {name: 'FastAPI'})-[:USES_TECHNOLOGY]->(tech:Technology)
 RETURN proj, tech, properties(tech) as props
 LIMIT 100;
 
@@ -414,49 +464,127 @@ Return ONLY the Cypher query, no explanation or markdown formatting.`;
 }
 
 /**
- * Resolve entity name to canonical form
- * Uses entity_cache table in D1 for resolution
- *
- * @param {string} entityName - Entity name from question
- * @param {Object} env - Environment bindings
- * @param {string} userNamespace - User namespace
- * @returns {Promise<Object>} { name, type, id }
+ * Calculate Levenshtein distance between two strings
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
  */
-async function resolveEntity(entityName, env, userNamespace) {
+function levenshteinDistance(a, b) {
+  const matrix = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1 // deletion
+          )
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Resolve entity name to canonical name using fuzzy matching against cache
+ * @param {string} entityName - Extracted entity name
+ * @param {string} userId - User ID
+ * @param {Object} env - Environment bindings
+ * @returns {Promise<string>} Canonical name or original name
+ */
+export async function resolveEntity(entityName, userId, env) {
   try {
-    // Query entity_cache for canonical name
-    const query = `
-      SELECT canonical_name, entity_type, entity_id
-      FROM entity_cache
-      WHERE user_namespace = ? AND (
-        canonical_name LIKE ? OR
-        aliases LIKE ?
-      )
-      LIMIT 1
-    `;
+    // 1. Fetch all entities for this user from cache
+    // Note: For a personal knowledge graph, this list is small enough to fetch all.
+    // For larger graphs, we might need a more sophisticated search (e.g. Vector DB or FTS).
+    // Normalize user_id comparison to handle UUIDs with or without dashes
+    const cleanUserId = userId.replace(/-/g, '');
+    const { results } = await env.DB.prepare(
+      "SELECT canonical_name, entity_type, entity_id FROM entity_cache WHERE REPLACE(user_id, '-', '') = ?"
+    ).bind(cleanUserId).all();
 
-    const likePattern = `%${entityName}%`;
-    const result = await env.DB.prepare(query)
-      .bind(userNamespace, likePattern, likePattern)
-      .first();
-
-    if (result) {
+    if (!results || results.length === 0) {
       return {
-        name: result.canonical_name,
-        type: result.entity_type,
-        id: result.entity_id
+        name: entityName,
+        type: null,
+        id: null
       };
     }
 
-    // Not found - return as-is (will be used literally in query)
+    const candidates = results.map(r => r.canonical_name);
+
+    // 2. Find best match using Levenshtein distance
+    let bestMatch = null;
+    let minDistance = Infinity;
+    const lowerEntityName = entityName.toLowerCase();
+
+    for (const candidate of candidates) {
+      const lowerCandidate = candidate.toLowerCase();
+
+      // Exact match check (optimization)
+      if (lowerCandidate === lowerEntityName) {
+        // Find the full object to get type
+        const match = results.find(r => r.canonical_name.toLowerCase() === lowerCandidate);
+        return {
+          name: candidate,
+          type: match ? match.entity_type : null,
+          id: match ? match.entity_id : null
+        };
+      }
+
+      const distance = levenshteinDistance(lowerEntityName, lowerCandidate);
+
+      // Calculate similarity score (0 to 1)
+      const maxLength = Math.max(lowerEntityName.length, lowerCandidate.length);
+      const similarity = 1 - (distance / maxLength);
+
+      // Threshold: 
+      // - Allow small typos (distance <= 2 for words > 4 chars)
+      // - High similarity (> 0.7)
+      if (distance < minDistance) {
+        minDistance = distance;
+        bestMatch = { candidate, distance, similarity };
+      }
+    }
+
+    // Decision logic
+    if (bestMatch) {
+      // If very close match (e.g. "GraftMind" vs "GraphMind" -> distance 2, len 9 -> sim 0.77)
+      // Let's be generous for voice inputs.
+      if (bestMatch.similarity > 0.6 || bestMatch.distance <= 2) {
+        console.log(`[EntityResolution] Fuzzy match: "${entityName}" -> "${bestMatch.candidate}" (dist: ${bestMatch.distance}, sim: ${bestMatch.similarity.toFixed(2)})`);
+
+        const match = results.find(r => r.canonical_name === bestMatch.candidate);
+        return {
+          name: bestMatch.candidate,
+          type: match ? match.entity_type : null,
+          id: match ? match.entity_id : null
+        };
+      }
+    }
+
     return {
       name: entityName,
-      type: null, // Type will be inferred
+      type: null,
       id: null
     };
+
   } catch (error) {
-    console.error('[CypherGenerator] Entity resolution error:', error);
-    // Fallback to original name
+    console.warn('[EntityResolution] Error resolving entity:', error);
     return {
       name: entityName,
       type: null,

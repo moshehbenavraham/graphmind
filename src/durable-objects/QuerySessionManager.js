@@ -60,23 +60,14 @@ const TIMEOUT_WARNING_THRESHOLD = 4 * 60 * 1000;
  */
 const MIN_CONFIDENCE_THRESHOLD = 0.7;
 
+import { generateGraphName } from '../lib/falkordb/namespace.js';
+
 /**
  * Generate a unique query ID
  * @returns {string} Query ID in format "query_" + UUID
  */
 function generateQueryId() {
   return `query_${crypto.randomUUID()}`;
-}
-
-/**
- * Generate a user namespace for FalkorDB
- * @param {string} userId - User ID
- * @returns {string} Namespace in format "user_{userId}_graph"
- */
-function getUserNamespace(userId) {
-  // Clean user ID (remove non-alphanumeric characters)
-  const cleanUserId = userId.replace(/[^a-zA-Z0-9]/g, '_');
-  return `user_${cleanUserId}_graph`;
 }
 
 /**
@@ -160,6 +151,28 @@ export class QuerySessionManager {
   }
 
   /**
+   * Build FalkorDB connection config from environment variables
+   * @returns {{host: string, port: number, username: string, password: string}}
+   */
+  buildFalkorConfig() {
+    const host = this.env.FALKORDB_HOST;
+    const username = this.env.FALKORDB_USER || 'default';
+    const password = this.env.FALKORDB_PASSWORD || '';
+    const rawPort = this.env.FALKORDB_PORT;
+    const portNumber = Number(rawPort);
+
+    // Default to 443 for https hosts, 6380 for local dev
+    const defaultPort = host && host.startsWith('http') ? 443 : 6380;
+    const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
+
+    if (!host) {
+      throw new Error('FALKORDB_HOST is not configured');
+    }
+
+    return { host, port, username, password };
+  }
+
+  /**
    * Main fetch handler - handles HTTP requests and WebSocket upgrades
    * @param {Request} request - Incoming HTTP request
    * @returns {Promise<Response>} HTTP response
@@ -223,7 +236,7 @@ export class QuerySessionManager {
     this.sessionMetadata.session_id = sessionId;
     this.sessionMetadata.query_id = generateQueryId();
     this.sessionMetadata.user_id = userId;
-    this.sessionMetadata.user_namespace = getUserNamespace(userId);
+    this.sessionMetadata.user_namespace = generateGraphName(userId);
     this.sessionMetadata.start_time = Date.now();
 
     // Update logger with session context
@@ -401,6 +414,12 @@ export class QuerySessionManager {
     // Sort chunks to guarantee ordering before reassembly
     const sortedChunks = [...this.audioBuffer].sort((a, b) => a.sequence - b.sequence);
 
+    this.logger.info('Preparing audio for transcription', {
+      buffer_chunks: this.audioBuffer.length,
+      sorted_chunks: sortedChunks.length,
+      first_chunk_preview: sortedChunks[0]?.chunk?.substring(0, 50) + '...'
+    });
+
     try {
       const uint8Chunks = sortedChunks.map(entry => base64ToChunk(entry.chunk));
 
@@ -408,13 +427,16 @@ export class QuerySessionManager {
 
       this.logger.info('Audio reassembled for transcription', {
         chunk_count: uint8Chunks.length,
-        byte_length: reassembled.byteLength
+        byte_length: reassembled.byteLength,
+        byte_length_kb: (reassembled.byteLength / 1024).toFixed(2),
+        is_single_chunk: uint8Chunks.length === 1
       });
 
       return await transcribeAudioChunk(reassembled, this.env, { language: 'en' });
     } catch (error) {
       this.logger.error('Failed to reassemble audio for transcription', {
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
       throw error;
     }
@@ -435,7 +457,23 @@ export class QuerySessionManager {
       this.performanceMetrics.transcription_end = Date.now();
     } catch (error) {
       this.performanceMetrics.transcription_end = Date.now();
-      this.sendError('TRANSCRIPTION_ERROR', 'Failed to transcribe audio. Please try again.', true);
+
+      // Log detailed error information for debugging
+      this.logger.error('Transcription failed with detailed error', {
+        error_name: error.name,
+        error_message: error.message,
+        error_code: error.code,
+        error_stack: error.stack?.substring(0, 500), // Limit stack trace length
+        buffer_length: this.audioBuffer.length,
+        session_id: this.sessionId
+      });
+
+      // Send detailed error to client (in dev mode) or generic error (in prod)
+      const errorMessage = this.env.ENVIRONMENT === 'development'
+        ? `Failed to transcribe audio: ${error.message}`
+        : 'Failed to transcribe audio. Please try again.';
+
+      this.sendError('TRANSCRIPTION_ERROR', errorMessage, true, error);
       this.cleanup();
       return;
     }
@@ -537,6 +575,7 @@ export class QuerySessionManager {
       const { cypher, parameters, templateUsed, entities } = await generateCypherQuery(
         this.question,
         this.sessionMetadata.user_namespace,
+        this.sessionMetadata.user_id,
         this.env
       );
 
@@ -560,17 +599,28 @@ export class QuerySessionManager {
       await this.executeQuery(cypher, parameters, templateUsed);
 
     } catch (error) {
-      this.logger.error('Query generation error', error);
+      this.logger.error('Query generation error', {
+        error_message: error.message,
+        error_stack: error.stack,
+        error_name: error.name,
+        transcript: this.transcript
+      });
 
       let errorMessage = 'I couldn\'t understand that question. Try asking about specific people, projects, or topics.';
       if (error.message && error.message.includes('No entities found')) {
         errorMessage = 'I couldn\'t identify what you\'re asking about. Try mentioning specific names or topics.';
       }
 
+      // In development, include the actual error
+      if (this.env.ENVIRONMENT === 'development') {
+        errorMessage = `Cypher generation failed: ${error.message}`;
+      }
+
       this.sendError(
         'CYPHER_GENERATION_FAILED',
         errorMessage,
-        true
+        true,
+        error  // Pass error object for debug details
       );
       this.cleanup();
     }
@@ -592,23 +642,33 @@ export class QuerySessionManager {
 
       this.performanceMetrics.query_execution_start = Date.now();
 
+      // Build FalkorDB connection config
+      const config = this.buildFalkorConfig();
+
       // Get FalkorDBConnectionPool Durable Object
       const poolId = this.env.FALKORDB_POOL.idFromName('pool');
       const poolStub = this.env.FALKORDB_POOL.get(poolId);
 
-      // Execute query via connection pool
-      const response = await poolStub.fetch('http://internal/query', {
+      // Execute query via connection pool (using correct endpoint /execute)
+      const response = await poolStub.fetch('http://internal/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          config,
+          userId: this.sessionMetadata.user_id,
           cypher,
-          parameters,
-          user_namespace: this.sessionMetadata.user_namespace
+          params: parameters
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Query execution failed: ${response.statusText}`);
+        const errorText = await response.text();
+        this.logger.error('Query execution failed', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Query execution failed: ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -616,17 +676,24 @@ export class QuerySessionManager {
 
       const executionTime = this.performanceMetrics.query_execution_end - this.performanceMetrics.query_execution_start;
 
+      // /execute endpoint returns {data, metadata, statistics} not {results}
+      const queryResults = result.data || [];
+
       this.logger.info('Query executed', {
         execution_time_ms: executionTime,
-        results_count: result.results?.length || 0
+        results_count: queryResults.length,
+        statistics: result.statistics
       });
 
       // Format results
-      const formattedResults = autoFormatResults(result.results || [], {
+      const formattedResults = autoFormatResults(queryResults, {
         execution_time_ms: executionTime,
         cached: false,
         template_used: templateUsed,
-        query_id: this.sessionMetadata.query_id
+        query_id: this.sessionMetadata.query_id,
+        cypher_query: cypher,
+        user_namespace: this.sessionMetadata.user_namespace,
+        user_id: this.sessionMetadata.user_id
       });
 
       this.queryResults = formattedResults;
@@ -641,7 +708,7 @@ export class QuerySessionManager {
       // Save to D1 and cache in KV
       await Promise.all([
         this.saveQueryToDatabase(cypher, formattedResults, executionTime),
-        this.cacheQueryResults(cypher, parameters, result.results, templateUsed)
+        this.cacheQueryResults(cypher, parameters, queryResults, templateUsed)
       ]);
 
       // Generate answer (Feature 009)
@@ -650,12 +717,23 @@ export class QuerySessionManager {
       this.cleanup();
 
     } catch (error) {
-      this.logger.error('Query execution error', error);
+      this.logger.error('Query execution error', {
+        error_message: error.message,
+        error_stack: error.stack,
+        error_name: error.name,
+        cypher_query: cypher
+      });
+
+      // Send detailed error in development, generic in production
+      const errorMessage = this.env.ENVIRONMENT === 'development'
+        ? `Graph query failed: ${error.message}`
+        : 'Unable to search your knowledge graph right now. Please try again.';
 
       this.sendError(
         'QUERY_EXECUTION_FAILED',
-        'Unable to search your knowledge graph right now. Please try again.',
-        true
+        errorMessage,
+        true,
+        error  // Pass error object for debug details in dev mode
       );
       this.cleanup();
     }
@@ -837,16 +915,28 @@ export class QuerySessionManager {
    * @param {string} errorCode - Error code
    * @param {string} message - User-friendly error message
    * @param {boolean} retryable - Whether error is retryable
+   * @param {Error} [error] - Original error object (for development details)
    */
-  sendError(errorCode, message, retryable) {
+  sendError(errorCode, message, retryable, error = null) {
     this.logger.warn(`Error sent to client: ${errorCode}`, { message, retryable });
 
-    this.sendToClient({
+    const errorPayload = {
       type: 'error',
       error_code: errorCode,
       message,
       retryable
-    });
+    };
+
+    // In development mode, include error details for debugging
+    if (this.env.ENVIRONMENT === 'development' && error) {
+      errorPayload.debug = {
+        error_message: error.message,
+        error_stack: error.stack,
+        error_name: error.name
+      };
+    }
+
+    this.sendToClient(errorPayload);
   }
 
   /**

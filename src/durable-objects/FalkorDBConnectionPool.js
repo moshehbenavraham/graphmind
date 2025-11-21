@@ -189,6 +189,7 @@ export class FalkorDBConnectionPool {
         JSON.stringify({
           error: normalizedError.message,
           code: normalizedError.code,
+          originalMessage: normalizedError.originalMessage,
         }),
         {
           status: normalizedError.httpStatus || 500,
@@ -243,6 +244,7 @@ export class FalkorDBConnectionPool {
         JSON.stringify({
           error: normalizedError.message,
           code: normalizedError.code,
+          originalMessage: normalizedError.originalMessage,
         }),
         {
           status: normalizedError.httpStatus || 500,
@@ -857,7 +859,7 @@ export class FalkorDBConnectionPool {
       const nextInterval = isHealthy ? this.alarmIntervalWarm : this.alarmIntervalCold;
       const nextAlarmTime = Date.now() + nextInterval;
       await this.state.storage.setAlarm(nextAlarmTime);
-      console.log(`[ConnectionPool] Next alarm scheduled for ${new Date(nextAlarmTime).toISOString()} (${nextInterval/1000}s interval, pool ${isHealthy ? 'HEALTHY' : 'UNHEALTHY'})`);
+      console.log(`[ConnectionPool] Next alarm scheduled for ${new Date(nextAlarmTime).toISOString()} (${nextInterval / 1000}s interval, pool ${isHealthy ? 'HEALTHY' : 'UNHEALTHY'})`);
 
     } catch (error) {
       console.error('[ConnectionPool] Alarm warmup failed:', error);
