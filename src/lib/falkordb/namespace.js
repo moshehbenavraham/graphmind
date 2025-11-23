@@ -21,6 +21,14 @@ import { normalizeError } from './errors.js';
  * @throws {Error} If userId is invalid
  */
 export function generateGraphName(userId) {
+  // DEBUG: Log input
+  console.log('[Namespace] generateGraphName called', {
+    userId,
+    userId_type: typeof userId,
+    userId_length: userId?.length,
+    userId_has_dashes: userId?.includes('-')
+  });
+
   if (!userId || typeof userId !== 'string') {
     throw new Error('User ID is required and must be a string');
   }
@@ -28,6 +36,15 @@ export function generateGraphName(userId) {
   // Validate UUID format (loose validation)
   // Accept UUIDs with or without dashes
   const cleanUserId = userId.replace(/-/g, '');
+
+  // DEBUG: Log UUID validation
+  console.log('[Namespace] UUID validation', {
+    original_userId: userId,
+    cleanUserId,
+    cleanUserId_length: cleanUserId.length,
+    passes_hex_test: /^[a-f0-9]{32}$/i.test(cleanUserId)
+  });
+
   if (!/^[a-f0-9]{32}$/i.test(cleanUserId)) {
     throw new Error('User ID must be a valid UUID format');
   }
@@ -35,10 +52,28 @@ export function generateGraphName(userId) {
   // Construct graph name
   const graphName = `user_${userId}_graph`;
 
+  // DEBUG: Log generated graph name
+  console.log('[Namespace] Graph name constructed', {
+    userId,
+    graphName,
+    graphName_length: graphName.length
+  });
+
   // Validate final format
   if (!isValidGraphName(graphName)) {
+    console.error('[Namespace] Generated graph name validation failed', {
+      graphName,
+      graphName_length: graphName.length
+    });
     throw new Error(`Generated graph name is invalid: ${graphName}`);
   }
+
+  // DEBUG: Log successful generation
+  console.log('[Namespace] generateGraphName successful', {
+    userId,
+    graphName,
+    validation_passed: true
+  });
 
   return graphName;
 }

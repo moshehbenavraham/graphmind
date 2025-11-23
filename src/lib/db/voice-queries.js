@@ -23,8 +23,7 @@ export async function updateQueryAnswer(env, queryId, userId, answer, sources, l
       UPDATE voice_queries
       SET answer = ?,
           sources = ?,
-          latency_ms = ?,
-          updated_at = CURRENT_TIMESTAMP
+          latency_ms = ?
       WHERE query_id = ? AND user_id = ?
     `).bind(answer, sourcesJson, latencyMs, queryId, userId).run();
 

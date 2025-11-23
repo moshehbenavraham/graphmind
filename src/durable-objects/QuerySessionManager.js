@@ -246,7 +246,13 @@ export class QuerySessionManager {
       user_id: userId
     });
 
-    this.logger.info('WebSocket connection established');
+    // DEBUG: Log extracted userId and generated namespace
+    this.logger.info('WebSocket connection established', {
+      extracted_user_id: userId,
+      generated_user_namespace: this.sessionMetadata.user_namespace,
+      session_id: sessionId,
+      query_id: this.sessionMetadata.query_id
+    });
 
     // Set up event handlers
     server.addEventListener('message', (event) => this.handleMessage(event));
@@ -572,6 +578,13 @@ export class QuerySessionManager {
       }
 
       // 2. Generate Cypher query from question
+      // DEBUG: Log inputs before generating Cypher
+      this.logger.info('Generating Cypher query', {
+        question: this.question,
+        user_id: this.sessionMetadata.user_id,
+        user_namespace: this.sessionMetadata.user_namespace
+      });
+
       const { cypher, parameters, templateUsed, entities } = await generateCypherQuery(
         this.question,
         this.sessionMetadata.user_namespace,
@@ -582,10 +595,14 @@ export class QuerySessionManager {
       this.cypherQuery = cypher;
       this.performanceMetrics.cypher_generation_end = Date.now();
 
+      // DEBUG: Log generated Cypher with all details
       this.logger.info('Cypher query generated', {
         template: templateUsed,
         cypher,
-        entities: entities.length
+        parameters,
+        entities_count: entities.length,
+        entities: entities,
+        user_namespace: this.sessionMetadata.user_namespace
       });
 
       // Send cypher_generated event
@@ -645,6 +662,17 @@ export class QuerySessionManager {
       // Build FalkorDB connection config
       const config = this.buildFalkorConfig();
 
+      // DEBUG: Log execution request details
+      this.logger.info('Executing query against FalkorDB', {
+        user_id: this.sessionMetadata.user_id,
+        user_namespace: this.sessionMetadata.user_namespace,
+        cypher,
+        parameters,
+        template_used: templateUsed,
+        config_host: config.host,
+        config_port: config.port
+      });
+
       // Get FalkorDBConnectionPool Durable Object
       const poolId = this.env.FALKORDB_POOL.idFromName('pool');
       const poolStub = this.env.FALKORDB_POOL.get(poolId);
@@ -679,10 +707,17 @@ export class QuerySessionManager {
       // /execute endpoint returns {data, metadata, statistics} not {results}
       const queryResults = result.data || [];
 
+      // DEBUG: Log detailed query results
       this.logger.info('Query executed', {
         execution_time_ms: executionTime,
         results_count: queryResults.length,
-        statistics: result.statistics
+        statistics: result.statistics,
+        metadata: result.metadata,
+        cypher: cypher,
+        parameters: parameters,
+        user_namespace: this.sessionMetadata.user_namespace,
+        user_id: this.sessionMetadata.user_id,
+        raw_results_preview: queryResults.slice(0, 3) // First 3 results for debugging
       });
 
       // Format results

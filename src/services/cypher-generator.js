@@ -25,9 +25,25 @@ import { validateAndSanitize } from '../lib/graph/cypher-validator.js';
  * @returns {Promise<Object>} { cypher, parameters, templateUsed, entities }
  */
 export async function generateCypherQuery(question, userNamespace, userId, env) {
+  // DEBUG: Log all inputs to generateCypherQuery
+  console.log('[CypherGenerator] generateCypherQuery called', {
+    question,
+    userNamespace,
+    userId,
+    userId_length: userId?.length,
+    userId_has_dashes: userId?.includes('-')
+  });
+
   // 1. Select template based on question pattern
   const entities = extractEntityReferences(question);
   const template = selectCypherTemplate(question, entities);
+
+  // DEBUG: Log template selection
+  console.log('[CypherGenerator] Template selected', {
+    template,
+    entities_count: entities.length,
+    entities: entities.map(e => ({ text: e.text, type: e.type }))
+  });
 
   // 2. If LLM fallback needed (complex query), use Llama 3.1-8b
   if (template === 'llm_generate') {
@@ -508,16 +524,46 @@ function levenshteinDistance(a, b) {
  */
 export async function resolveEntity(entityName, userId, env) {
   try {
+    // DEBUG: Log entity resolution inputs
+    console.log('[EntityResolution] resolveEntity called', {
+      entityName,
+      userId,
+      userId_length: userId?.length,
+      userId_has_dashes: userId?.includes('-')
+    });
+
     // 1. Fetch all entities for this user from cache
     // Note: For a personal knowledge graph, this list is small enough to fetch all.
     // For larger graphs, we might need a more sophisticated search (e.g. Vector DB or FTS).
     // Normalize user_id comparison to handle UUIDs with or without dashes
     const cleanUserId = userId.replace(/-/g, '');
+
+    // DEBUG: Log D1 query params
+    console.log('[EntityResolution] Querying entity_cache', {
+      original_userId: userId,
+      cleanUserId,
+      sql: "SELECT canonical_name, entity_type FROM entity_cache WHERE REPLACE(user_id, '-', '') = ?"
+    });
+
     const { results } = await env.DB.prepare(
-      "SELECT canonical_name, entity_type, entity_id FROM entity_cache WHERE REPLACE(user_id, '-', '') = ?"
+      "SELECT canonical_name, entity_type FROM entity_cache WHERE REPLACE(user_id, '-', '') = ?"
     ).bind(cleanUserId).all();
 
+    // DEBUG: Log D1 query results
+    console.log('[EntityResolution] D1 query results', {
+      results_count: results?.length || 0,
+      results_preview: results?.slice(0, 5).map(r => ({
+        canonical_name: r.canonical_name,
+        entity_type: r.entity_type
+      }))
+    });
+
     if (!results || results.length === 0) {
+      console.log('[EntityResolution] No entities found in cache for user', {
+        userId,
+        cleanUserId,
+        entityName
+      });
       return {
         name: entityName,
         type: null,
@@ -539,11 +585,20 @@ export async function resolveEntity(entityName, userId, env) {
       if (lowerCandidate === lowerEntityName) {
         // Find the full object to get type
         const match = results.find(r => r.canonical_name.toLowerCase() === lowerCandidate);
-        return {
+        const resolvedEntity = {
           name: candidate,
           type: match ? match.entity_type : null,
-          id: match ? match.entity_id : null
+          id: null
         };
+
+        // DEBUG: Log exact match
+        console.log('[EntityResolution] Entity resolved (exact match)', {
+          input_entityName: entityName,
+          resolved_name: resolvedEntity.name,
+          resolved_type: resolvedEntity.type
+        });
+
+        return resolvedEntity;
       }
 
       const distance = levenshteinDistance(lowerEntityName, lowerCandidate);
@@ -563,19 +618,44 @@ export async function resolveEntity(entityName, userId, env) {
 
     // Decision logic
     if (bestMatch) {
+      // DEBUG: Log fuzzy matching decision
+      console.log('[EntityResolution] Best fuzzy match found', {
+        entityName,
+        bestMatch_candidate: bestMatch.candidate,
+        distance: bestMatch.distance,
+        similarity: bestMatch.similarity.toFixed(2),
+        threshold_met: bestMatch.similarity > 0.6 || bestMatch.distance <= 2
+      });
+
       // If very close match (e.g. "GraftMind" vs "GraphMind" -> distance 2, len 9 -> sim 0.77)
       // Let's be generous for voice inputs.
       if (bestMatch.similarity > 0.6 || bestMatch.distance <= 2) {
         console.log(`[EntityResolution] Fuzzy match: "${entityName}" -> "${bestMatch.candidate}" (dist: ${bestMatch.distance}, sim: ${bestMatch.similarity.toFixed(2)})`);
 
         const match = results.find(r => r.canonical_name === bestMatch.candidate);
-        return {
+        const resolvedEntity = {
           name: bestMatch.candidate,
           type: match ? match.entity_type : null,
-          id: match ? match.entity_id : null
+          id: null
         };
+
+        // DEBUG: Log final resolved entity
+        console.log('[EntityResolution] Entity resolved (fuzzy match)', {
+          input_entityName: entityName,
+          resolved_name: resolvedEntity.name,
+          resolved_type: resolvedEntity.type
+        });
+
+        return resolvedEntity;
       }
     }
+
+    // DEBUG: Log no match found
+    console.log('[EntityResolution] No fuzzy match found, using original name', {
+      entityName,
+      bestMatch_similarity: bestMatch?.similarity || 0,
+      bestMatch_distance: bestMatch?.distance || Infinity
+    });
 
     return {
       name: entityName,

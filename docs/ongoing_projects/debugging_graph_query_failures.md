@@ -2,7 +2,7 @@
 
 **Issue:** The natural language query "Who works at GraphMind?" returns "No results found".
 **Date:** 2025-11-21
-**Status:** Ongoing
+**Status:** ✅ RESOLVED (2025-11-23)
 
 ## Symptoms
 - Frontend displays "No results found".
@@ -52,10 +52,124 @@ The query is still failing despite fixing the entity resolution and namespace ge
 4.  **Token/Auth Issue:** Is the `userId` extracted from the token the same as the one used for seeding?
 
 ## Next Steps
-1.  **Log Everything:** Add aggressive logging in `QuerySessionManager` and `cypher-generator` to see:
-    -   Exact `userId` being used.
-    -   Exact `userNamespace` being generated.
-    -   Exact Cypher query being generated.
-    -   Result of `resolveEntity`.
-2.  **Verify User ID:** Check if the logged-in user ID matches the seeded user ID (`cdb473b8...`).
-3.  **Inspect Generated Cypher:** The logs in the frontend don't show the generated Cypher. We need server-side logs (via `wrangler tail`) to see what's actually being executed.
+
+### ✅ COMPLETED: Comprehensive Logging Implementation (2025-11-23)
+
+Added comprehensive debug logging across the entire query pipeline to diagnose the issue:
+
+**Files Modified:**
+- `src/durable-objects/QuerySessionManager.js`: WebSocket connection, query generation, query execution
+- `src/services/cypher-generator.js`: Cypher generation and entity resolution
+- `src/durable-objects/FalkorDBConnectionPool.js`: Query execution and namespace management
+- `src/lib/falkordb/namespace.js`: Graph name generation
+
+**Logging Coverage:**
+1. ✅ **userId Flow Tracking:**
+   - Extracted userId from WebSocket URL params
+   - userId format validation (length, dashes)
+   - userId propagation through all layers
+
+2. ✅ **Namespace Generation:**
+   - Input userId to `generateGraphName`
+   - UUID validation process
+   - Generated graphName output
+   - Namespace cache lookups
+
+3. ✅ **Entity Resolution:**
+   - Input entity name ("GraphMind")
+   - D1 query SQL and parameters
+   - D1 query results (all candidates)
+   - Fuzzy matching scores
+   - Final resolved entity (name, type, id)
+
+4. ✅ **Cypher Query Generation:**
+   - Selected template
+   - Extracted entities
+   - Generated Cypher query
+   - Query parameters
+
+5. ✅ **Query Execution:**
+   - Exact Cypher sent to FalkorDB
+   - Graph name used
+   - Query results (count, preview, statistics)
+
+**How to Use:**
+1. Run `npx wrangler dev` to start local development server
+2. Execute the query "Who works at GraphMind?" via the frontend
+3. Run `npx wrangler tail` in another terminal to see real-time logs
+4. Analyze logs to identify where the issue occurs
+
+**Expected Findings:**
+- Verify userId matches seeded user: `cdb473b8-c8ab-4904-aabf-61f3922e5016`
+- Verify graphName matches: `user_cdb473b8-c8ab-4904-aabf-61f3922e5016_graph`
+- Verify "GraphMind" resolves to type `Project` (NOT `Person`)
+- Verify generated Cypher uses correct entity type
+
+### ✅ RESOLUTION (2025-11-23)
+
+**Root Cause:** Session crash after successful query execution due to non-existent `updated_at` column
+
+**What Actually Happened:**
+The comprehensive logging revealed the truth - the query pipeline was working perfectly:
+1. ✅ Entity resolution resolved "GraphMind" to type `Project`
+2. ✅ Cypher query was generated correctly
+3. ✅ FalkorDB returned 2 results (Bob Smith and Carol White)
+
+**The Real Bug:**
+After successfully executing the query and receiving results from FalkorDB, the code crashed when trying to save the answer to D1:
+
+```javascript
+// BROKEN CODE in src/lib/db/voice-queries.js
+UPDATE voice_queries
+SET answer = ?,
+    sources = ?,
+    latency_ms = ?,
+    updated_at = CURRENT_TIMESTAMP  // ❌ Column doesn't exist!
+WHERE query_id = ? AND user_id = ?
+```
+
+**Database Schema Reality:**
+- Table `voice_queries` has columns: `query_id`, `user_id`, `question`, `answer`, `created_at`, etc.
+- **NO `updated_at` column exists**
+
+**Impact:**
+- Query executed successfully and FalkorDB returned 2 rows
+- Session crashed with error: `D1_ERROR: no such column: updated_at: SQLITE_ERROR`
+- Crash occurred BEFORE results were sent to frontend via WebSocket
+- Frontend received empty results and displayed "No results found"
+
+**Production Logs Evidence:**
+```
+[FalkorDB] Query executed { results: 2 }
+"raw_results_preview":[
+  {"target":{"name":"Bob Smith","role":"CTO"}},
+  {"target":{"name":"Carol White","role":"Designer"}}
+]
+(error) Failed to update query answer: D1_ERROR: no such column: updated_at
+(log) Session cleaned up (crashed before sending results)
+```
+
+**The Fix:**
+```javascript
+// FIXED CODE in src/lib/db/voice-queries.js
+UPDATE voice_queries
+SET answer = ?,
+    sources = ?,
+    latency_ms = ?
+WHERE query_id = ? AND user_id = ?
+```
+
+**Deployed Versions:**
+1. Version 6d8cb77c-0e24-4ae9-9d91-86104ae404b7: Fixed `entity_id` bug in cypher-generator.js (red herring)
+2. Version 47fd7538-91eb-4963-a2fc-50967d492642: Fixed actual bug - removed `updated_at` from voice-queries.js ✅
+
+**Verification:**
+Query "Who works on GraphMind?" now returns:
+- Bob Smith (CTO)
+- Carol White (Designer)
+
+**Lessons Learned:**
+- Comprehensive logging was essential to find the real bug
+- The issue appeared to be in query generation but was actually in result delivery
+- Silent SQL errors can cause misleading symptoms
+- Always verify database schema matches code expectations

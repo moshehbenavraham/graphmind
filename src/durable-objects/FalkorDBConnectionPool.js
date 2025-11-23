@@ -160,6 +160,16 @@ export class FalkorDBConnectionPool {
   async handleExecuteQuery(request) {
     const { config, userId, cypher, params } = await request.json();
 
+    // DEBUG: Log incoming request
+    console.log('[ConnectionPool] handleExecuteQuery called', {
+      userId,
+      userId_length: userId?.length,
+      userId_has_dashes: userId?.includes('-'),
+      cypher_preview: cypher?.substring(0, 100),
+      params,
+      has_config: !!config
+    });
+
     // Set config if provided
     if (config) {
       await this.setConnectionConfig(config);
@@ -174,9 +184,16 @@ export class FalkorDBConnectionPool {
 
     try {
       // Get or create user's namespace
+      console.log('[ConnectionPool] Getting namespace for user', { userId });
       const graphName = await this.getOrCreateNamespace(userId);
+      console.log('[ConnectionPool] Namespace retrieved', { userId, graphName });
 
       // Execute query using connection pool
+      console.log('[ConnectionPool] Executing query', {
+        graphName,
+        cypher,
+        params
+      });
       const result = await this.executeQuery(graphName, cypher, params);
 
       return new Response(JSON.stringify(result), {
@@ -367,9 +384,22 @@ export class FalkorDBConnectionPool {
    * @returns {Promise<string>} Graph name
    */
   async getOrCreateNamespace(userId) {
+    // DEBUG: Log function entry
+    console.log('[ConnectionPool] getOrCreateNamespace called', {
+      userId,
+      userId_length: userId?.length,
+      userId_has_dashes: userId?.includes('-'),
+      in_memory_cache_has_userId: this.namespaceCache.has(userId)
+    });
+
     // Check in-memory cache first
     if (this.namespaceCache.has(userId)) {
-      return this.namespaceCache.get(userId);
+      const cachedGraphName = this.namespaceCache.get(userId);
+      console.log('[ConnectionPool] Namespace found in memory cache', {
+        userId,
+        graphName: cachedGraphName
+      });
+      return cachedGraphName;
     }
 
     // Check Durable Object storage
@@ -379,11 +409,24 @@ export class FalkorDBConnectionPool {
     if (cachedNamespace) {
       // Update in-memory cache
       this.namespaceCache.set(userId, cachedNamespace);
+      console.log('[ConnectionPool] Namespace found in DO storage', {
+        userId,
+        graphName: cachedNamespace,
+        storageKey
+      });
       return cachedNamespace;
     }
 
     // Generate new namespace
+    console.log('[ConnectionPool] Generating new namespace via generateGraphName', {
+      userId
+    });
     const graphName = generateGraphName(userId);
+    console.log('[ConnectionPool] Generated namespace', {
+      userId,
+      graphName,
+      graphName_length: graphName.length
+    });
 
     // Create graph database
     const client = await this.getConnection();
