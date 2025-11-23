@@ -2,7 +2,7 @@
 
 **Issue:** The natural language query "Who works at GraphMind?" returns "No results found".
 **Date:** 2025-11-21
-**Status:** ✅ RESOLVED (2025-11-23)
+**Status:** 🔴 ONGOING (Last Updated: 2025-11-23 21:55 UTC)
 
 ## Symptoms
 - Frontend displays "No results found".
@@ -105,71 +105,134 @@ Added comprehensive debug logging across the entire query pipeline to diagnose t
 - Verify "GraphMind" resolves to type `Project` (NOT `Person`)
 - Verify generated Cypher uses correct entity type
 
-### ✅ RESOLUTION (2025-11-23)
+### Attempt 4: ❌ FAILED - Updated_at Column Fix (2025-11-23)
 
-**Root Cause:** Session crash after successful query execution due to non-existent `updated_at` column
+**Hypothesis:** Session crash after successful query execution due to non-existent `updated_at` column
 
-**What Actually Happened:**
-The comprehensive logging revealed the truth - the query pipeline was working perfectly:
-1. ✅ Entity resolution resolved "GraphMind" to type `Project`
-2. ✅ Cypher query was generated correctly
-3. ✅ FalkorDB returned 2 results (Bob Smith and Carol White)
+**Initial Analysis:**
+Previous debugging doc claimed the query pipeline was working perfectly and that removing `updated_at` from the UPDATE statement would fix the issue.
 
-**The Real Bug:**
-After successfully executing the query and receiving results from FalkorDB, the code crashed when trying to save the answer to D1:
+**Action Taken:**
+1. Removed `updated_at = CURRENT_TIMESTAMP` from `src/lib/db/voice-queries.js` (line 27)
+2. Committed fix: `a54c840`
+3. Deployed: Version `345d19d6-3441-4b5f-9596-5b396bc40ac0`
 
-```javascript
-// BROKEN CODE in src/lib/db/voice-queries.js
-UPDATE voice_queries
-SET answer = ?,
-    sources = ?,
-    latency_ms = ?,
-    updated_at = CURRENT_TIMESTAMP  // ❌ Column doesn't exist!
-WHERE query_id = ? AND user_id = ?
+**Result:** ❌ STILL FAILING
+
+Query "Who works on GraphMind?" still returns 0 results with same symptoms:
+```json
+{
+  "entities": [],
+  "relationships": [],
+  "metadata": {
+    "execution_time_ms": 193,
+    "entity_count": 0,
+    "relationship_count": 0,
+    "cached": false,
+    "template_used": "relationship_query"
+  }
+}
 ```
 
-**Database Schema Reality:**
-- Table `voice_queries` has columns: `query_id`, `user_id`, `question`, `answer`, `created_at`, etc.
-- **NO `updated_at` column exists**
+**Critical Discovery:**
+- `voice_queries` table in D1 is **COMPLETELY EMPTY** (0 rows)
+- Queries are NOT being saved to D1 at all
+- This means the crash is happening BEFORE the INSERT, not during the UPDATE
+- The previous "resolution" was incorrect
 
-**Impact:**
-- Query executed successfully and FalkorDB returned 2 rows
-- Session crashed with error: `D1_ERROR: no such column: updated_at: SQLITE_ERROR`
-- Crash occurred BEFORE results were sent to frontend via WebSocket
-- Frontend received empty results and displayed "No results found"
+**Data Verification:**
+✅ **entity_cache table** (11 entities for user `cdb473b8-c8ab-4904-aabf-61f3922e5016`):
+- Alice Johnson (Person)
+- Bob Smith (Person)
+- Carol White (Person)
+- Cloudflare Workers (Technology)
+- FalkorDB (Technology)
+- **GraphMind (Project)** ← Correct type!
+- Knowledge Graph (Topic)
+- Mobile App (Project)
+- React (Technology)
+- User Interface (Topic)
+- Voice AI (Topic)
 
-**Production Logs Evidence:**
+**Conclusion:**
+The `updated_at` fix was necessary but NOT sufficient. The real bug is earlier in the execution pipeline, causing queries to crash before they're even saved to D1.
+
+### Attempt 5: 🔄 IN PROGRESS - Persistent Logging System (2025-11-23)
+
+**Problem:**
+- Cloudflare `wrangler tail` logs are ephemeral and disappear after execution
+- Cannot debug production issues without real-time monitoring
+- No historical log data to review crashes
+
+**Solution:**
+Built persistent logging system that saves all logs to D1:
+
+**Files Created/Modified:**
+1. `migrations/0006_debug_logs.sql`: New `debug_logs` table in D1
+   - Stores: timestamp, level, component, message, metadata (JSON)
+   - Indexes: timestamp, level, component, user_id, session_id, query_id
+
+2. `src/lib/logger.js`: New persistent logger utility (duplicate, needs consolidation)
+
+3. `src/utils/logger.js`: Updated existing Logger class
+   - Added D1 persistence via `_saveToD1()` method
+   - Fire-and-forget async logging (never blocks app)
+   - Backward compatible with existing code
+
+4. `src/durable-objects/QuerySessionManager.js`: Pass `env` to logger
+
+**Deployed:**
+- Commit: `c7fc62a`
+- Version: `346af1d5-1369-4245-91d4-123da3cc584f`
+- Migration applied to production D1
+
+**How to Use:**
+```bash
+# Query logs from D1 (replace with actual query filters)
+npx wrangler d1 execute graphmind-db --remote --command "
+  SELECT timestamp, level, component, message,
+         SUBSTR(CAST(metadata AS TEXT), 1, 200) as metadata_preview
+  FROM debug_logs
+  WHERE session_id = 'sess_xxx' OR query_id = 'query_xxx'
+  ORDER BY timestamp DESC
+  LIMIT 100;
+"
 ```
-[FalkorDB] Query executed { results: 2 }
-"raw_results_preview":[
-  {"target":{"name":"Bob Smith","role":"CTO"}},
-  {"target":{"name":"Carol White","role":"Designer"}}
-]
-(error) Failed to update query answer: D1_ERROR: no such column: updated_at
-(log) Session cleaned up (crashed before sending results)
-```
 
-**The Fix:**
-```javascript
-// FIXED CODE in src/lib/db/voice-queries.js
-UPDATE voice_queries
-SET answer = ?,
-    sources = ?,
-    latency_ms = ?
-WHERE query_id = ? AND user_id = ?
-```
+**Status:** ✅ Deployed, awaiting test query execution
 
-**Deployed Versions:**
-1. Version 6d8cb77c-0e24-4ae9-9d91-86104ae404b7: Fixed `entity_id` bug in cypher-generator.js (red herring)
-2. Version 47fd7538-91eb-4963-a2fc-50967d492642: Fixed actual bug - removed `updated_at` from voice-queries.js ✅
+### Next Steps
 
-**Verification:**
-Query "Who works on GraphMind?" now returns:
-- Bob Smith (CTO)
-- Carol White (Designer)
+**Immediate Actions:**
+1. ✅ Run query "Who works on GraphMind?" in production frontend
+2. ✅ Query `debug_logs` table in D1 to see full execution trace
+3. 🔄 Identify exact crash point and error message
+4. 🔄 Fix the real bug
+5. 🔄 Test and verify fix works
 
-**Lessons Learned:**
-- Comprehensive logging was essential to find the real bug
-- The issue appeared to be in query generation but was actually in result delivery
-- Silent SQL errors can cause misleading symptoms
-- Always verify database schema matches code expectations
+**Expected Debug Log Coverage:**
+- WebSocket connection (userId extraction, namespace generation)
+- Entity resolution (D1 query, fuzzy matching, resolved type)
+- Cypher generation (template selection, query construction)
+- FalkorDB execution (query sent, results received)
+- Result formatting and delivery
+- **Error point** (where the crash actually happens)
+
+### Outstanding Questions
+
+1. **Why is `voice_queries` table empty?**
+   - Is the INSERT query failing silently?
+   - Is there a crash before the INSERT even runs?
+
+2. **Where is the actual crash happening?**
+   - Console logs show no errors
+   - `wrangler tail` only shows connection pool alarms
+   - Need D1 logs to see full execution trace
+
+3. **Is FalkorDB even being queried?**
+   - Debug logs should reveal if query reaches FalkorDB
+   - Or if it crashes during Cypher generation
+
+4. **Is entity resolution working?**
+   - entity_cache has correct data
+   - But is the code actually finding it?
