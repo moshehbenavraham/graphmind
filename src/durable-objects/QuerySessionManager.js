@@ -147,7 +147,7 @@ export class QuerySessionManager {
     };
 
     // Logger (will be initialized with context)
-    this.logger = createLogger('QuerySessionManager');
+    this.logger = createLogger('QuerySessionManager', {}, this.env);
   }
 
   /**
@@ -244,7 +244,7 @@ export class QuerySessionManager {
       session_id: sessionId,
       query_id: this.sessionMetadata.query_id,
       user_id: userId
-    });
+    }, this.env);
 
     // DEBUG: Log extracted userId and generated namespace
     this.logger.info('WebSocket connection established', {

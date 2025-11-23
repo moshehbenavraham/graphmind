@@ -41,17 +41,19 @@ class PerformanceTimer {
 }
 
 /**
- * Structured logger with context support
+ * Structured logger with context support and D1 persistence
  */
 export class Logger {
   /**
    * Create a logger instance
    * @param {string} component - Component name (e.g., 'VoiceSessionManager', 'API:StartRecording')
    * @param {Object} context - Base context (user_id, session_id, etc.)
+   * @param {Object} env - Worker environment bindings (optional, for D1 persistence)
    */
-  constructor(component, context = {}) {
+  constructor(component, context = {}, env = null) {
     this.component = component;
     this.baseContext = context;
+    this.env = env;
   }
 
   /**
@@ -63,7 +65,7 @@ export class Logger {
     return new Logger(this.component, {
       ...this.baseContext,
       ...additionalContext
-    });
+    }, this.env);
   }
 
   /**
@@ -85,7 +87,39 @@ export class Logger {
   }
 
   /**
-   * Write log to console
+   * Save log to D1 (async, fire-and-forget)
+   * @param {Object} log - Formatted log object
+   */
+  async _saveToD1(log) {
+    if (!this.env?.DB) {
+      return; // No D1 available, skip
+    }
+
+    try {
+      await this.env.DB.prepare(`
+        INSERT INTO debug_logs (
+          timestamp, level, component, message, metadata,
+          user_id, session_id, query_id, request_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        log.timestamp,
+        log.level,
+        log.component,
+        log.message,
+        JSON.stringify(log),  // Store full log as JSON in metadata
+        log.user_id || null,
+        log.session_id || null,
+        log.query_id || null,
+        log.request_id || null
+      ).run();
+    } catch (error) {
+      // Silent fail - don't crash the app if logging fails
+      console.error('[Logger] Failed to save to D1:', error.message);
+    }
+  }
+
+  /**
+   * Write log to console and D1
    * @param {string} level - Log level
    * @param {string} message - Log message
    * @param {Object} data - Additional data
@@ -94,7 +128,7 @@ export class Logger {
     const log = this._formatLog(level, message, data);
     const logString = JSON.stringify(log);
 
-    // Use appropriate console method based on level
+    // 1. Log to console (synchronous)
     switch (level) {
       case LogLevel.DEBUG:
         console.debug(logString);
@@ -112,6 +146,9 @@ export class Logger {
       default:
         console.log(logString);
     }
+
+    // 2. Save to D1 (async, don't wait)
+    this._saveToD1(log).catch(() => {});  // Ignore D1 errors
   }
 
   /**
@@ -214,10 +251,11 @@ export class Logger {
  * Create a logger instance for a component
  * @param {string} component - Component name
  * @param {Object} context - Base context
+ * @param {Object} env - Worker environment bindings (optional)
  * @returns {Logger} Logger instance
  */
-export function createLogger(component, context = {}) {
-  return new Logger(component, context);
+export function createLogger(component, context = {}, env = null) {
+  return new Logger(component, context, env);
 }
 
 /**
