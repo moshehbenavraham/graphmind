@@ -11,23 +11,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.11] - 2025-11-23
+
+### Added
+
+- **Persistent D1 Logging System** (Production Debugging Infrastructure)
+  - Created `debug_logs` table in D1 for permanent log storage
+  - Migration: `migrations/0006_debug_logs.sql`
+  - Schema: timestamp, level, component, message, metadata (JSON), user_id, session_id, query_id, request_id
+  - Indexes: timestamp DESC, level, component, user_id, session_id, query_id (for efficient filtering)
+
+- **Updated Logger Class** (`src/utils/logger.js`)
+  - Added D1 persistence via `_saveToD1()` method
+  - Fire-and-forget async logging (never blocks app execution)
+  - Dual logging: console output + D1 storage
+  - Backward compatible with existing `createLogger()` calls
+
+- **New Logger Utility** (`src/lib/logger.js`)
+  - Alternative persistent logger implementation (duplicate, needs consolidation)
+  - Includes `queryLogs()` and `cleanupOldLogs()` helper functions
+
+### Changed
+
+- **QuerySessionManager Logger** (`src/durable-objects/QuerySessionManager.js`)
+  - Now passes `env` parameter to `createLogger()` to enable D1 persistence
+  - All session logs now saved to `debug_logs` table
+
+### Purpose
+
+**Solves Critical Production Debugging Problem:**
+- Previous logging via `wrangler tail` was ephemeral and disappeared after execution
+- No way to debug production issues without real-time monitoring
+- Historical log data now permanently available in D1 for post-mortem analysis
+
+**Deployment:**
+- Commit: `c7fc62a`
+- Version: `346af1d5-1369-4245-91d4-123da3cc584f`
+
+**Query Logs Example:**
+```bash
+npx wrangler d1 execute graphmind-db --remote --command "
+  SELECT timestamp, level, component, message
+  FROM debug_logs
+  WHERE session_id = 'sess_xxx'
+  ORDER BY timestamp DESC LIMIT 100;
+"
+```
+
 ## [1.11.10] - 2025-11-23
 
 ### Fixed
 
-- **Critical Session Crash Bug** (`src/lib/db/voice-queries.js`)
-  - Fixed session crash occurring after successful query execution
-  - Root cause: UPDATE statement tried to set non-existent `updated_at` column in `voice_queries` table
-  - Impact: Queries executed successfully and FalkorDB returned results, but session crashed BEFORE sending results to frontend
-  - Symptom: Frontend displayed "No results found" despite data existing and query working correctly
-  - Debug process: Comprehensive logging revealed query pipeline was working perfectly - issue was in result delivery
-  - Fix: Removed `updated_at` from UPDATE statement in `updateQueryAnswer()` function
-  - Deployment: Version 47fd7538-91eb-4963-a2fc-50967d492642
+- **Partial Fix: Updated_at Column Bug** (`src/lib/db/voice-queries.js`)
+  - ⚠️ **NOTE: This fix was necessary but NOT sufficient - query still fails**
+  - Removed `updated_at = CURRENT_TIMESTAMP` from UPDATE statement
+  - Column doesn't exist in `voice_queries` table schema
+  - Fix: Removed reference in `updateQueryAnswer()` function
+  - Deployment: Version `345d19d6-3441-4b5f-9596-5b396bc40ac0`
+  - **Status:** Query "Who works on GraphMind?" still returns 0 results
+  - **Investigation:** Ongoing in `docs/ongoing_projects/debugging_graph_query_failures.md`
 
-- **Minor Schema Mismatch** (`src/services/cypher-generator.js`)
-  - Removed references to non-existent `entity_id` column in `entity_cache` queries
-  - This was identified during debugging but was not the root cause of the query failure
-  - Deployment: Version 6d8cb77c-0e24-4ae9-9d91-86104ae404b7
+### Critical Discovery
+
+- **voice_queries Table is Empty**
+  - Investigation revealed D1 `voice_queries` table has 0 rows
+  - Queries are NOT being saved to database at all
+  - Crash is happening BEFORE INSERT statement, not during UPDATE
+  - Previous hypothesis about `updated_at` causing crash was incorrect
+  - **Real bug location:** Unknown - requires D1 persistent logs to diagnose
 
 ### Added
 
@@ -111,5 +162,6 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
-| 1.11.10 | 2025-11-23   | Comprehensive debug logging for query pipeline |
+| 1.11.11 | 2025-11-23   | Persistent D1 logging system for production debugging |
+| 1.11.10 | 2025-11-23   | Partial fix: removed updated_at column (query still fails) |
 | 1.11.9  | 2025-11-21   | FalkorDB data persistence fix |
