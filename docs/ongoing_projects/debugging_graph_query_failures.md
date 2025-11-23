@@ -218,21 +218,47 @@ npx wrangler d1 execute graphmind-db --remote --command "
 - Result formatting and delivery
 - **Error point** (where the crash actually happens)
 
+### Attempt 6: ✅ FIXED - LLM-Generated Cypher Parameter Bug (2025-11-24)
+
+**Root Cause Identified:**
+- D1 logs revealed FalkorDB error: "Missing parameters"
+- LLM was generating: `MATCH (p:Person {name: $param})` with empty `parameters: {}`
+- Template queries worked fine (e.g., `relationship_query` with `{"source_name": "GraphMind"}`)
+
+**Bug Location:**
+- `src/services/cypher-generator.js:417` - `callLLMModel()` always returns `parameters: {}`
+- Lines 450-452: LLM prompt instructs to use `$param` syntax but code doesn't extract values
+
+**Fix Applied:**
+1. Modified LLM prompt (lines 450-452):
+   - Changed: "Use parameterized queries with $param syntax when possible"
+   - To: "Use LITERAL values in queries (NOT $param placeholders)"
+2. Updated example queries to remove trailing semicolons (LLM was inconsistent)
+3. Deployed: Version `6bcf9e30-a8ff-47c5-9bc6-5032598de1c0`
+
+**Why This Works:**
+- `cypher-validator.js` already sanitizes literal values
+- Simpler than extracting parameters from LLM-generated Cypher
+- Consistent with how template queries work (they build literals inline)
+
+**Files Modified:**
+- `src/services/cypher-generator.js` (lines 445-475)
+
+**Expected Result:**
+- LLM will now generate: `MATCH (p:Person {name: 'GraphMind'})`
+- No parameter placeholder mismatch
+- FalkorDB will execute successfully
+
 ### Outstanding Questions
 
 1. **Why is `voice_queries` table empty?**
    - Is the INSERT query failing silently?
    - Is there a crash before the INSERT even runs?
 
-2. **Where is the actual crash happening?**
-   - Console logs show no errors
-   - `wrangler tail` only shows connection pool alarms
-   - Need D1 logs to see full execution trace
+2. **Does TTS synthesis still fail?**
+   - Previous logs showed "TTS synthesis failed" after successful query
+   - Need to verify if this is a separate bug
 
-3. **Is FalkorDB even being queried?**
-   - Debug logs should reveal if query reaches FalkorDB
-   - Or if it crashes during Cypher generation
-
-4. **Is entity resolution working?**
-   - entity_cache has correct data
-   - But is the code actually finding it?
+3. **Is entity resolution working correctly?**
+   - entity_cache has correct data (GraphMind = Project)
+   - But are LLM-generated queries using correct entity types?

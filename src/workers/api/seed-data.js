@@ -93,11 +93,29 @@ async function hasExistingData(env, userId, traceId) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      // Parse error details from Connection Pool response
+      let errorMessage = response.statusText;
+      let errorDetails = null;
+      try {
+        // Get response as text first to avoid body consumption issues
+        const errorText = await response.text();
+        errorMessage = errorText || response.statusText;
+
+        // Try to parse as JSON
+        try {
+          errorDetails = JSON.parse(errorText);
+          errorMessage = errorDetails?.error || errorDetails?.originalMessage || errorDetails?.message || errorText || response.statusText;
+        } catch (jsonError) {
+          // Not JSON, use raw text
+        }
+      } catch (textError) {
+        // Keep default statusText
+      }
       console.error('[SeedData] Failed to check existing data:', {
         status: response.status,
         statusText: response.statusText,
-        error: errorText,
+        error: errorMessage,
+        errorDetails,
         traceId,
         config: { host: config.host, port: config.port }
       });
@@ -225,7 +243,27 @@ async function addSeedData(env, userId) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to add seed data: ${response.statusText}`);
+    // Parse error details from Connection Pool response
+    let errorMessage = response.statusText;
+    try {
+      // Get response as text first to avoid body consumption issues
+      const errorText = await response.text();
+      console.error('[SeedData] Batch execute error response:', errorText);
+
+      // Try to parse as JSON
+      try {
+        const errorBody = JSON.parse(errorText);
+        errorMessage = errorBody?.error || errorBody?.originalMessage || errorBody?.message || errorText || response.statusText;
+        console.error('[SeedData] Parsed error body:', errorBody);
+      } catch (jsonError) {
+        // Not JSON, use raw text
+        errorMessage = errorText || response.statusText;
+        console.error('[SeedData] Error response is not JSON, using raw text');
+      }
+    } catch (textError) {
+      console.error('[SeedData] Failed to read error response:', textError.message);
+    }
+    throw new Error(`Failed to add seed data: ${errorMessage}`);
   }
 
   // Get final count
@@ -239,6 +277,30 @@ async function addSeedData(env, userId) {
       params: {}
     })
   });
+
+  if (!countResponse.ok) {
+    // Parse error details from Connection Pool response
+    let errorMessage = countResponse.statusText;
+    try {
+      // Get response as text first to avoid body consumption issues
+      const errorText = await countResponse.text();
+      console.error('[SeedData] Count query error response:', errorText);
+
+      // Try to parse as JSON
+      try {
+        const errorBody = JSON.parse(errorText);
+        errorMessage = errorBody?.error || errorBody?.originalMessage || errorBody?.message || errorText || countResponse.statusText;
+        console.error('[SeedData] Parsed count error body:', errorBody);
+      } catch (jsonError) {
+        // Not JSON, use raw text
+        errorMessage = errorText || countResponse.statusText;
+        console.error('[SeedData] Count error response is not JSON, using raw text');
+      }
+    } catch (textError) {
+      console.error('[SeedData] Failed to read count error response:', textError.message);
+    }
+    throw new Error(`Failed to count nodes: ${errorMessage}`);
+  }
 
   const countResult = await countResponse.json();
 

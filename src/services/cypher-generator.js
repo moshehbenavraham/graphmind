@@ -447,31 +447,32 @@ Important Rules:
 2. Use MATCH for queries, never CREATE, DELETE, DROP, or MERGE
 3. Include LIMIT clause (max 100 results)
 4. Return node properties with properties(n) as props
-5. Use parameterized queries with $param syntax when possible
+5. Use LITERAL values in queries (NOT $param placeholders)
 6. Entity names must match canonical names exactly (case-sensitive)
+7. Use single quotes for string literals
 
 Example Queries:
 
 Q: "What projects did Sarah work on?"
 A: MATCH (p:Person {name: 'Sarah Johnson'})-[:WORKS_ON]->(proj:Project)
 RETURN p, proj, properties(proj) as props
-LIMIT 100;
+LIMIT 100
 
 Q: "Who leads GraphMind?"
 A: MATCH (p:Person)-[:LEADS]->(proj:Project {name: 'GraphMind'})
 RETURN p, proj, properties(p) as props
-LIMIT 100;
+LIMIT 100
 
 Q: "Who attended meetings last week?"
 A: MATCH (p:Person)-[:ATTENDED]->(m:Meeting)
 WHERE m.date >= date() - duration('P7D')
 RETURN DISTINCT p, properties(p) as props
-LIMIT 100;
+LIMIT 100
 
 Q: "What technologies does the FastAPI project use?"
 A: MATCH (proj:Project {name: 'FastAPI'})-[:USES_TECHNOLOGY]->(tech:Technology)
 RETURN proj, tech, properties(tech) as props
-LIMIT 100;
+LIMIT 100
 
 Now convert this question:
 Question: "${question}"
