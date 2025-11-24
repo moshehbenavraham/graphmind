@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.14] - 2025-11-24
+
+### Fixed
+- **Production Deployment Configuration**
+  - **Wrangler Environment**: Updated `wrangler.toml` to include full `[env.production]` configuration with all bindings (D1, KV, R2, DO, AI, Queues).
+  - **Queue Isolation**: Created production-specific queues (`entity-extraction-jobs-prod`, `graph-sync-jobs-prod`) to resolve consumer conflicts with development environment.
+  - **Deployment Script**: Updated `scripts/deploy-prod.sh` to:
+    - Automatically update Wrangler to latest version.
+    - Consistently use `--env production` for all commands.
+    - Gracefully handle secret verification errors (preventing silent exits).
+  - **Secrets**: Configured production secrets (`FALKORDB_HOST`, `FALKORDB_PORT`) for correct tunnel connectivity.
+
 ## [1.11.13] - 2025-11-24
 
 ### Changed

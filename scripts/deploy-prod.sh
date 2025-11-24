@@ -81,6 +81,8 @@ echo ""
 echo -e "${YELLOW}[3/11] Installing fresh dependencies...${NC}"
 rm -rf node_modules/
 npm install
+echo "  - Updating Wrangler to latest..."
+npm install -D wrangler@latest
 cd src/frontend
 rm -rf node_modules/
 npm install
@@ -150,14 +152,14 @@ fi
 echo ""
 
 echo -e "${YELLOW}[7/11] Verifying production secrets...${NC}"
-SECRETS=$(npx wrangler secret list 2>&1)
+SECRETS=$(npx wrangler secret list --env production 2>&1 || true)
 if echo "$SECRETS" | grep -q "FALKORDB_HOST" && echo "$SECRETS" | grep -q "FALKORDB_PORT"; then
     echo -e "${GREEN}✔ Production secrets configured${NC}"
 else
     echo -e "${RED}✖ Missing production secrets${NC}"
     echo "Please run:"
-    echo "  npx wrangler secret put FALKORDB_HOST"
-    echo "  npx wrangler secret put FALKORDB_PORT"
+    echo "  npx wrangler secret put FALKORDB_HOST --env production"
+    echo "  npx wrangler secret put FALKORDB_PORT --env production"
     exit 1
 fi
 echo ""
@@ -187,7 +189,7 @@ cd "$PROJECT_ROOT"
 echo ""
 
 echo -e "${YELLOW}[10/11] Deploying Workers API...${NC}"
-npx wrangler deploy
+npx wrangler deploy --env production
 WORKER_URL=$(npx wrangler deployments list --json 2>/dev/null | jq -r '.[0].url // "https://graphmind-api.apex-web-services-llc-0d4.workers.dev"')
 echo -e "${GREEN}✔ Workers deployed: $WORKER_URL${NC}"
 echo ""

@@ -95,7 +95,77 @@ dead_letter_queue = "graph-sync-failed"
 [vars]
 ENVIRONMENT = "development"
 
-# Answer Generation Configuration (Feature 009)
+# Production Environment
+# Production Environment
+[env.production]
+name = "graphmind-api-prod"
+
+# Production D1 Database
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "graphmind-db"
+database_id = "5e0037ac-48c9-4e46-84ee-7aa41e517fc0"
+
+# Production KV Namespaces
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "bc58a6761f474954aafd55c2c1616108"
+
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "8da7913f421b47a88b723721946427de"
+
+# Production R2 Bucket
+[[env.production.r2_buckets]]
+binding = "AUDIO_BUCKET"
+bucket_name = "graphmind-audio"
+
+# Production Durable Objects
+[[env.production.durable_objects.bindings]]
+name = "FALKORDB_POOL"
+class_name = "FalkorDBConnectionPool"
+script_name = "graphmind-api-prod"
+
+[[env.production.durable_objects.bindings]]
+name = "VOICE_SESSION"
+class_name = "VoiceSessionManager"
+script_name = "graphmind-api-prod"
+
+[[env.production.durable_objects.bindings]]
+name = "QUERY_SESSION_MANAGER"
+class_name = "QuerySessionManager"
+script_name = "graphmind-api-prod"
+
+# Production Workers AI
+[env.production.ai]
+binding = "AI"
+
+# Production Queues
+[[env.production.queues.producers]]
+binding = "ENTITY_EXTRACTION_QUEUE"
+queue = "entity-extraction-jobs-prod"
+
+[[env.production.queues.consumers]]
+queue = "entity-extraction-jobs-prod"
+max_batch_size = 10
+max_retries = 3
+dead_letter_queue = "entity-extraction-failed"
+
+[[env.production.queues.producers]]
+binding = "GRAPH_SYNC_QUEUE"
+queue = "graph-sync-jobs-prod"
+
+[[env.production.queues.consumers]]
+queue = "graph-sync-jobs-prod"
+max_batch_size = 5
+max_retries = 3
+max_batch_timeout = 5
+dead_letter_queue = "graph-sync-failed"
+
+[env.production.vars]
+ENVIRONMENT = "production"
 ANSWER_CACHE_TTL = "3600"
 ANSWER_MAX_TOKENS = "200"
 LLM_TEMPERATURE = "0.7"
+
+
