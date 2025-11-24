@@ -11,196 +11,182 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
-## [1.11.14] - 2025-11-24
-
-### Fixed
-- **Production Deployment Configuration**
-  - **Wrangler Environment**: Updated `wrangler.toml` to include full `[env.production]` configuration with all bindings (D1, KV, R2, DO, AI, Queues).
-  - **Queue Isolation**: Created production-specific queues (`entity-extraction-jobs-prod`, `graph-sync-jobs-prod`) to resolve consumer conflicts with development environment.
-  - **Deployment Script**: Updated `scripts/deploy-prod.sh` to:
-    - Automatically update Wrangler to latest version.
-    - Consistently use `--env production` for all commands.
-    - Gracefully handle secret verification errors (preventing silent exits).
-  - **Secrets**: Configured production secrets (`FALKORDB_HOST`, `FALKORDB_PORT`) for correct tunnel connectivity.
-
-## [1.11.13] - 2025-11-24
-
-### Changed
-- **Deployment Automation**
-  - Updated `scripts/deploy-local.sh` to auto-confirm database migrations using `yes | ...`.
-  - Prevents deployment from hanging on "continue?" prompts.
-
-### Fixed
-- **FalkorDB Client** (`src/lib/falkordb/rest-client.js`)
-  - Fixed URL construction bug where port was dropped if protocol was present.
-  - Improved handling of `http://` vs `https://` prefixes.
-
-### Known Issues
-- **Local Connection Failure**
-  - "Add Test Data" continues to fail with `PING failed: Network connection lost`.
-  - Connection between Worker and local REST API remains unstable in some environments.
-
-## [1.11.12] - 2025-11-24
-
-### Fixed
-
-- **Local Development Environment Configuration**
-  - Fixed critical issue where local frontend was connecting to production backend
-  - Updated `scripts/deploy-local.sh` to enforce `VITE_API_BASE_URL="http://localhost:8787"`
-  - Added safety check in `src/frontend/utils/api.js` to warn when localhost connects to production
-  - Ensures local code changes are actually tested during development
-
-- **Local Database Initialization**
-  - Identified and fixed missing D1 database schema in local environment
-  - Documented migration requirement in `docs/ongoing_projects/local_deploy_checklist.md`
-
-- **API Error Handling**
-  - Improved error logging in `src/workers/api/seed-data.js` and `src/frontend/utils/api.js`
-  - Added `X-Code-Version` headers to responses for version verification
-  - Added raw response body logging for non-JSON errors
+## [0.3.4] - 2025-11-24
 
 ### Added
 
-- **Debugging Documentation**
-  - Created `docs/ongoing_projects/local_deploy_debugging.md` tracking the "Add Test Data" failure investigation
-  - Created `docs/ongoing_projects/local_deploy_checklist.md` for environment setup verification
-
-## [1.11.11] - 2025-11-23
-
-### Added
-
-- **Persistent D1 Logging System** (Production Debugging Infrastructure)
-  - Created `debug_logs` table in D1 for permanent log storage
-  - Migration: `migrations/0006_debug_logs.sql`
-  - Schema: timestamp, level, component, message, metadata (JSON), user_id, session_id, query_id, request_id
-  - Indexes: timestamp DESC, level, component, user_id, session_id, query_id (for efficient filtering)
-
-- **Updated Logger Class** (`src/utils/logger.js`)
-  - Added D1 persistence via `_saveToD1()` method
-  - Fire-and-forget async logging (never blocks app execution)
-  - Dual logging: console output + D1 storage
-  - Backward compatible with existing `createLogger()` calls
-
-- **New Logger Utility** (`src/lib/logger.js`)
-  - Alternative persistent logger implementation (duplicate, needs consolidation)
-  - Includes `queryLogs()` and `cleanupOldLogs()` helper functions
-
-### Changed
-
-- **QuerySessionManager Logger** (`src/durable-objects/QuerySessionManager.js`)
-  - Now passes `env` parameter to `createLogger()` to enable D1 persistence
-  - All session logs now saved to `debug_logs` table
-
-### Purpose
-
-**Solves Critical Production Debugging Problem:**
-- Previous logging via `wrangler tail` was ephemeral and disappeared after execution
-- No way to debug production issues without real-time monitoring
-- Historical log data now permanently available in D1 for post-mortem analysis
-
-**Deployment:**
-- Commit: `c7fc62a`
-- Version: `346af1d5-1369-4245-91d4-123da3cc584f`
-
-**Query Logs Example:**
-```bash
-npx wrangler d1 execute graphmind-db --remote --command "
-  SELECT timestamp, level, component, message
-  FROM debug_logs
-  WHERE session_id = 'sess_xxx'
-  ORDER BY timestamp DESC LIMIT 100;
-"
-```
-
-## [1.11.10] - 2025-11-23
+**GraphRAG 2.0 Vector Search Verification**
+- Verified complete GraphRAG 2.0 vector-first retrieval pipeline
+- Backfilled 61 nodes with 768-dimension embeddings (6 Person, 4 Project, 51 Topic)
+- Vector search operational with cosine similarity scoring
+- Admin JWT authentication for backfill endpoint
 
 ### Fixed
 
-- **Partial Fix: Updated_at Column Bug** (`src/lib/db/voice-queries.js`)
-  - ⚠️ **NOTE: This fix was necessary but NOT sufficient - query still fails**
-  - Removed `updated_at = CURRENT_TIMESTAMP` from UPDATE statement
-  - Column doesn't exist in `voice_queries` table schema
-  - Fix: Removed reference in `updateQueryAnswer()` function
-  - Deployment: Version `345d19d6-3441-4b5f-9596-5b396bc40ac0`
-  - **Status:** Query "Who works on GraphMind?" still returns 0 results
-  - **Investigation:** Ongoing in `docs/ongoing_projects/debugging_graph_query_failures.md`
+**REST API Data Parser** (`scripts/falkordb-rest-api.js`)
+- Added `extractValue()` function to parse FalkorDB's `[type, value]` format
+- Added `extractColumnName()` for column headers in `[[type, name], ...]` format
+- Fixed `parseFalkorDBResult()` to return clean column names and extracted values
 
-### Critical Discovery
+**FalkorDB Parameter Handling** (`scripts/falkordb-rest-api.js`)
+- Changed from `--params JSON` format to `CYPHER key=value` prefix format
+- FalkorDB requires params in `CYPHER id=0 embedding=[...] MATCH...` syntax
+- Fixed "Missing parameters" errors when executing parameterized queries
 
-- **voice_queries Table is Empty**
-  - Investigation revealed D1 `voice_queries` table has 0 rows
-  - Queries are NOT being saved to database at all
-  - Crash is happening BEFORE INSERT statement, not during UPDATE
-  - Previous hypothesis about `updated_at` causing crash was incorrect
-  - **Real bug location:** Unknown - requires D1 persistent logs to diagnose
+**REST API Port Configuration** (`scripts/falkordb-rest-api.js`)
+- Added `FALKORDB_REDIS_PORT` env var for direct Redis connection (default 6380)
+- Separated from `FALKORDB_PORT` which Workers use for REST API (3001)
+- Fixed "Unknown RESP type 72 'H'" error caused by HTTP/Redis protocol mismatch
 
-### Added
+**Auth Middleware Admin Role** (`src/middleware/auth.js`)
+- Added extraction of `role` and `is_admin` from JWT claims
+- Fixed 403 Forbidden errors when accessing admin endpoints with valid admin JWT
 
-- **Comprehensive Debug Logging for Query Pipeline**
-  - Added detailed logging to `QuerySessionManager.js`:
-    - WebSocket connection establishment with extracted userId and generated namespace
-    - Cypher query generation inputs (question, userId, userNamespace)
-    - Generated Cypher query details (cypher, parameters, entities, template)
-    - Query execution request details (userId, namespace, config)
-    - Query execution results (execution time, results count, statistics, raw results preview)
+**Backfill Endpoint** (`src/workers/api/admin/backfill-embeddings.js`)
+- Fixed `userId` to use authenticated user's ID instead of `crypto.randomUUID()`
+- Changed embedding storage to use `vecf32($embedding)` for vector index compatibility
+- Fixed "Node null has no text to embed" errors from incorrect data parsing
 
-  - Added detailed logging to `cypher-generator.js`:
-    - Function entry logging for `generateCypherQuery` with all input parameters
-    - Template selection results with entity details
-    - Entity resolution logging in `resolveEntity`:
-      - Input entity name and userId validation
-      - D1 query SQL and parameters
-      - D1 query results (count and preview)
-      - Fuzzy matching scores and decisions
-      - Final resolved entity (name, type, id) for both exact and fuzzy matches
-      - Fallback logging when no match found
+### Technical Details
 
-  - Added detailed logging to `FalkorDBConnectionPool.js`:
-    - Incoming query execution requests with userId validation
-    - Namespace retrieval process (cache hit/miss, generation)
-    - Query execution with exact Cypher and parameters
+**Files Modified:**
+- `scripts/falkordb-rest-api.js` - Lines 152-188 (CYPHER params), Lines 211-310 (data parser)
+- `src/middleware/auth.js` - Lines 109-115 (role extraction)
+- `src/workers/api/admin/backfill-embeddings.js` - Lines 105, 153, 167 (userId and vecf32)
 
-  - Added detailed logging to `namespace.js`:
-    - Graph name generation inputs with userId validation
-    - UUID validation process (original, cleaned, test results)
-    - Graph name construction details
-    - Graph name validation results
+**Vector Index Requirements:**
+- Embeddings must be stored as `vecf32()` type, not raw arrays
+- Indexes must be created BEFORE or rebuilt AFTER data population
+- Query format: `CALL db.idx.vector.queryNodes('Label', 'embedding', K, vecf32($vector))`
 
-### Changed
-
-- **Enhanced Error Diagnostics**
-  - All logging includes userId format validation (length, has dashes)
-  - Entity resolution logs now include all D1 query candidates
-  - Fuzzy matching logs include similarity scores and distance calculations
-  - Query execution logs include full parameter sets for debugging
-
-### Purpose
-
-These logging enhancements support debugging the graph query failure issue documented in `docs/ongoing_projects/debugging_graph_query_failures.md`, where the query "Who works at GraphMind?" returns no results despite data existing in FalkorDB. The comprehensive logging will reveal:
-- Exact userId flowing through the system
-- Exact userNamespace/graphName being generated
-- Entity resolution results for "GraphMind" (should resolve to type `Project`, not `Person`)
-- Exact Cypher query being executed against FalkorDB
-
-## [1.11.9] - 2025-11-21
+## [0.3.3] - 2025-11-24
 
 ### Fixed
 
-- **FalkorDB Data Persistence**
-  - Fixed critical bug where FalkorDB data was lost on container restart
-  - Root cause: Volume was mounted to `/data` but FalkorDB stores data in `/var/lib/falkordb/data`
-  - Root cause: Default save thresholds (1hr minimum) meant data wasn't saved before restarts
+**FalkorDB Configuration for Local Development**
+- Fixed "FALKORDB_HOST is not configured" error when adding seed data in local development
+- Root cause: Wrangler ignores `.env` when `.dev.vars` exists, but `.dev.vars` was incomplete
+- Added missing environment variables to `.dev.vars`: `FALKORDB_HOST`, `FALKORDB_PORT`, `FALKORDB_USER`, `BCRYPT_COST`, `ANSWER_CACHE_TTL`, `ANSWER_MAX_TOKENS`, `LLM_TEMPERATURE`
+- Workers now properly receive all required environment variables via `env` object
+
+**FalkorDB Port Configuration Mismatch**
+- Fixed "POOL_ERROR_500: PING failed: Network connection lost" error when connecting to FalkorDB
+- Corrected port configuration from 6380 to 3001 in both `.dev.vars` and `.env`
+- Workers now connect to REST API wrapper (port 3001) instead of attempting HTTP requests directly to FalkorDB Docker (port 6380 with Redis protocol)
+- Architecture: Worker → REST API wrapper (3001) → FalkorDB Docker (6380)
 
 ### Changed
 
-- **FalkorDB Docker Configuration** (`scripts/start-tunnel-services.sh`, `scripts/deploy-prod.sh`)
-  - Updated volume mount path from `/data` to `/var/lib/falkordb/data`
-  - Added persistence configuration after container startup:
-    - RDB snapshots: Every 60 seconds if 1+ key changed (`CONFIG SET save "60 1"`)
-    - AOF (Append-Only File): Enabled for durability (`CONFIG SET appendonly yes`)
+- `.dev.vars` now contains complete set of environment variables for local Worker development
+- `.dev.vars` `FALKORDB_PORT` changed from 6380 to 3001 (REST API wrapper port)
+- `.env` `FALKORDB_PORT` changed from 6380 to 3001 for consistency
+- Added architecture documentation comments in both `.dev.vars` and `.env` explaining the connection flow
 
-- **Documentation** (`CLAUDE.md`)
-  - Updated FalkorDB Docker command with correct volume mount path
+### Technical Details
+
+**Files Modified:**
+- `.dev.vars` - Complete rewrite: Added all missing environment variables and corrected FALKORDB_PORT
+- `.env` - Lines 28-36: Updated FALKORDB_PORT and added documentation comments
+
+**Environment Variables Added to `.dev.vars`:**
+- `FALKORDB_HOST=localhost`
+- `FALKORDB_PORT=3001` (changed from 6380)
+- `FALKORDB_USER=default`
+- `BCRYPT_COST=12`
+- `ANSWER_CACHE_TTL=3600`
+- `ANSWER_MAX_TOKENS=200`
+- `LLM_TEMPERATURE=0.7`
+
+**Architecture Clarification:**
+- FalkorDB Docker: Port 6380 (Redis protocol) - internal use only
+- REST API wrapper: Port 3001 (HTTP) - Worker connection endpoint
+- Workers use HTTP REST client and must connect to port 3001, not 6380
+
+## [0.3.2] - 2025-11-24
+
+### Fixed
+
+**Frontend Authentication Error Handling**
+- Fixed login error messages not displaying when attempting to log in with invalid credentials
+- Modified `src/frontend/utils/api.js` to skip 401 auto-redirect for `/api/auth/login` and `/api/auth/register` endpoints
+- 401 errors from authentication endpoints now properly display error messages instead of triggering redirect loop
+- Users now see "Invalid email or password" message when login fails
+
+**JWT Token Generation in Registration**
+- Fixed "Registration completed but token generation failed" error during user registration
+- Added `JWT_SECRET` to `.dev.vars` file for local development (Wrangler doesn't read from `.env`)
+- Registration now successfully generates JWT tokens and logs users in immediately after account creation
+
+**Local Development Data Persistence**
+- Fixed data loss issue where `deploy-local.sh` destroyed all data on every run
+- Modified `scripts/deploy-local.sh` to preserve `.wrangler/state/` directory containing D1 local database
+- Changed FalkorDB container management from destroy/recreate to stop/start for persistence
+- Added `redis.conf` with proper persistence settings (RDB snapshots + AOF) for new FalkorDB containers
+- User accounts and graph data now persist across local development restarts
+
+**Deployment Script Numbering**
+- Fixed incorrect "[9/8]" step numbering in `scripts/deploy-local.sh` health checks section
+- Removed numbering from health checks phase (post-deployment validation)
+
+### Changed
+
+- `.dev.vars` now includes `JWT_SECRET` for local development
+- `deploy-local.sh` now restarts existing FalkorDB containers instead of recreating them
+- D1 local database in `.wrangler/state/` directory is preserved during cleanup operations
+- FalkorDB containers now start with `redis.conf` for persistent configuration
+
+### Technical Details
+
+**Files Modified:**
+- `scripts/deploy-local.sh` - Lines 74-84 (D1 persistence), Lines 91-127 (FalkorDB persistence), Line 188 (numbering fix)
+- `src/frontend/utils/api.js` - Lines 59-68 (401 handling for auth endpoints)
+- `.dev.vars` - Added JWT_SECRET environment variable
+
+**Persistence Configuration:**
+- FalkorDB: RDB snapshots (60s/1 change, 300s/10 changes, 3600s/1 change)
+- FalkorDB: AOF enabled with everysec fsync
+- D1: SQLite database preserved in `.wrangler/state/v3/d1/`
+
+## [0.3.1] - 2025-11-24
+
+### Fixed
+
+**FalkorDB REST API Authentication Issues**
+- Fixed health check failures in deployment scripts due to missing authentication headers
+- Updated `scripts/deploy-prod.sh` to include `Authorization: Bearer` header with `FALKORDB_REST_API_KEY` in all health checks
+- Updated `scripts/deploy-local.sh` with same authentication fixes
+- Updated `scripts/start-tunnel-services.sh` to use authenticated health checks
+- Increased wait time from 3s to 5s for REST API initialization
+- Health checks now properly validate against authenticated `/health` endpoint
+
+**Seed Data API Key Missing**
+- Fixed `buildFalkorConfig()` in `src/workers/api/seed-data.js` to include `apiKey` parameter
+- Added `const apiKey = env.FALKORDB_REST_API_KEY` (line 31)
+- Updated return statement to include `apiKey` in config object (line 42)
+- Fixed "POOL_ERROR_500: Unauthorized" errors when adding test data to knowledge graph
+- Seed data operations now properly authenticate with FalkorDB REST API
+
+**Cypher Query Parameterization**
+- Fixed LLM prompt in `src/services/cypher-generator.js` to generate parameterized queries instead of literal values
+- Changed instruction from "Use LITERAL values in queries (NOT $param placeholders)" to "Use $param placeholders for all entity names and values (REQUIRED for parameterization)"
+- Updated all example queries to use `$param` syntax (e.g., `{name: $project_name}` instead of `{name: 'GraphMind'}`)
+- Added `extractParametersFromQuery()` function to extract parameter values from generated queries and match with detected entities
+- Fixed "Missing parameters" errors when executing LLM-generated queries
+- Queries now properly use FalkorDB's parameterization system
+
+### Changed
+
+- Deployment scripts now require `FALKORDB_REST_API_KEY` environment variable for health checks
+- LLM Cypher generation now returns proper `parameters` object instead of empty `{}`
+
+### Technical Details
+
+**Files Modified:**
+- `scripts/deploy-prod.sh` - Lines 126-129, 208-212
+- `scripts/deploy-local.sh` - Lines 125-128, 198-202
+- `scripts/start-tunnel-services.sh` - Lines 65-68
+- `src/workers/api/seed-data.js` - Lines 27-42
+- `src/services/cypher-generator.js` - Lines 413-483 (added parameter extraction), Lines 445-474 (updated LLM prompt)
 
 
 
@@ -216,7 +202,3 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
-| 1.11.12 | 2025-11-24   | Fix local dev environment connecting to prod, D1 init |
-| 1.11.11 | 2025-11-23   | Persistent D1 logging system for production debugging |
-| 1.11.10 | 2025-11-23   | Partial fix: removed updated_at column (query still fails) |
-| 1.11.9  | 2025-11-21   | FalkorDB data persistence fix |

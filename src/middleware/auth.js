@@ -109,7 +109,9 @@ export async function authenticateRequest(request, env) {
     const user = {
       user_id: claims.sub,
       email: claims.email,
-      namespace: claims.namespace
+      namespace: claims.namespace,
+      role: claims.role,       // Admin role check
+      is_admin: claims.is_admin // Alternative admin flag
     };
 
     return user;
@@ -183,4 +185,54 @@ export async function optionalAuth(request, env) {
     // Ignore authentication errors for optional auth
     return null;
   }
+}
+
+/**
+ * Check if user has admin role
+ *
+ * @param {Object} user - User context from authenticateRequest
+ * @returns {boolean} True if user has admin role
+ */
+export function isAdmin(user) {
+  return user && (user.role === 'admin' || user.is_admin === true);
+}
+
+/**
+ * Require admin role middleware
+ *
+ * Validates that the authenticated user has admin privileges.
+ *
+ * @param {Request} request - Fetch API Request object
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object>} User context or Response with error
+ *
+ * Usage:
+ *   const authResult = await requireAdmin(request, env);
+ *   if (authResult instanceof Response) {
+ *     return authResult;  // Not admin, return error response
+ *   }
+ *   const user = authResult;  // User is admin
+ */
+export async function requireAdmin(request, env) {
+  // First check authentication
+  const authResult = await requireAuth(request, env);
+
+  if (authResult instanceof Response) {
+    return authResult; // Return auth error
+  }
+
+  const user = authResult;
+
+  // Check admin role
+  if (!isAdmin(user)) {
+    return new Response(JSON.stringify({
+      error: 'Forbidden',
+      message: 'Admin role required. Contact system administrator for access.'
+    }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  return user;
 }

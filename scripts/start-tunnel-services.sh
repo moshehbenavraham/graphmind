@@ -62,10 +62,10 @@ else
 
     # Wait for REST API to be ready
     echo -e "${YELLOW}Waiting for REST API to be ready...${NC}"
-    sleep 3
+    sleep 5
 
-    # Verify REST API is responding
-    if curl -s http://localhost:3001/health > /dev/null 2>&1; then
+    # Verify REST API is responding (with authentication)
+    if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy" 2>&1; then
         echo -e "${GREEN}✅ REST API health check passed${NC}"
     else
         echo -e "${RED}⚠️  REST API health check failed (may need more time)${NC}"

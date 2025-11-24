@@ -72,10 +72,15 @@ echo -e "${GREEN}✔ Services stopped${NC}"
 echo ""
 
 echo -e "${YELLOW}[2/8] Cleaning all build artifacts and caches...${NC}"
-rm -rf dist/ .wrangler/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
+# Clean build artifacts but preserve .wrangler/state/ for D1 database persistence
+rm -rf dist/ .wrangler/tmp/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
+# Preserve .wrangler/state/ which contains D1 local database
+if [ -d ".wrangler" ]; then
+    find .wrangler -mindepth 1 -maxdepth 1 ! -name 'state' -exec rm -rf {} + 2>/dev/null || true
+fi
 npm cache clean --force >/dev/null 2>&1 || true
 (cd src/frontend && npm cache clean --force >/dev/null 2>&1 || true)
-echo -e "${GREEN}✔ Build artifacts cleaned${NC}"
+echo -e "${GREEN}✔ Build artifacts cleaned (D1 database preserved)${NC}"
 echo ""
 
 echo -e "${YELLOW}[3/8] Installing fresh dependencies...${NC}"
@@ -90,23 +95,41 @@ echo ""
 
 echo -e "${YELLOW}[4/8] Starting FalkorDB Docker container...${NC}"
 if docker ps -a | grep -q falkordb-local; then
-    echo "  - Removing existing container..."
-    docker rm -f falkordb-local >/dev/null 2>&1 || true
+    echo "  - Existing container found, restarting..."
+    docker stop falkordb-local >/dev/null 2>&1 || true
+    docker start falkordb-local >/dev/null 2>&1
+    echo "  - Waiting for FalkorDB to be ready..."
+    sleep 5
+else
+    echo "  - Creating new container with persistence enabled..."
+
+    # Create redis.conf with persistence settings
+    mkdir -p "$PROJECT_ROOT/falkordb-data"
+    cat > "$PROJECT_ROOT/falkordb-data/redis.conf" << 'EOF'
+# FalkorDB Persistence Configuration
+# RDB snapshots: save every 60s if 1+ changes
+save 60 1
+save 300 10
+save 3600 1
+
+# AOF (Append-Only File) for durability
+appendonly yes
+appendfsync everysec
+
+# Database directory
+dir /var/lib/falkordb/data
+EOF
+
+    docker run -d \
+      --name falkordb-local \
+      -p 6380:6379 \
+      -v "$PROJECT_ROOT/falkordb-data:/var/lib/falkordb/data" \
+      falkordb/falkordb:latest \
+      redis-server /var/lib/falkordb/data/redis.conf
+
+    echo "  - Waiting for FalkorDB to be ready..."
+    sleep 5
 fi
-
-docker run -d \
-  --name falkordb-local \
-  -p 6380:6379 \
-  -v "$PROJECT_ROOT/falkordb-data:/var/lib/falkordb/data" \
-  falkordb/falkordb:latest
-
-echo "  - Waiting for FalkorDB to be ready..."
-sleep 5
-
-# Configure persistence (save every 60s if 1+ change, enable AOF)
-echo "  - Configuring persistence..."
-docker exec falkordb-local redis-cli CONFIG SET save "60 1" >/dev/null
-docker exec falkordb-local redis-cli CONFIG SET appendonly yes >/dev/null
 
 if docker ps | grep -q falkordb-local; then
     echo -e "${GREEN}✔ FalkorDB running on port 6380 with persistence enabled${NC}"
@@ -122,9 +145,10 @@ FALKORDB_HOST="localhost" FALKORDB_PORT="6380" node scripts/falkordb-rest-api.js
 REST_API_PID=$!
 echo "  - REST API started (PID: $REST_API_PID)"
 echo "  - Waiting for REST API to be ready..."
-sleep 3
+sleep 5
 
-if curl -s http://localhost:3001/health | grep -q "healthy"; then
+# Health check with authentication
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
     echo -e "${GREEN}✔ REST API running on port 3001${NC}"
 else
     echo -e "${RED}✖ REST API failed to start${NC}"
@@ -184,7 +208,7 @@ fi
 echo ""
 
 echo "============================================"
-echo -e "${YELLOW}[9/8] Running health checks...${NC}"
+echo -e "${YELLOW}Running health checks...${NC}"
 echo "  - Testing FalkorDB..."
 if docker exec falkordb-local redis-cli PING | grep -q "PONG"; then
     echo -e "    ${GREEN}✔ FalkorDB responding${NC}"
@@ -194,7 +218,7 @@ else
 fi
 
 echo "  - Testing REST API..."
-if curl -s http://localhost:3001/health | grep -q "healthy"; then
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
     echo -e "    ${GREEN}✔ REST API healthy${NC}"
 else
     echo -e "    ${RED}✖ REST API unhealthy${NC}"

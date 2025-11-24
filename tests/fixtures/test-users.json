@@ -1,0 +1,86 @@
+{
+  "users": [
+    {
+      "userId": "test_user_001",
+      "userIdNormalized": "test_user_001",
+      "email": "alice.test@graphmind.dev",
+      "name": "Alice Test User",
+      "role": "admin",
+      "password": "Test123!@#",
+      "passwordHash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIeWDUO8Xe",
+      "purpose": "Primary test user with admin privileges for testing backfill and admin endpoints",
+      "knowledgeGraph": {
+        "nodes": 14,
+        "relationships": 16,
+        "topics": ["AI", "cloud", "databases", "voice"]
+      }
+    },
+    {
+      "userId": "test_user_002",
+      "userIdNormalized": "test_user_002",
+      "email": "bob.test@graphmind.dev",
+      "name": "Bob Test User",
+      "role": "user",
+      "password": "Test456!@#",
+      "passwordHash": "$2b$12$KQv4d2zrCXWIylf1MIBkDPZy7UuyNRKsrO9/MfxZ6HzZJfXEVP9Yf",
+      "purpose": "Regular user for testing user isolation and access control",
+      "knowledgeGraph": {
+        "nodes": 0,
+        "relationships": 0,
+        "topics": []
+      }
+    },
+    {
+      "userId": "test_user_003",
+      "userIdNormalized": "test_user_003",
+      "email": "carol.test@graphmind.dev",
+      "name": "Carol Test User",
+      "role": "user",
+      "password": "Test789!@#",
+      "passwordHash": "$2b$12$MRv5e3AsD YXJZMG2NIClEQaz8VvzOSLtrP0/NgYa7IAaKgYFWQ0Zg",
+      "purpose": "Additional user for testing cross-user isolation (no data leakage)",
+      "knowledgeGraph": {
+        "nodes": 5,
+        "relationships": 3,
+        "topics": ["frontend", "UI"]
+      }
+    }
+  ],
+  "testScenarios": {
+    "userIsolation": {
+      "description": "Verify that test_user_001 cannot see data from test_user_002 or test_user_003",
+      "users": ["test_user_001", "test_user_002", "test_user_003"],
+      "expectedBehavior": "Each user only sees their own knowledge graph nodes"
+    },
+    "adminAccess": {
+      "description": "Verify that test_user_001 (admin) can access admin endpoints",
+      "adminUser": "test_user_001",
+      "regularUsers": ["test_user_002", "test_user_003"],
+      "expectedBehavior": "Admin user gets 200 OK, regular users get 403 Forbidden"
+    },
+    "emptyKnowledgeGraph": {
+      "description": "Verify semantic search handles empty knowledge graph gracefully",
+      "user": "test_user_002",
+      "expectedBehavior": "Returns empty results with meaningful message"
+    },
+    "concurrentQueries": {
+      "description": "Test concurrent semantic queries from multiple users",
+      "users": ["test_user_001", "test_user_002", "test_user_003"],
+      "concurrency": 10,
+      "expectedBehavior": "All queries return correct results without data leakage"
+    }
+  },
+  "authentication": {
+    "jwtSecret": "test_jwt_secret_for_validation_only_do_not_use_in_production",
+    "tokenExpiration": "24h",
+    "bcryptCost": 12
+  },
+  "metadata": {
+    "totalUsers": 3,
+    "adminUsers": 1,
+    "regularUsers": 2,
+    "created": "2025-11-24",
+    "purpose": "Test user accounts for validation and security testing",
+    "note": "Password hashes generated with bcrypt cost 12 for testing"
+  }
+}

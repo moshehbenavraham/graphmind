@@ -165,6 +165,66 @@ export async function executeCypher(client, graphName, cypher, params = {}, time
 }
 
 /**
+ * Execute a vector similarity search on FalkorDB
+ *
+ * Uses the db.idx.vector.queryNodes procedure.
+ *
+ * @param {Object} client - Redis client instance
+ * @param {string} graphName - Name of the graph database
+ * @param {string} label - Node label to search (e.g., 'Person')
+ * @param {string} property - Vector property name (e.g., 'embedding')
+ * @param {Array<number>} vector - Query vector
+ * @param {Object} [options] - Search options
+ * @param {number} [options.limit=10] - Max results
+ * @param {number} [options.threshold=0.7] - Similarity threshold (0-1)
+ * @returns {Promise<Array<{nodeId: number, node: Object, score: number}>>} Array of matches with scores and IDs
+ */
+export async function queryNodesByVector(client, graphName, label, property, vector, options = {}) {
+  const { limit = 10, threshold = 0.7 } = options;
+
+  if (!vector || !Array.isArray(vector)) {
+    throw new Error('Vector is required and must be an array');
+  }
+
+  // Construct the vector query procedure call
+  // Use vecf32() wrapper for the query vector (required by FalkorDB vector indexes)
+  // Return ID(node) for traversal operations
+  const cypher = `
+    CALL db.idx.vector.queryNodes($label, $property, $limit, vecf32($vector))
+    YIELD node, score
+    WHERE score >= $threshold
+    RETURN ID(node) as nodeId, node, score
+  `;
+
+  const params = {
+    label,
+    property,
+    limit,
+    vector,
+    threshold
+  };
+
+  const result = await executeCypher(client, graphName, cypher, params);
+
+  // Format results - handle both array and object response formats
+  return (result.data || []).map(row => {
+    // Handle array format [nodeId, node, score] or object format {nodeId, node, score}
+    if (Array.isArray(row)) {
+      return {
+        nodeId: row[0],
+        node: row[1],
+        score: row[2]
+      };
+    }
+    return {
+      nodeId: row.nodeId,
+      node: row.node,
+      score: row.score
+    };
+  });
+}
+
+/**
  * Parse FalkorDB query result from Redis protocol format
  *
  * FalkorDB returns results in a specific array format via Redis protocol.

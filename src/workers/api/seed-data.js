@@ -22,12 +22,13 @@ function getTraceId(request) {
  * Normalize FalkorDB connection config and provide sensible defaults.
  * Falls back to 443 when using https hosts and 6380 for local dev.
  * @param {Object} env
- * @returns {{host: string, port: number, username: string, password: string}}
+ * @returns {{host: string, port: number, username: string, password: string, apiKey: string}}
  */
 function buildFalkorConfig(env) {
   const host = env.FALKORDB_HOST;
   const username = env.FALKORDB_USER || 'default';
   const password = env.FALKORDB_PASSWORD || '';
+  const apiKey = env.FALKORDB_REST_API_KEY;
   const rawPort = env.FALKORDB_PORT;
   const portNumber = Number(rawPort);
 
@@ -38,7 +39,7 @@ function buildFalkorConfig(env) {
     throw new Error('FALKORDB_HOST is not configured');
   }
 
-  return { host, port, username, password };
+  return { host, port, username, password, apiKey };
 }
 
 /**
@@ -314,20 +315,24 @@ async function addSeedData(env, userId) {
   // But for now, let's just run raw SQL inserts to avoid import issues if the lib isn't fully compatible with this worker context yet.
   // Actually, let's try to use the D1 binding directly for simplicity and reliability in this seed script.
 
+  // Include user_id_normalized for efficient indexed lookups (migration 0007)
   const stmt = env.DB.prepare(`
     INSERT OR REPLACE INTO entity_cache (
-      entity_key, user_id, canonical_name, entity_type, 
-      aliases, properties, confidence, mention_count, 
+      entity_key, user_id, user_id_normalized, canonical_name, entity_type,
+      aliases, properties, confidence, mention_count,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `);
 
   const batch = [];
+  const normalizedUserId = userId.replace(/-/g, '');  // Pre-normalize for indexed column
+
   for (const entity of entitiesToCache) {
-    const key = `${entity.type}:${entity.name} `.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const key = `${entity.type}:${entity.name}`.toLowerCase().replace(/[^a-z0-9]/g, '');
     batch.push(stmt.bind(
       key,
       userId,
+      normalizedUserId,  // user_id_normalized for efficient lookups
       entity.name,
       entity.type,
       '[]', // aliases

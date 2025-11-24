@@ -21,6 +21,10 @@ export function buildMergeNode(nodeType, entityId, createProps, updateProps = {}
   const createSetClauses = Object.entries(createProps)
     .map(([key, value]) => {
       const paramName = `create_${key}`;
+      // Use vecf32() wrapper for embedding property (required for FalkorDB vector indexes)
+      if (key === 'embedding') {
+        return `n.${key} = vecf32($${paramName})`;
+      }
       return `n.${key} = $${paramName}`;
     })
     .join(', ');
@@ -28,6 +32,10 @@ export function buildMergeNode(nodeType, entityId, createProps, updateProps = {}
   const updateSetClauses = Object.entries(updateProps)
     .map(([key, value]) => {
       const paramName = `update_${key}`;
+      // Use vecf32() wrapper for embedding property
+      if (key === 'embedding') {
+        return `n.${key} = vecf32($${paramName})`;
+      }
       return `n.${key} = $${paramName}`;
     })
     .join(', ');

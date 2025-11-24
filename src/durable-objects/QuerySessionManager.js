@@ -42,6 +42,13 @@ import { createTTSSynthesizer } from '../services/tts-synthesizer.js';
 import { createAudioCache } from '../lib/audio/audio-cache.js';
 import { base64ToChunk, chunkAudio, createChunkMessage, reassembleChunks } from '../lib/audio/audio-chunker.js';
 
+// GraphRAG (Feature 008 - GraphRAG 2.0)
+import { EmbeddingService } from '../services/embedding.js';
+import { traversalQueryTemplate } from '../lib/graph/cypher-templates.js';
+
+// Query Router (GraphRAG-first architecture)
+import { QueryRouter } from '../services/query-router.js';
+
 /**
  * Maximum session duration in milliseconds (5 minutes)
  * @const {number}
@@ -161,15 +168,15 @@ export class QuerySessionManager {
     const rawPort = this.env.FALKORDB_PORT;
     const portNumber = Number(rawPort);
 
-    // Default to 443 for https hosts, 6380 for local dev
-    const defaultPort = host && host.startsWith('http') ? 443 : 6380;
+    // Default to 443 for https hosts, 3001 for local dev (REST API)
+    const defaultPort = host && host.startsWith('http') ? 443 : 3001;
     const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
 
     if (!host) {
       throw new Error('FALKORDB_HOST is not configured');
     }
 
-    return { host, port, username, password };
+    return { host, port, username, password, apiKey: this.env.FALKORDB_REST_API_KEY };
   }
 
   /**
@@ -577,11 +584,32 @@ export class QuerySessionManager {
         return;
       }
 
-      // 2. Generate Cypher query from question
-      // DEBUG: Log inputs before generating Cypher
-      this.logger.info('Generating Cypher query', {
+      // 2. Route query based on classification (GraphRAG-first architecture)
+      const router = new QueryRouter();
+      const { type: queryType, path: executionPath } = router.route(this.question);
+
+      this.logger.info('Query routing decision', {
         question: this.question,
-        user_id: this.sessionMetadata.user_id,
+        query_type: queryType,
+        execution_path: executionPath,
+        user_id: this.sessionMetadata.user_id
+      });
+
+      // GraphRAG path: relationship, temporal, complex queries
+      // Uses vector search + graph traversal - handles case/spelling variations
+      if (executionPath === 'graphrag') {
+        this.logger.info('Routing to GraphRAG pipeline', {
+          query_type: queryType,
+          question: this.question
+        });
+        await this.executeGraphRAG();
+        return;
+      }
+
+      // Template path: simple lookups, counts, lists (deterministic, fast)
+      this.logger.info('Routing to template pipeline', {
+        query_type: queryType,
+        question: this.question,
         user_namespace: this.sessionMetadata.user_namespace
       });
 
@@ -592,10 +620,16 @@ export class QuerySessionManager {
         this.env
       );
 
+      // If template generator falls back to LLM, switch to GraphRAG
+      if (templateUsed === 'llm_generate') {
+        this.logger.info('Template fallback to GraphRAG', { question: this.question });
+        await this.executeGraphRAG();
+        return;
+      }
+
       this.cypherQuery = cypher;
       this.performanceMetrics.cypher_generation_end = Date.now();
 
-      // DEBUG: Log generated Cypher with all details
       this.logger.info('Cypher query generated', {
         template: templateUsed,
         cypher,
@@ -605,7 +639,6 @@ export class QuerySessionManager {
         user_namespace: this.sessionMetadata.user_namespace
       });
 
-      // Send cypher_generated event
       this.sendToClient({
         type: 'cypher_generated',
         cypher_query: cypher,
@@ -623,28 +656,277 @@ export class QuerySessionManager {
         transcript: this.transcript
       });
 
+      // Fallback to GraphRAG on template failure
+      this.logger.info('Template failed, falling back to GraphRAG', {
+        error: error.message
+      });
+
+      try {
+        await this.executeGraphRAG();
+        return;
+      } catch (graphragError) {
+        this.logger.error('GraphRAG fallback also failed', {
+          error: graphragError.message
+        });
+      }
+
       let errorMessage = 'I couldn\'t understand that question. Try asking about specific people, projects, or topics.';
       if (error.message && error.message.includes('No entities found')) {
         errorMessage = 'I couldn\'t identify what you\'re asking about. Try mentioning specific names or topics.';
       }
 
-      // In development, include the actual error
       if (this.env.ENVIRONMENT === 'development') {
-        errorMessage = `Cypher generation failed: ${error.message}`;
+        errorMessage = `Query failed: ${error.message}`;
       }
 
       this.sendError(
-        'CYPHER_GENERATION_FAILED',
+        'QUERY_FAILED',
         errorMessage,
         true,
-        error  // Pass error object for debug details
+        error
       );
       this.cleanup();
     }
   }
 
   /**
+   * Execute GraphRAG pipeline (Vector Search + Traversal)
+   * Replaces LLM-based Cypher generation for complex queries
+   *
+   * Pipeline:
+   * 1. Generate embedding from user question
+   * 2. Vector search across Person, Project, Note, Topic
+   * 3. Extract top semantic matches
+   * 4. Graph traversal to expand context
+   * 5. Format results and generate answer
+   */
+  async executeGraphRAG() {
+    const startTime = Date.now();
+
+    try {
+      this.logger.info('graphrag.started', {
+        question: this.question?.substring(0, 100),
+        user_id: this.sessionMetadata.user_id
+      });
+
+      this.sendToClient({
+        type: 'query_executing',
+        message: 'Searching knowledge graph (Vector Scan)...'
+      });
+
+      this.performanceMetrics.query_execution_start = Date.now();
+
+      // 1. Generate Embedding
+      const embeddingStart = Date.now();
+      const embeddingService = new EmbeddingService(this.env.AI);
+      const vector = await embeddingService.generateEmbedding(this.question);
+
+      this.logger.info('graphrag.embedding.completed', {
+        latency_ms: Date.now() - embeddingStart,
+        vector_dimension: vector?.length
+      });
+
+      // 2. Vector Search (Parallel across types)
+      const types = ['Person', 'Project', 'Note', 'Topic'];
+      const poolId = this.env.FALKORDB_POOL.idFromName('pool');
+      const poolStub = this.env.FALKORDB_POOL.get(poolId);
+      const config = this.buildFalkorConfig();
+
+      const searchStart = Date.now();
+      const searchPromises = types.map(async (type) => {
+        // Fixed: Use vecf32() wrapper for vector and return ID(node)
+        const cypher = `
+          CALL db.idx.vector.queryNodes('${type}', 'embedding', 5, vecf32($vector))
+          YIELD node, score
+          WHERE score >= 0.65
+          RETURN ID(node) as nodeId, node, score
+        `;
+
+        try {
+          const response = await poolStub.fetch('http://internal/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              config,
+              userId: this.sessionMetadata.user_id,
+              cypher,
+              params: { vector }
+            })
+          });
+
+          if (!response.ok) {
+            this.logger.warn(`graphrag.vector_search.type_failed`, { type, status: response.status });
+            return [];
+          }
+
+          const result = await response.json();
+          const rows = result.data || [];
+
+          this.logger.info('graphrag.vector_search.type_completed', {
+            type,
+            results_count: rows.length,
+            top_score: rows[0]?.score || rows[0]?.[2]
+          });
+
+          // Handle both array format [nodeId, node, score] and object format
+          return rows.map(row => {
+            if (Array.isArray(row)) {
+              return { nodeId: row[0], node: row[1], score: row[2], type };
+            }
+            return { nodeId: row.nodeId, node: row.node, score: row.score, type };
+          });
+        } catch (err) {
+          this.logger.warn(`graphrag.vector_search.type_error`, { type, error: err.message });
+          return [];
+        }
+      });
+
+      const searchResults = (await Promise.all(searchPromises)).flat();
+
+      this.logger.info('graphrag.vector_search.completed', {
+        latency_ms: Date.now() - searchStart,
+        total_results: searchResults.length
+      });
+
+      // Sort by score descending
+      searchResults.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+      // Take top 10 entry points
+      const topNodes = searchResults.slice(0, 10);
+
+      if (topNodes.length === 0) {
+        this.logger.info('graphrag.no_results', { reason: 'vector_search_empty' });
+        // Fall back to keyword search instead of failing
+        this.sendToClient({
+          type: 'query_executing',
+          message: 'Trying keyword search...'
+        });
+
+        const { cypher, parameters, templateUsed } = await generateCypherQuery(
+          this.question,
+          this.sessionMetadata.user_namespace,
+          this.sessionMetadata.user_id,
+          this.env
+        );
+
+        return await this.executeQuery(cypher, parameters, templateUsed);
+      }
+
+      // 3. Graph Traversal (Context Expansion)
+      // Extract node IDs - handle multiple response formats
+      const nodeIds = topNodes.map(row => {
+        // Support multiple formats: direct nodeId, node.id, node.identity, node.entity_id
+        return row.nodeId || row.node?.id || row.node?.identity || row.node?.entity_id;
+      }).filter(id => id !== undefined && id !== null);
+
+      if (nodeIds.length === 0) {
+        this.logger.warn('graphrag.node_id_extraction_failed', {
+          topNodes_sample: JSON.stringify(topNodes.slice(0, 2))
+        });
+        throw new Error('Failed to extract node IDs from vector search results');
+      }
+
+      this.logger.info('graphrag.traversal.starting', {
+        entry_points: nodeIds.length,
+        node_ids: nodeIds.slice(0, 5)
+      });
+
+      const traversalCypher = traversalQueryTemplate(nodeIds);
+
+      this.sendToClient({
+        type: 'query_executing',
+        message: 'Expanding context (Graph Traversal)...'
+      });
+
+      const traversalStart = Date.now();
+      const traversalResponse = await poolStub.fetch('http://internal/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config,
+          userId: this.sessionMetadata.user_id,
+          cypher: traversalCypher,
+          params: { node_ids: nodeIds }
+        })
+      });
+
+      if (!traversalResponse.ok) {
+        const errorText = await traversalResponse.text();
+        this.logger.error('graphrag.traversal.failed', { status: traversalResponse.status, error: errorText });
+        throw new Error(`Traversal query failed: ${traversalResponse.status}`);
+      }
+
+      const traversalResult = await traversalResponse.json();
+      const traversalData = traversalResult.data || [];
+
+      this.logger.info('graphrag.traversal.completed', {
+        latency_ms: Date.now() - traversalStart,
+        results_count: traversalData.length
+      });
+
+      this.performanceMetrics.query_execution_end = Date.now();
+      const executionTime = this.performanceMetrics.query_execution_end - this.performanceMetrics.query_execution_start;
+
+      // Combine Vector Results (Entry Points) + Traversal Results (Context)
+      const combinedResults = [...traversalData];
+
+      // Format results
+      const formattedResults = autoFormatResults(combinedResults, {
+        execution_time_ms: executionTime,
+        cached: false,
+        template_used: 'vector_graph_rag',
+        query_id: this.sessionMetadata.query_id,
+        cypher_query: 'VECTOR_SEARCH + TRAVERSAL',
+        user_namespace: this.sessionMetadata.user_namespace,
+        user_id: this.sessionMetadata.user_id,
+        vector_search_results: topNodes.length,
+        traversal_results: traversalData.length
+      });
+
+      this.queryResults = formattedResults;
+
+      this.sendToClient({
+        type: 'query_results',
+        query_id: this.sessionMetadata.query_id,
+        results: formattedResults
+      });
+
+      // Save to D1
+      await this.saveQueryToDatabase('GRAPH_RAG_PIPELINE', formattedResults, executionTime);
+
+      this.logger.info('graphrag.completed', {
+        total_latency_ms: Date.now() - startTime,
+        vector_results: topNodes.length,
+        traversal_results: traversalData.length
+      });
+
+      // Generate answer
+      await this.generateAnswer(formattedResults);
+
+      this.cleanup();
+
+    } catch (error) {
+      this.logger.error('graphrag.failed', {
+        error: error.message,
+        latency_ms: Date.now() - startTime
+      });
+
+      // Provide more helpful error message based on error type
+      let userMessage = "I couldn't find relevant information.";
+      if (error.message.includes('node IDs')) {
+        userMessage = "I found some results but couldn't process them. Please try again.";
+      } else if (error.message.includes('Traversal')) {
+        userMessage = "I found relevant nodes but couldn't expand the context. Please try again.";
+      }
+
+      this.sendError('QUERY_FAILED', userMessage, true);
+      this.cleanup();
+    }
+  }
+
+  /**
    * Execute Cypher query against FalkorDB
+
    *
    * @param {string} cypher - Cypher query
    * @param {Object} parameters - Query parameters

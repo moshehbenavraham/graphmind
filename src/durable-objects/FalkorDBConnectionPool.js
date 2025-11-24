@@ -86,6 +86,7 @@ export class FalkorDBConnectionPool {
       port: config.port,
       username: config.username,
       password: config.password,
+      apiKey: config.apiKey,
     };
 
     // Persist to storage for alarm handler
@@ -95,6 +96,7 @@ export class FalkorDBConnectionPool {
       host: config.host,
       port: config.port,
       username: config.username,
+      hasApiKey: !!config.apiKey
     });
   }
 

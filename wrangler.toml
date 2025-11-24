@@ -95,6 +95,12 @@ dead_letter_queue = "graph-sync-failed"
 [vars]
 ENVIRONMENT = "development"
 
+# FalkorDB REST API Authentication (Feature 012 - Security Hardening)
+# Set with: npx wrangler secret put FALKORDB_REST_API_KEY
+# This authenticates Workers -> REST API requests
+# IMPORTANT: This is a secret, not a var. Set it using wrangler secret CLI, not here.
+# FALKORDB_REST_API_KEY = "set-via-wrangler-secret-put"
+
 # Production Environment
 # Production Environment
 [env.production]

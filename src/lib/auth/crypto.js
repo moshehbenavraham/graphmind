@@ -62,6 +62,7 @@ export async function verifyPassword(password, hash) {
  * @param {string} payload.user_id - User UUID
  * @param {string} payload.email - User email
  * @param {string} payload.namespace - FalkorDB namespace (user_{uuid})
+ * @param {string} [payload.role] - User role (e.g., 'admin', 'user')
  * @param {string} secret - JWT signing secret
  * @returns {string} Signed JWT token
  * @throws {Error} If token generation fails
@@ -71,13 +72,14 @@ export async function verifyPassword(password, hash) {
  *   sub: user_id,
  *   email: user@example.com,
  *   namespace: user_{uuid},
+ *   role: 'user' or 'admin',
  *   iat: issued_at_timestamp,
  *   exp: expiration_timestamp
  * }
  */
 export function generateToken(payload, secret) {
   try {
-    const { user_id, email, namespace } = payload;
+    const { user_id, email, namespace, role } = payload;
 
     if (!user_id || !email || !namespace) {
       throw new Error('Missing required payload fields: user_id, email, namespace');
@@ -92,6 +94,7 @@ export function generateToken(payload, secret) {
       sub: user_id,      // Subject (user ID)
       email,             // User email
       namespace,         // FalkorDB namespace
+      role: role || 'user',  // User role (default: 'user')
       iat: Math.floor(Date.now() / 1000),  // Issued at
       exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60)  // Expires in 24 hours
     };

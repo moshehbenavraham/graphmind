@@ -17,7 +17,9 @@
  * @returns {string} Cypher query
  */
 export function entityLookupTemplate(userNamespace, entityType, entityName) {
-  return `MATCH (n:${entityType} {name: $entity_name})
+  // Use toLower() for case-insensitive matching
+  return `MATCH (n:${entityType})
+WHERE toLower(n.name) = toLower($entity_name)
 RETURN n, labels(n) as type, properties(n) as props
 LIMIT 1;`;
 }
@@ -38,8 +40,10 @@ export function relationshipQueryTemplate(userNamespace, sourceType, sourceName,
 
   if (direction === 'incoming') {
     // (Unknown)-[Rel]->(Known)
-    // Example: "Who works at GraphMind?" -> MATCH (target:Person)-[:WORKS_ON]->(source:Project {name: 'GraphMind'})
-    return `MATCH (target${targetPattern})-[r:${relType}]->(source:${sourceType} {name: $source_name})
+    // Example: "Who works at GraphMind?" -> MATCH (target:Person)-[:WORKS_ON]->(source:Project)
+    // Use toLower() for case-insensitive matching
+    return `MATCH (target${targetPattern})-[r:${relType}]->(source:${sourceType})
+WHERE toLower(source.name) = toLower($source_name)
 RETURN source, r, target, type(r) as relationship_type
 ORDER BY target.name
 LIMIT 100;`;
@@ -47,7 +51,9 @@ LIMIT 100;`;
 
   // Default: Outgoing
   // (Known)-[Rel]->(Unknown)
-  return `MATCH (source:${sourceType} {name: $source_name})-[r:${relType}]->(target${targetPattern})
+  // Use toLower() for case-insensitive matching
+  return `MATCH (source:${sourceType})-[r:${relType}]->(target${targetPattern})
+WHERE toLower(source.name) = toLower($source_name)
 RETURN source, r, target, type(r) as relationship_type
 ORDER BY target.name
 LIMIT 100;`;
@@ -107,6 +113,21 @@ export function countQueryTemplate(userNamespace, entityType, condition = '') {
 
   return `MATCH (n:${entityType})
 ${whereClause}RETURN count(n) as count, '${entityType}' as entity_type;`;
+}
+
+/**
+ * Pattern 6: Traversal Query (GraphRAG Context Expansion)
+ * Use Case: Expand context from vector search results
+ *
+ * @param {Array<number>} nodeIds - IDs of nodes to traverse from
+ * @returns {string} Cypher query
+ */
+export function traversalQueryTemplate(nodeIds) {
+  // Note: nodeIds will be passed as parameter $node_ids
+  return `MATCH (n)-[r]-(connected)
+WHERE ID(n) IN $node_ids
+RETURN n, r, connected
+LIMIT 100;`;
 }
 
 /**

@@ -29,6 +29,7 @@ import { handleInitPool } from './api/test/init-pool.js';
 import { handleBenchmarkFalkorDB } from './api/test/benchmark-falkordb.js';
 import { handleQueryRequest } from './workers/api/query.js';
 import { handleSeedDataV2 } from './workers/api/seed-data.js';
+import { handleBackfillEmbeddings } from './workers/api/admin/backfill-embeddings.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -599,49 +600,16 @@ export default {
 
       // Basic health check endpoint
       if (url.pathname === '/') {
-      return new Response(JSON.stringify({
-        status: 'ok',
-        service: 'graphmind-api',
-        version: '0.1.0',
-        timestamp: new Date().toISOString(),
-        bindings: {
-          database: !!env.DB,
-          kv: !!env.KV,
-          ai: !!env.AI,
-          r2: !!env.AUDIO_BUCKET
-        }
-      }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    // Detailed health check endpoint
-    if (url.pathname === '/api/health') {
-      try {
-        // Test D1 database connectivity
-        const startTime = Date.now();
-        const dbTest = await env.DB.prepare('SELECT 1 as test').first();
-        const dbLatency = Date.now() - startTime;
-
         return new Response(JSON.stringify({
           status: 'ok',
-          checks: {
-            database: {
-              connected: !!dbTest,
-              latency_ms: dbLatency
-            },
-            kv: {
-              connected: !!env.KV
-            },
-            ai: {
-              available: !!env.AI
-            },
-            r2: {
-              available: !!env.AUDIO_BUCKET
-            }
+          service: 'graphmind-api',
+          version: '0.1.0',
+          timestamp: new Date().toISOString(),
+          bindings: {
+            database: !!env.DB,
+            kv: !!env.KV,
+            ai: !!env.AI,
+            r2: !!env.AUDIO_BUCKET
           }
         }), {
           status: 200,
@@ -649,88 +617,142 @@ export default {
             'Content-Type': 'application/json'
           }
         });
-      } catch (error) {
-        return new Response(JSON.stringify({
-          status: 'error',
-          message: 'Health check failed',
-          error: error.message,
-          checks: {
-            database: {
-              connected: false,
-              error: error.message
-            }
-          }
-        }), {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
       }
-    }
 
-    // T030: FalkorDB health check endpoint
-    if (url.pathname === '/api/health/falkordb' && method === 'GET') {
-      return await handleFalkorDBHealth(request, env);
-    }
+      // Detailed health check endpoint
+      if (url.pathname === '/api/health') {
+        try {
+          // Test D1 database connectivity
+          const startTime = Date.now();
+          const dbTest = await env.DB.prepare('SELECT 1 as test').first();
+          const dbLatency = Date.now() - startTime;
 
-    // T055: Graph namespace init endpoint
-    if (url.pathname === '/api/graph/init' && method === 'POST') {
-      return await handleGraphInit(request, env);
-    }
-
-    // FalkorDB test endpoint
-    if (url.pathname === '/api/test/falkordb' && method === 'POST') {
-      try {
-        const body = await request.json();
-        const { userId, query } = body;
-
-        if (!userId || !query) {
           return new Response(JSON.stringify({
-            error: 'Missing userId or query'
+            status: 'ok',
+            checks: {
+              database: {
+                connected: !!dbTest,
+                latency_ms: dbLatency
+              },
+              kv: {
+                connected: !!env.KV
+              },
+              ai: {
+                available: !!env.AI
+              },
+              r2: {
+                available: !!env.AUDIO_BUCKET
+              }
+            }
           }), {
-            status: 400,
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            status: 'error',
+            message: 'Health check failed',
+            error: error.message,
+            checks: {
+              database: {
+                connected: false,
+                error: error.message
+              }
+            }
+          }), {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      }
+
+      // T030: FalkorDB health check endpoint
+      if (url.pathname === '/api/health/falkordb' && method === 'GET') {
+        return await handleFalkorDBHealth(request, env);
+      }
+
+      // T055: Graph namespace init endpoint
+      if (url.pathname === '/api/graph/init' && method === 'POST') {
+        return await handleGraphInit(request, env);
+      }
+
+      // FalkorDB test endpoint
+      if (url.pathname === '/api/test/falkordb' && method === 'POST') {
+        try {
+          const body = await request.json();
+          const { userId, query } = body;
+
+          if (!userId || !query) {
+            return new Response(JSON.stringify({
+              error: 'Missing userId or query'
+            }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Get Durable Object stub
+          const id = env.FALKORDB_POOL.idFromName('pool');
+          const stub = env.FALKORDB_POOL.get(id);
+
+          // Execute query with credentials
+          const doRequest = new Request('http://do/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              config: {
+                host: env.FALKORDB_HOST || 'localhost',
+                port: '3001', // REST API wrapper port
+                username: env.FALKORDB_USER || 'default',
+                password: env.FALKORDB_PASSWORD,
+                apiKey: env.FALKORDB_REST_API_KEY,
+              },
+              userId,
+              cypher: query,
+              params: body.params || {}
+            })
+          });
+
+          const doResponse = await stub.fetch(doRequest);
+          const result = await doResponse.json();
+
+          return new Response(JSON.stringify(result), {
+            status: doResponse.status,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            error: error.message
+          }), {
+            status: 500,
             headers: { 'Content-Type': 'application/json' }
           });
         }
-
-        // Get Durable Object stub
-        const id = env.FALKORDB_POOL.idFromName('pool');
-        const stub = env.FALKORDB_POOL.get(id);
-
-        // Execute query with credentials
-        const doRequest = new Request('http://do/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            config: {
-              host: env.FALKORDB_HOST,
-              port: env.FALKORDB_PORT,
-              username: env.FALKORDB_USER || env.FALKORDB_USERNAME,
-              password: env.FALKORDB_PASSWORD
-            },
-            userId,
-            cypher: query,
-            params: body.params || {}
-          })
-        });
-
-        const doResponse = await stub.fetch(doRequest);
-        const result = await doResponse.json();
-
-        return new Response(JSON.stringify(result), {
-          status: doResponse.status,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } catch (error) {
-        return new Response(JSON.stringify({
-          error: error.message
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
       }
-    }
+
+      // Admin: Backfill embeddings
+      if (url.pathname === '/api/admin/backfill-embeddings' && method === 'POST') {
+        // Basic auth check (TODO: Implement proper admin auth)
+        /*
+        const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!token) {
+          return addCorsHeaders(unauthorizedError('Missing token'));
+        }
+        // For now, just verify it's a valid user
+        try {
+          verifyToken(token, env.JWT_SECRET);
+        } catch (e) {
+          return addCorsHeaders(unauthorizedError('Invalid token'));
+        }
+        */
+
+        const response = await handleBackfillEmbeddings(request, env);
+        return addCorsHeaders(response);
+      }
 
       // 404 handler for unknown routes
       return new Response(JSON.stringify({

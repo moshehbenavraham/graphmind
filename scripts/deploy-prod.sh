@@ -123,9 +123,10 @@ node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
 REST_API_PID=$!
 echo "  - REST API started (PID: $REST_API_PID)"
 echo "  - Waiting for REST API to be ready..."
-sleep 3
+sleep 5
 
-if curl -s http://localhost:3001/health | grep -q "healthy"; then
+# Health check with authentication
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
     echo -e "${GREEN}✔ REST API running on port 3001${NC}"
 else
     echo -e "${RED}✖ REST API failed to start${NC}"
@@ -204,7 +205,7 @@ else
 fi
 
 echo "  - Testing REST API..."
-if curl -s -m 10 http://localhost:3001/health | grep -q "healthy"; then
+if curl -s -m 10 -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
     echo -e "    ${GREEN}✔ REST API healthy${NC}"
 else
     echo -e "    ${RED}✖ REST API unhealthy${NC}"

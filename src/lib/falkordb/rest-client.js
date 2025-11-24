@@ -15,10 +15,11 @@
  * @param {number} config.port - FalkorDB port
  * @param {string} config.username - FalkorDB username
  * @param {string} config.password - FalkorDB password
+ * @param {string} config.apiKey - REST API authentication key (Feature 012 - Security Hardening)
  * @returns {Object} REST API client with query methods
  */
 export function createRestClient(config) {
-  const { host, port, username, password } = config;
+  const { host, port, username, password, apiKey } = config;
 
   if (!host) {
     throw new Error('FalkorDB host is not configured');
@@ -84,11 +85,18 @@ export function createRestClient(config) {
       });
 
       try {
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add authentication header if API key is provided (Feature 012 - Security Hardening)
+        if (apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
         const response = await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             query: cypher,
             params: params
@@ -142,9 +150,12 @@ export function createRestClient(config) {
       if (command === 'PING') {
         // Health check - matches scripts/falkordb-rest-api.js endpoint
         try {
-          const response = await fetch(`${baseUrl}/health`, {
-            headers: { 'Content-Type': 'application/json' },
-          });
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(`${baseUrl}/health`, { headers });
 
           if (!response.ok) {
             throw new Error(`Health check failed: ${response.statusText}`);
@@ -164,9 +175,12 @@ export function createRestClient(config) {
       if (command === 'GRAPH.LIST') {
         // List all graphs - matches GET /api/graphs
         try {
-          const response = await fetch(`${baseUrl}/api/graphs`, {
-            headers: { 'Content-Type': 'application/json' },
-          });
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(`${baseUrl}/api/graphs`, { headers });
 
           if (!response.ok) {
             throw new Error(`Failed to list graphs: ${response.statusText}`);
@@ -184,9 +198,14 @@ export function createRestClient(config) {
         // Delete graph - matches DELETE /api/graph/:graphName
         const [graphName] = args;
         try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
           const response = await fetch(`${baseUrl}/api/graph/${graphName}`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
           });
 
           if (!response.ok) {

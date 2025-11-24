@@ -5,28 +5,78 @@
  * Forwards requests to FalkorDB using Redis protocol
  */
 
+require('dotenv').config(); // Load environment variables from .env
 const express = require('express');
 const { createClient } = require('redis');
 
 const app = express();
 app.use(express.json());
 
-// CORS for local development
+// API Key Authentication - REQUIRED
+const API_KEY = process.env.FALKORDB_REST_API_KEY;
+
+if (!API_KEY) {
+  console.error('FATAL: FALKORDB_REST_API_KEY not set in environment');
+  console.error('Generate with: openssl rand -hex 32');
+  console.error('Then add to .env: FALKORDB_REST_API_KEY=<generated_key>');
+  process.exit(1);
+}
+
+// CORS + Authentication Middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  // 1. CORS origin restriction
+  const allowedOrigins = [
+    'http://localhost:5173',           // Vite dev server
+    'http://localhost:8787',           // Wrangler dev server
+    'https://graphmind.pages.dev',     // Cloudflare Pages production
+    /^https:\/\/.*\.graphmind\.pages\.dev$/  // Preview deployments
+  ];
+
+  const origin = req.headers.origin;
+  const isAllowed = allowedOrigins.some(pattern => {
+    return typeof pattern === 'string' ? pattern === origin : pattern.test(origin);
+  });
+
+  if (isAllowed && origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests (no auth required)
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
+
+  // 2. Authentication check (all non-OPTIONS requests)
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+
+  const token = authHeader.substring(7); // Remove "Bearer " prefix
+  if (token !== API_KEY) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid authentication token'
+    });
+  }
+
   next();
 });
 
 // Redis/FalkorDB connection
+// Note: FALKORDB_REDIS_PORT is for direct Redis connection (default 6380)
+// FALKORDB_PORT is used by Workers to connect to this REST API (typically 3001)
 const redisClient = createClient({
   socket: {
     host: process.env.FALKORDB_HOST || 'localhost',
-    port: parseInt(process.env.FALKORDB_PORT || '6380')
+    port: parseInt(process.env.FALKORDB_REDIS_PORT || '6380')
   },
   username: process.env.FALKORDB_USER || 'default',
   password: process.env.FALKORDB_PASSWORD || ''
@@ -100,31 +150,42 @@ app.post('/api/graph/:graphName/query', async (req, res) => {
   }
 
   try {
-    // Interpolate parameters into query
-    let finalQuery = query;
-    for (const [key, value] of Object.entries(params)) {
-      const paramPlaceholder = `$${key}`;
-      let paramValue;
-
-      if (value === null || value === undefined) {
-        paramValue = 'null';
-      } else if (typeof value === 'string') {
-        paramValue = `"${value.replace(/"/g, '\\"')}"`;
-      } else if (typeof value === 'number' || typeof value === 'boolean') {
-        paramValue = String(value);
-      } else if (Array.isArray(value)) {
-        paramValue = '[' + value.map(v =>
-          typeof v === 'string' ? `"${v.replace(/"/g, '\\"')}"` : String(v)
-        ).join(', ') + ']';
-      } else {
-        paramValue = JSON.stringify(value);
-      }
-
-      finalQuery = finalQuery.replaceAll(paramPlaceholder, paramValue);
+    // Build CYPHER prefix for parameters
+    // FalkorDB requires params in "CYPHER key=value key2=value2" prefix format
+    let cypherPrefix = '';
+    if (params && Object.keys(params).length > 0) {
+      const paramStrings = Object.entries(params).map(([key, value]) => {
+        if (value === null || value === undefined) {
+          return `${key}=NULL`;
+        }
+        if (typeof value === 'string') {
+          // Escape double quotes in strings
+          return `${key}="${value.replace(/"/g, '\\"')}"`;
+        }
+        if (Array.isArray(value)) {
+          // Arrays (like embeddings) need special handling
+          // FalkorDB expects list format: [1,2,3]
+          return `${key}=${JSON.stringify(value)}`;
+        }
+        if (typeof value === 'boolean') {
+          return `${key}=${value}`;
+        }
+        // Numbers
+        return `${key}=${value}`;
+      });
+      cypherPrefix = 'CYPHER ' + paramStrings.join(' ') + ' ';
     }
 
+    const fullQuery = cypherPrefix + query;
+    const args = [
+      'GRAPH.QUERY',
+      graphName,
+      fullQuery,
+      '--compact'  // Compact result format (recommended)
+    ];
+
     const startTime = Date.now();
-    const result = await redisClient.sendCommand(['GRAPH.QUERY', graphName, finalQuery]);
+    const result = await redisClient.sendCommand(args);
     const latency = Date.now() - startTime;
 
     // Parse FalkorDB result
@@ -169,6 +230,52 @@ app.delete('/api/graph/:graphName', async (req, res) => {
 /**
  * Parse FalkorDB result from Redis protocol format
  */
+/**
+ * Extract a value from FalkorDB's raw format
+ * FalkorDB returns values as [type, value] arrays:
+ * - Type 1: null
+ * - Type 2: string
+ * - Type 3: integer
+ * - Type 4: boolean
+ * - Type 5: double
+ * - Type 6: array
+ * - Type 7: edge
+ * - Type 8: node
+ * - Type 9: path
+ * - Type 10: map
+ * - Type 11: point
+ */
+function extractValue(val) {
+  if (val === null || val === undefined) return null;
+  // If it's already a plain value (not array), return as-is
+  if (!Array.isArray(val)) return val;
+  // If it's [type, value] format, extract the value
+  if (val.length >= 2) {
+    const [type, value] = val;
+    // Recursively handle nested arrays/maps
+    if (Array.isArray(value)) {
+      return value.map(extractValue);
+    }
+    return value;
+  }
+  // Fallback
+  return val[0] ?? null;
+}
+
+/**
+ * Extract column name from FalkorDB header format
+ * Headers come as [[type, name], ...] where type indicates column type
+ */
+function extractColumnName(col, index) {
+  if (Array.isArray(col) && col.length >= 2) {
+    return col[1]; // Return the name part
+  }
+  if (typeof col === 'string') {
+    return col;
+  }
+  return `col_${index}`;
+}
+
 function parseFalkorDBResult(result) {
   if (!result || !Array.isArray(result)) {
     return { data: [], metadata: {}, statistics: {} };
@@ -180,9 +287,12 @@ function parseFalkorDBResult(result) {
     statistics: {},
   };
 
-  // Extract column headers
+  // Extract column headers - store both raw and extracted names
   if (result.length > 0 && Array.isArray(result[0])) {
-    parsed.metadata.columns = result[0];
+    const rawColumns = result[0];
+    // Extract clean column names for use as object keys
+    parsed.metadata.columns = rawColumns.map((col, idx) => extractColumnName(col, idx));
+    parsed.metadata.rawColumns = rawColumns; // Keep raw for debugging
   }
 
   // Extract result rows
@@ -194,7 +304,8 @@ function parseFalkorDBResult(result) {
       const rowObj = {};
       row.forEach((value, index) => {
         const columnName = columns[index] || `col_${index}`;
-        rowObj[columnName] = value;
+        // Extract the actual value from [type, value] format
+        rowObj[columnName] = extractValue(value);
       });
       return rowObj;
     });

@@ -57,7 +57,10 @@ class ApiClient {
       });
 
       // Handle 401 unauthorized - token expired or invalid
-      if (response.status === 401) {
+      // Skip auto-redirect for login/register endpoints (they return 401 for invalid credentials)
+      const isAuthEndpoint = endpoint === '/api/auth/login' || endpoint === '/api/auth/register';
+
+      if (response.status === 401 && !isAuthEndpoint) {
         logger.warn('request.unauthorized', 'Clearing token and redirecting to login', { endpoint });
         localStorage.removeItem('jwt_token');
         window.location.href = '/login';
