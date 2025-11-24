@@ -302,8 +302,146 @@ npx wrangler d1 execute graphmind-db --local --command "
 
 ---
 
+## Update: Additional Attempts (2025-11-24)
+
+### 8. Fixed deploy-local.sh Process Killing
+
+**Problem Identified:** Script was not killing `workerd` processes, causing port conflicts.
+
+**Changes Made (commit f6ff387, efcc627):**
+- Added `pkill -9 -f "workerd"` to process kill list
+- Added port cleanup using `lsof -ti :8787 | xargs kill -9` for ports 8787, 5173, 3001
+- Added port availability check before starting wrangler
+- Added verification step to ensure all processes are killed
+
+**Result:** Successfully prevents "Address already in use" errors, but seed data still fails.
+
+### 9. Enforced Fixed Ports
+
+**Problem Identified:** Wrangler was starting on random ports (e.g., 39849 instead of 8787).
+
+**Changes Made (commit f8f1c01):**
+- Added `--port 8787` flag to wrangler dev command in deploy-local.sh
+- Added `server.port: 5173` and `strictPort: true` to vite.config.js
+- REST API already using fixed port 3001
+
+**Result:** Ports now locked correctly, but seed data still fails.
+
+### 10. Simplified Error Handling
+
+**Approach:** Stripped away all complex JSON parsing to get raw error messages.
+
+**Changes Made:**
+```javascript
+// SIMPLIFIED - Remove complex parsing
+let response;
+try {
+  response = await poolStub.fetch('http://internal/execute-batch', {...});
+} catch (fetchError) {
+  throw new Error(`FETCH_ERROR: ${fetchError.message}`);
+}
+
+if (!response.ok) {
+  const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
+  throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
+}
+```
+
+**Result:** Still shows generic "Internal Server Error" without FETCH_ERROR or POOL_ERROR prefix.
+
+### 11. Added Version Markers
+
+**Approach:** Added version markers to confirm code is running.
+
+**Changes Made:**
+```javascript
+export async function handleSeedData(request, env) {
+  try {
+    console.log('[SeedData v2.0] Function entry point - CODE_UPDATED_20251124');
+    // ...
+  } catch (error) {
+    return errorResponse(
+      '[CODE_v2.0] Failed to add seed data: ' + error.message,
+      'SERVER_ERROR',
+      500,
+      { trace_id: traceId }
+    );
+  }
+}
+```
+
+**Result:** Error message does NOT contain `[CODE_v2.0]` prefix, suggesting either:
+- Wrangler not loading updated code despite restarts
+- Browser caching old API responses
+- Multiple wrangler instances running simultaneously
+
+### 12. Multiple Wrangler Restarts
+
+**Attempts:**
+- Killed all wrangler and workerd processes multiple times
+- Verified bundle contains updated code (`grep "CODE_v2.0" .wrangler/tmp/*/index.js` returns 1)
+- Confirmed wrangler listening on port 8787
+- Health endpoint returns 200 OK
+- Multiple full deploy-local.sh runs
+
+**Result:** Frontend still receives generic "Internal Server Error" without any custom error markers.
+
+---
+
+## Final Status: UNRESOLVED
+
+### What Was Accomplished
+
+1. **deploy-local.sh improvements:**
+   - Fixed process killing (now includes workerd)
+   - Added port cleanup (8787, 5173, 3001)
+   - Added port availability checks
+   - Enforced fixed ports via CLI flags
+
+2. **Error handling improvements:**
+   - Added detailed error parsing throughout seed-data.js
+   - Added version markers for code verification
+   - Simplified error messages to avoid parsing complexity
+   - Added extensive console logging
+
+3. **Configuration improvements:**
+   - Locked frontend to port 5173 (strictPort)
+   - Locked API to port 8787 (--port flag)
+   - Ensured single wrangler instance
+
+### What Remains Unknown
+
+**The root cause is still unidentified.** Despite all improvements, the error remains:
+```
+Failed to add seed data: Failed to add seed data: Internal Server Error
+```
+
+**Possible causes:**
+1. **Code not loading:** Despite bundle verification, runtime may not be executing updated code
+2. **Error occurs before handler:** Error may be thrown at framework level before reaching custom handlers
+3. **Browser caching:** Frontend may be caching old error responses
+4. **Durable Object issue:** Connection Pool Durable Object may be failing silently
+5. **FalkorDB connection issue:** Connection to FalkorDB may be failing without proper error reporting
+
+### Files Modified (Committed)
+
+- `scripts/deploy-local.sh` - Process killing and port enforcement (commits f6ff387, efcc627, f8f1c01)
+- `src/frontend/vite.config.js` - Port locking (commit f8f1c01)
+- `src/workers/api/seed-data.js` - Simplified error handling (not committed)
+
+---
+
 ## Conclusion
 
-Despite extensive error handling improvements, the root cause remains unknown due to lack of visibility into the actual error. The error is being caught and re-thrown, but the underlying issue from the Connection Pool is not surfacing.
+After extensive debugging efforts spanning multiple sessions, the "Add Test Data" functionality remains broken with no visibility into the actual error. The issue appears to be a fundamental problem with either:
+- Code deployment/loading mechanism
+- Durable Object communication
+- Error propagation through the Workers runtime
+- FalkorDB connection from Workers environment
 
-**Recommendation:** Restart wrangler completely and watch live logs while clicking the button to see the actual error output.
+**Recommendation:** This issue requires a different debugging approach, potentially:
+1. Testing seed data functionality in production (not local dev)
+2. Using wrangler tail for real-time log streaming
+3. Adding logging at the Workers runtime level
+4. Testing Connection Pool Durable Object independently
+5. Bypassing Durable Object and connecting directly to FalkorDB REST API
