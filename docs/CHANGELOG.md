@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [1.11.13] - 2025-11-24
+
+### Changed
+- **Deployment Automation**
+  - Updated `scripts/deploy-local.sh` to auto-confirm database migrations using `yes | ...`.
+  - Prevents deployment from hanging on "continue?" prompts.
+
+### Fixed
+- **FalkorDB Client** (`src/lib/falkordb/rest-client.js`)
+  - Fixed URL construction bug where port was dropped if protocol was present.
+  - Improved handling of `http://` vs `https://` prefixes.
+
+### Known Issues
+- **Local Connection Failure**
+  - "Add Test Data" continues to fail with `PING failed: Network connection lost`.
+  - Connection between Worker and local REST API remains unstable in some environments.
+
+## [1.11.12] - 2025-11-24
+
+### Fixed
+
+- **Local Development Environment Configuration**
+  - Fixed critical issue where local frontend was connecting to production backend
+  - Updated `scripts/deploy-local.sh` to enforce `VITE_API_BASE_URL="http://localhost:8787"`
+  - Added safety check in `src/frontend/utils/api.js` to warn when localhost connects to production
+  - Ensures local code changes are actually tested during development
+
+- **Local Database Initialization**
+  - Identified and fixed missing D1 database schema in local environment
+  - Documented migration requirement in `docs/ongoing_projects/local_deploy_checklist.md`
+
+- **API Error Handling**
+  - Improved error logging in `src/workers/api/seed-data.js` and `src/frontend/utils/api.js`
+  - Added `X-Code-Version` headers to responses for version verification
+  - Added raw response body logging for non-JSON errors
+
+### Added
+
+- **Debugging Documentation**
+  - Created `docs/ongoing_projects/local_deploy_debugging.md` tracking the "Add Test Data" failure investigation
+  - Created `docs/ongoing_projects/local_deploy_checklist.md` for environment setup verification
+
 ## [1.11.11] - 2025-11-23
 
 ### Added
@@ -162,6 +204,7 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 1.11.12 | 2025-11-24   | Fix local dev environment connecting to prod, D1 init |
 | 1.11.11 | 2025-11-23   | Persistent D1 logging system for production debugging |
 | 1.11.10 | 2025-11-23   | Partial fix: removed updated_at column (query still fails) |
 | 1.11.9  | 2025-11-21   | FalkorDB data persistence fix |

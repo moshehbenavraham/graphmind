@@ -8,6 +8,20 @@ class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL;
     logger.debug('init', 'Initialized API client', { baseURL: this.baseURL });
+
+    // Safety check for local development
+    if (window.location.hostname === 'localhost' && this.baseURL.includes('workers.dev')) {
+      logger.warn('init.config_mismatch', '⚠️ FRONTEND IS TALKING TO PRODUCTION BACKEND!', {
+        frontend: window.location.origin,
+        backend: this.baseURL,
+        recommendation: 'Check VITE_API_BASE_URL in .env or deploy-local.sh'
+      });
+      console.error(
+        '%c⚠️ DANGER: Local frontend is connected to PRODUCTION backend (%s). Operations like Seed Data will affect the live database!',
+        'color: red; font-size: 16px; font-weight: bold;',
+        this.baseURL
+      );
+    }
   }
 
   // Get authentication headers with JWT token
@@ -72,8 +86,20 @@ class ApiClient {
           status: response.status,
           endpoint,
           trace_id: traceId,
-          error: errorData
+          error: errorData,
+          // Log raw body if possible, for debugging
+          raw_body_preview: JSON.stringify(errorData).substring(0, 200)
         });
+
+        // If JSON parse failed (errorData has generic message), try to get text if possible
+        if (errorData.error === 'Request failed' && !response.bodyUsed) {
+             try {
+                 const text = await response.text();
+                 logger.error('request.failed.raw_text', 'Raw error body', { text });
+                 throw new Error(`HTTP ${response.status} Raw: ${text.substring(0, 100)}`);
+             } catch (e) { /* ignore */ }
+        }
+
         throw new Error(finalMessage);
       }
 

@@ -227,30 +227,31 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  // SIMPLIFIED ERROR DEBUGGING - Remove all complex parsing to see raw error
-  let response;
-  try {
-    response = await poolStub.fetch('http://internal/execute-batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        operations: [
-          { cypher: query1, params: {} },
-          { cypher: query2, params: {} },
-          { cypher: query3, params: {} }
-        ]
-      })
-    });
-  } catch (fetchError) {
-    throw new Error(`FETCH_ERROR: ${fetchError.message || fetchError.toString()}`);
-  }
+    // SIMPLIFIED ERROR DEBUGGING - Remove all complex parsing to see raw error
+    let response;
+    try {
+      response = await poolStub.fetch('http://internal/execute-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config,
+          userId,
+          operations: [
+            { cypher: query1, params: {} },
+            { cypher: query2, params: {} },
+            { cypher: query3, params: {} }
+          ]
+        })
+      });
+    } catch (fetchError) {
+      throw new Error(`FETCH_ERROR: ${fetchError.message || fetchError.toString()}`);
+    }
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
-    throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
-  }
+    if (!response.ok) {
+      const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
+      // DO NOT THROW "Failed to add seed data" here to avoid duplication
+      throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
+    }
 
   // Get final count
   const countResponse = await poolStub.fetch('http://internal/execute', {
@@ -349,10 +350,10 @@ async function addSeedData(env, userId) {
  * Handle POST /api/seed-data
  * Add test knowledge graph data to authenticated user's namespace
  */
-export async function handleSeedData(request, env) {
+export async function handleSeedDataV2(request, env) {
   try {
     const traceId = getTraceId(request);
-    console.log('[SeedData v2.0] Function entry point - CODE_UPDATED_20251124');
+    console.log('[SeedData V2] Function entry point - FORCED UPDATE');
     // Validate FalkorDB configuration early for clearer errors
     buildFalkorConfig(env);
 
@@ -417,7 +418,7 @@ export async function handleSeedData(request, env) {
     });
 
     return errorResponse(
-      '[CODE_v2.0] Failed to add seed data: ' + (error?.message || 'Unknown error'),
+      '[V2_ERROR] Failed to add seed data: ' + (error?.message || 'Unknown error'),
       'SERVER_ERROR',
       500,
       { trace_id: traceId }

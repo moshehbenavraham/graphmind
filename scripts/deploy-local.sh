@@ -117,7 +117,8 @@ fi
 echo ""
 
 echo -e "${YELLOW}[5/8] Starting FalkorDB REST API wrapper...${NC}"
-node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
+# Force connection to local Docker container (ignoring .env tunnel config)
+FALKORDB_HOST="localhost" FALKORDB_PORT="6380" node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
 REST_API_PID=$!
 echo "  - REST API started (PID: $REST_API_PID)"
 echo "  - Waiting for REST API to be ready..."
@@ -134,7 +135,8 @@ echo ""
 
 echo -e "${YELLOW}[6/8] Starting frontend dev server...${NC}"
 cd src/frontend
-npm run dev > /tmp/vite-dev.log 2>&1 &
+# Force API URL to localhost for local deployment, overriding any .env files
+VITE_API_BASE_URL="http://localhost:8787" npm run dev > /tmp/vite-dev.log 2>&1 &
 FRONTEND_PID=$!
 cd "$PROJECT_ROOT"
 echo "  - Frontend dev server started (PID: $FRONTEND_PID)"
@@ -150,7 +152,13 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[7/8] Starting Workers dev server...${NC}"
+echo -e "${YELLOW}[7/8] Applying Database Migrations...${NC}"
+# Run migrations BEFORE starting the worker to ensure DB is ready and unlocked
+yes | npx wrangler d1 migrations apply graphmind-db --local
+echo -e "${GREEN}✔ Database migrations applied${NC}"
+echo ""
+
+echo -e "${YELLOW}[8/8] Starting Workers dev server...${NC}"
 # Final check that port 8787 is available
 if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then
     echo -e "${RED}✖ Port 8787 is already in use!${NC}"
@@ -159,7 +167,8 @@ if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then
     exit 1
 fi
 
-npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
+# Force Worker to talk to local REST API wrapper (ignoring .env tunnel config)
+FALKORDB_HOST="http://127.0.0.1" FALKORDB_PORT="3001" npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
 WORKER_PID=$!
 echo "  - Workers dev server started (PID: $WORKER_PID)"
 echo "  - Waiting for Workers to be ready on port 8787..."
@@ -174,7 +183,8 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[8/8] Running health checks...${NC}"
+echo "============================================"
+echo -e "${YELLOW}[9/8] Running health checks...${NC}"
 echo "  - Testing FalkorDB..."
 if docker exec falkordb-local redis-cli PING | grep -q "PONG"; then
     echo -e "    ${GREEN}✔ FalkorDB responding${NC}"

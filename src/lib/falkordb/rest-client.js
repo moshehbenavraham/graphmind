@@ -41,9 +41,18 @@ export function createRestClient(config) {
         : 'http';
 
   const needsPort = portNumber && ![80, 443].includes(portNumber);
-  const baseUrl = hasProtocol
-    ? sanitizedHost
-    : `${protocol}://${sanitizedHost}${needsPort ? `:${portNumber}` : ''}`;
+
+  let baseUrl;
+  if (hasProtocol) {
+    // Check if port is explicitly part of the host string already
+    const hostHasPort = /:\d+$/.test(sanitizedHost);
+    baseUrl = sanitizedHost;
+    if (needsPort && !hostHasPort) {
+      baseUrl = `${baseUrl}:${portNumber}`;
+    }
+  } else {
+    baseUrl = `${protocol}://${sanitizedHost}${needsPort ? `:${portNumber}` : ''}`;
+  }
 
   // Create Basic Auth header
   const authHeader = 'Basic ' + btoa(`${username}:${password}`);

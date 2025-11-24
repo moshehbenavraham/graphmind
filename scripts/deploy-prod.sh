@@ -42,24 +42,43 @@ echo "Clean rebuild with Cloudflare Tunnel"
 echo "============================================"
 echo ""
 
-echo -e "${YELLOW}[1/10] Stopping all existing services...${NC}"
-pkill -f "cloudflared tunnel run" >/dev/null 2>&1 || true
-pkill -f "falkordb-rest-api.js" >/dev/null 2>&1 || true
-pkill -f "wrangler dev" >/dev/null 2>&1 || true
-pkill -f "wrangler tail" >/dev/null 2>&1 || true
-pkill -f "vite" >/dev/null 2>&1 || true
-sleep 2
+echo -e "${YELLOW}[1/11] Stopping all existing services...${NC}"
+pkill -9 -f "cloudflared tunnel run" >/dev/null 2>&1 || true
+pkill -9 -f "falkordb-rest-api.js" >/dev/null 2>&1 || true
+pkill -9 -f "wrangler dev" >/dev/null 2>&1 || true
+pkill -9 -f "wrangler tail" >/dev/null 2>&1 || true
+pkill -9 -f "workerd" >/dev/null 2>&1 || true
+pkill -9 -f "vite" >/dev/null 2>&1 || true
+sleep 3
+
+echo "  - Killing processes on required ports (8787, 5173, 3001)..."
+lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null || true
+sleep 1
+
+echo "  - Verifying all processes killed..."
+REMAINING=$(ps aux | grep -E "wrangler dev|workerd|vite|falkordb-rest-api|cloudflared" | grep -v grep | wc -l)
+if [ "$REMAINING" -gt 0 ]; then
+    echo -e "${RED}  WARNING: $REMAINING processes still running, killing again...${NC}"
+    pkill -9 -f "wrangler" >/dev/null 2>&1 || true
+    pkill -9 -f "workerd" >/dev/null 2>&1 || true
+    pkill -9 -f "vite" >/dev/null 2>&1 || true
+    pkill -9 -f "falkordb-rest-api" >/dev/null 2>&1 || true
+    pkill -9 -f "cloudflared" >/dev/null 2>&1 || true
+    sleep 2
+fi
 echo -e "${GREEN}✔ Services stopped${NC}"
 echo ""
 
-echo -e "${YELLOW}[2/10] Cleaning all build artifacts and caches...${NC}"
+echo -e "${YELLOW}[2/11] Cleaning all build artifacts and caches...${NC}"
 rm -rf dist/ .wrangler/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
 npm cache clean --force >/dev/null 2>&1 || true
 (cd src/frontend && npm cache clean --force >/dev/null 2>&1 || true)
 echo -e "${GREEN}✔ Build artifacts cleaned${NC}"
 echo ""
 
-echo -e "${YELLOW}[3/10] Installing fresh dependencies...${NC}"
+echo -e "${YELLOW}[3/11] Installing fresh dependencies...${NC}"
 rm -rf node_modules/
 npm install
 cd src/frontend
@@ -69,7 +88,7 @@ cd "$PROJECT_ROOT"
 echo -e "${GREEN}✔ Dependencies installed${NC}"
 echo ""
 
-echo -e "${YELLOW}[4/10] Starting FalkorDB Docker container...${NC}"
+echo -e "${YELLOW}[4/11] Starting FalkorDB Docker container...${NC}"
 if docker ps -a | grep -q falkordb-local; then
     echo "  - Removing existing container..."
     docker rm -f falkordb-local >/dev/null 2>&1 || true
@@ -97,7 +116,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[5/10] Starting FalkorDB REST API wrapper...${NC}"
+echo -e "${YELLOW}[5/11] Starting FalkorDB REST API wrapper...${NC}"
 node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
 REST_API_PID=$!
 echo "  - REST API started (PID: $REST_API_PID)"
@@ -113,7 +132,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[6/10] Starting Cloudflare Tunnel...${NC}"
+echo -e "${YELLOW}[6/11] Starting Cloudflare Tunnel...${NC}"
 cloudflared tunnel run falkordb-tunnel > /tmp/cloudflared.log 2>&1 &
 TUNNEL_PID=$!
 echo "  - Tunnel started (PID: $TUNNEL_PID)"
@@ -130,7 +149,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[7/10] Verifying production secrets...${NC}"
+echo -e "${YELLOW}[7/11] Verifying production secrets...${NC}"
 SECRETS=$(npx wrangler secret list 2>&1)
 if echo "$SECRETS" | grep -q "FALKORDB_HOST" && echo "$SECRETS" | grep -q "FALKORDB_PORT"; then
     echo -e "${GREEN}✔ Production secrets configured${NC}"
@@ -143,7 +162,13 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[8/10] Building and deploying frontend...${NC}"
+echo -e "${YELLOW}[8/11] Applying Database Migrations...${NC}"
+# Run migrations BEFORE starting the worker
+yes | npx wrangler d1 migrations apply graphmind-db --env production
+echo -e "${GREEN}✔ Database migrations applied${NC}"
+echo ""
+
+echo -e "${YELLOW}[9/11] Building and deploying frontend...${NC}"
 cd src/frontend
 rm -rf dist/
 echo "  - Building frontend..."
@@ -161,13 +186,13 @@ echo -e "${GREEN}✔ Frontend deployed: $FRONTEND_URL${NC}"
 cd "$PROJECT_ROOT"
 echo ""
 
-echo -e "${YELLOW}[9/10] Deploying Workers API...${NC}"
+echo -e "${YELLOW}[10/11] Deploying Workers API...${NC}"
 npx wrangler deploy
 WORKER_URL=$(npx wrangler deployments list --json 2>/dev/null | jq -r '.[0].url // "https://graphmind-api.apex-web-services-llc-0d4.workers.dev"')
 echo -e "${GREEN}✔ Workers deployed: $WORKER_URL${NC}"
 echo ""
 
-echo -e "${YELLOW}[10/10] Running health checks...${NC}"
+echo -e "${YELLOW}[11/11] Running health checks...${NC}"
 echo "  - Testing FalkorDB..."
 if docker exec falkordb-local redis-cli PING | grep -q "PONG"; then
     echo -e "    ${GREEN}✔ FalkorDB responding${NC}"
@@ -177,7 +202,7 @@ else
 fi
 
 echo "  - Testing REST API..."
-if curl -s http://localhost:3001/health | grep -q "healthy"; then
+if curl -s -m 10 http://localhost:3001/health | grep -q "healthy"; then
     echo -e "    ${GREEN}✔ REST API healthy${NC}"
 else
     echo -e "    ${RED}✖ REST API unhealthy${NC}"
@@ -193,7 +218,7 @@ else
 fi
 
 echo "  - Testing Workers API..."
-API_HEALTH=$(curl -s "$WORKER_URL/api/health" 2>&1)
+API_HEALTH=$(curl -s -m 10 "$WORKER_URL/api/health" 2>&1)
 if echo "$API_HEALTH" | grep -q "ok"; then
     echo -e "    ${GREEN}✔ Workers API healthy${NC}"
 else

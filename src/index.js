@@ -28,7 +28,7 @@ import { handleCheckPoolWarmup } from './api/test/check-pool-warmup.js';
 import { handleInitPool } from './api/test/init-pool.js';
 import { handleBenchmarkFalkorDB } from './api/test/benchmark-falkordb.js';
 import { handleQueryRequest } from './workers/api/query.js';
-import { handleSeedData } from './workers/api/seed-data.js';
+import { handleSeedDataV2 } from './workers/api/seed-data.js';
 import { corsPreflightResponse, addCorsHeaders } from './utils/responses.js';
 import { internalServerError, unauthorizedError, badRequestError, notFoundError } from './utils/errors.js';
 import { verifyToken } from './lib/auth/crypto.js';
@@ -229,7 +229,9 @@ export default {
       // Route: POST /api/seed-data
       // Adds test knowledge graph data to authenticated user's namespace
       if (url.pathname === '/api/seed-data' && method === 'POST') {
-        const response = await handleSeedData(request, env);
+        console.log('[SeedData] V2 Route Handler Triggered');
+        const response = await handleSeedDataV2(request, env);
+        response.headers.set('X-Code-Version', 'v3');
         return addCorsHeaders(response);
       }
 
