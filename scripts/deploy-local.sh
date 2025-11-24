@@ -142,10 +142,10 @@ fi
 echo ""
 
 echo -e "${YELLOW}[7/8] Starting Workers dev server...${NC}"
-npx wrangler dev > /tmp/wrangler-dev.log 2>&1 &
+npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
 WORKER_PID=$!
 echo "  - Workers dev server started (PID: $WORKER_PID)"
-echo "  - Waiting for Workers to be ready..."
+echo "  - Waiting for Workers to be ready on port 8787..."
 sleep 8
 
 if ps -p $WORKER_PID > /dev/null; then
