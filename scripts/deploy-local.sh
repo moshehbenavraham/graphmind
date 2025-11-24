@@ -44,12 +44,21 @@ echo "============================================"
 echo ""
 
 echo -e "${YELLOW}[1/8] Stopping all existing services...${NC}"
-pkill -f "cloudflared tunnel run" >/dev/null 2>&1 || true
-pkill -f "falkordb-rest-api.js" >/dev/null 2>&1 || true
-pkill -f "wrangler dev" >/dev/null 2>&1 || true
-pkill -f "wrangler tail" >/dev/null 2>&1 || true
-pkill -f "vite" >/dev/null 2>&1 || true
-sleep 2
+pkill -9 -f "cloudflared tunnel run" >/dev/null 2>&1 || true
+pkill -9 -f "falkordb-rest-api.js" >/dev/null 2>&1 || true
+pkill -9 -f "wrangler dev" >/dev/null 2>&1 || true
+pkill -9 -f "wrangler tail" >/dev/null 2>&1 || true
+pkill -9 -f "vite" >/dev/null 2>&1 || true
+sleep 3
+echo "  - Verifying all processes killed..."
+REMAINING=$(ps aux | grep -E "wrangler dev|vite|falkordb-rest-api" | grep -v grep | wc -l)
+if [ "$REMAINING" -gt 0 ]; then
+    echo -e "${RED}  WARNING: $REMAINING processes still running, killing again...${NC}"
+    pkill -9 -f "wrangler" >/dev/null 2>&1 || true
+    pkill -9 -f "vite" >/dev/null 2>&1 || true
+    pkill -9 -f "falkordb-rest-api" >/dev/null 2>&1 || true
+    sleep 2
+fi
 echo -e "${GREEN}✔ Services stopped${NC}"
 echo ""
 

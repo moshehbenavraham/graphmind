@@ -227,43 +227,29 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  // Execute all operations in a single batch request
-  const response = await poolStub.fetch('http://internal/execute-batch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      config,
-      userId,
-      operations: [
-        { cypher: query1, params: {} },
-        { cypher: query2, params: {} },
-        { cypher: query3, params: {} }
-      ]
-    })
-  });
+  // SIMPLIFIED ERROR DEBUGGING - Remove all complex parsing to see raw error
+  let response;
+  try {
+    response = await poolStub.fetch('http://internal/execute-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        config,
+        userId,
+        operations: [
+          { cypher: query1, params: {} },
+          { cypher: query2, params: {} },
+          { cypher: query3, params: {} }
+        ]
+      })
+    });
+  } catch (fetchError) {
+    throw new Error(`FETCH_ERROR: ${fetchError.message || fetchError.toString()}`);
+  }
 
   if (!response.ok) {
-    // Parse error details from Connection Pool response
-    let errorMessage = response.statusText;
-    try {
-      // Get response as text first to avoid body consumption issues
-      const errorText = await response.text();
-      console.error('[SeedData] Batch execute error response:', errorText);
-
-      // Try to parse as JSON
-      try {
-        const errorBody = JSON.parse(errorText);
-        errorMessage = errorBody?.error || errorBody?.originalMessage || errorBody?.message || errorText || response.statusText;
-        console.error('[SeedData] Parsed error body:', errorBody);
-      } catch (jsonError) {
-        // Not JSON, use raw text
-        errorMessage = errorText || response.statusText;
-        console.error('[SeedData] Error response is not JSON, using raw text');
-      }
-    } catch (textError) {
-      console.error('[SeedData] Failed to read error response:', textError.message);
-    }
-    throw new Error(`Failed to add seed data: ${errorMessage}`);
+    const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
+    throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
   }
 
   // Get final count
@@ -366,6 +352,7 @@ async function addSeedData(env, userId) {
 export async function handleSeedData(request, env) {
   try {
     const traceId = getTraceId(request);
+    console.log('[SeedData v2.0] Function entry point - CODE_UPDATED_20251124');
     // Validate FalkorDB configuration early for clearer errors
     buildFalkorConfig(env);
 
@@ -430,7 +417,7 @@ export async function handleSeedData(request, env) {
     });
 
     return errorResponse(
-      'Failed to add seed data: ' + (error?.message || 'Unknown error'),
+      '[CODE_v2.0] Failed to add seed data: ' + (error?.message || 'Unknown error'),
       'SERVER_ERROR',
       500,
       { trace_id: traceId }
