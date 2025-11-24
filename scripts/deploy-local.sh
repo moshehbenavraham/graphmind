@@ -48,13 +48,22 @@ pkill -9 -f "cloudflared tunnel run" >/dev/null 2>&1 || true
 pkill -9 -f "falkordb-rest-api.js" >/dev/null 2>&1 || true
 pkill -9 -f "wrangler dev" >/dev/null 2>&1 || true
 pkill -9 -f "wrangler tail" >/dev/null 2>&1 || true
+pkill -9 -f "workerd" >/dev/null 2>&1 || true
 pkill -9 -f "vite" >/dev/null 2>&1 || true
 sleep 3
+
+echo "  - Killing processes on required ports (8787, 5173, 3001)..."
+lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null || true
+sleep 1
+
 echo "  - Verifying all processes killed..."
-REMAINING=$(ps aux | grep -E "wrangler dev|vite|falkordb-rest-api" | grep -v grep | wc -l)
+REMAINING=$(ps aux | grep -E "wrangler dev|workerd|vite|falkordb-rest-api" | grep -v grep | wc -l)
 if [ "$REMAINING" -gt 0 ]; then
     echo -e "${RED}  WARNING: $REMAINING processes still running, killing again...${NC}"
     pkill -9 -f "wrangler" >/dev/null 2>&1 || true
+    pkill -9 -f "workerd" >/dev/null 2>&1 || true
     pkill -9 -f "vite" >/dev/null 2>&1 || true
     pkill -9 -f "falkordb-rest-api" >/dev/null 2>&1 || true
     sleep 2
@@ -142,6 +151,14 @@ fi
 echo ""
 
 echo -e "${YELLOW}[7/8] Starting Workers dev server...${NC}"
+# Final check that port 8787 is available
+if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}✖ Port 8787 is already in use!${NC}"
+    echo "  Process using port 8787:"
+    lsof -Pi :8787 -sTCP:LISTEN
+    exit 1
+fi
+
 npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
 WORKER_PID=$!
 echo "  - Workers dev server started (PID: $WORKER_PID)"
