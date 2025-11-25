@@ -2,6 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import Navigation from '../components/Navigation';
 import { api } from '../utils/api';
 import { createLogger } from '../utils/logger';
+import {
+  GlitchText,
+  Card,
+  Button,
+  Badge,
+  RecordingIndicator,
+  BrutalWaveform,
+  TerminalTranscript,
+} from '../design-system';
 
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8787';
 const logger = createLogger('QueryPage');
@@ -23,7 +32,7 @@ function QueryPage() {
   const sessionMetaRef = useRef({});
   const audioMetricsRef = useRef(null);
   const startupTimerRef = useRef(null);
-  const stoppingRef = useRef(false); // Track if we're waiting for final audio chunk
+  const stoppingRef = useRef(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -53,8 +62,6 @@ function QueryPage() {
       logger.setContext(sessionMetaRef.current);
       logger.info('session.start', 'Query session started', sessionMetaRef.current);
 
-      // IMPORTANT: Use the websocket_url from the API response and append JWT token
-      // The server expects ?token= parameter for authentication
       if (!session.websocket_url) {
         throw new Error('Server did not provide websocket_url');
       }
@@ -100,12 +107,10 @@ function QueryPage() {
             break;
 
           case 'transcript_update':
-            // Partial transcript
             setTranscript(data.partial_text || '');
             break;
 
           case 'transcript_final':
-            // Final transcript
             setTranscript(data.question || data.text);
             break;
 
@@ -145,7 +150,6 @@ function QueryPage() {
             break;
 
           case 'audio_chunk':
-            // TODO: Handle TTS audio chunks for playback
             logger.debug('ws.audio_chunk', 'Audio chunk received', {
               chunk_index: data.chunk_index,
               bytes: data.bytes
@@ -196,33 +200,27 @@ function QueryPage() {
 
       wsRef.current = ws;
 
-      // Request microphone access with optimal audio settings
-      // Configure for high-quality voice transcription
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: 16000,      // 16kHz for voice (matches Whisper expectations)
-          channelCount: 1,        // Mono audio
-          echoCancellation: true, // Reduce echo
-          noiseSuppression: true, // Reduce background noise
-          autoGainControl: true   // Normalize volume levels
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
         }
       });
       audioStreamRef.current = stream;
 
-      // Create MediaRecorder with WebM/Opus codec
-      // Opus is widely supported and provides good compression for voice
       const mimeType = 'audio/webm;codecs=opus';
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType,
-        audioBitsPerSecond: 16000 // 16 kbps is sufficient for voice
+        audioBitsPerSecond: 16000
       });
       mediaRecorderRef.current = mediaRecorder;
 
       logger.debug('media.create', 'MediaRecorder created', { mimeType });
 
       mediaRecorder.ondataavailable = async (event) => {
-        // Skip tiny chunks (< 200 bytes) that occur during final MediaRecorder flush
-        // These are too small to contain meaningful audio and cause transcription errors
         if (event.data.size < 200) {
           if (audioMetricsRef.current) {
             audioMetricsRef.current.tinyChunks += 1;
@@ -235,12 +233,10 @@ function QueryPage() {
         }
 
         if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-          // Convert Blob to base64 for JSON transmission
           const reader = new FileReader();
           reader.onloadend = () => {
-            const base64Audio = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+            const base64Audio = reader.result.split(',')[1];
 
-            // Send as JSON message with expected format
             const message = {
               type: 'audio_chunk',
               chunk: base64Audio,
@@ -262,12 +258,11 @@ function QueryPage() {
                 audioMetricsRef.current.lastChunkAt = nowMs();
               }
 
-              // If we're stopping, send stop_recording AFTER audio chunk is sent
               if (stoppingRef.current && ws.readyState === WebSocket.OPEN) {
                 logger.debug('ws.stop', 'Sending stop_recording message after audio chunk');
                 const stopMessage = { type: 'stop_recording' };
                 ws.send(JSON.stringify(stopMessage));
-                stoppingRef.current = false; // Reset flag
+                stoppingRef.current = false;
               }
             } catch (err) {
               logger.error('media.chunk.failed', 'Failed to send audio chunk', { message: err.message });
@@ -324,19 +319,14 @@ function QueryPage() {
         };
       }
 
-      // Start recording without timeslice parameter
-      // This makes MediaRecorder emit data only when stop() is called
-      // This ensures we send a complete, valid WebM file to Whisper
-      // Previously we were chunking every 1s which created multiple WebM files
-      // that couldn't be properly reassembled
-      mediaRecorder.start(); // No timeslice = complete file on stop
+      mediaRecorder.start();
       logger.info('media.start', 'Recording started (complete file on stop)', {
         mimeType,
         strategy: 'complete_file'
       });
       setIsRecording(true);
-      chunkSequenceRef.current = 0; // Reset sequence counter
-      stoppingRef.current = false; // Reset stopping flag
+      chunkSequenceRef.current = 0;
+      stoppingRef.current = false;
 
     } catch (err) {
       startupTimerRef.current = null;
@@ -364,8 +354,6 @@ function QueryPage() {
 
   const stopRecording = () => {
     logger.info('recording.stop', 'Stopping recording');
-
-    // Set flag to send stop_recording after audio chunk arrives
     stoppingRef.current = true;
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -378,8 +366,6 @@ function QueryPage() {
       logger.debug('media.tracks_stopped', 'Audio stream tracks stopped');
     }
 
-    // Set a timeout fallback to send stop_recording if no audio chunk arrives
-    // This handles cases where recording was too short or failed
     setTimeout(() => {
       if (stoppingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
         logger.warn('ws.stop_fallback', 'Sending stop_recording (no audio chunk received)');
@@ -391,7 +377,7 @@ function QueryPage() {
           logger.error('ws.stop_failed', 'Failed to send stop_recording', { message: err.message });
         }
       }
-    }, 2000); // Wait 2 seconds for audio chunk
+    }, 2000);
 
     setIsRecording(false);
     setStatus('processing');
@@ -408,182 +394,168 @@ function QueryPage() {
     logger.setContext({});
   };
 
-  return (
-    <div>
-      <Navigation />
-      <div className="container" style={{ maxWidth: '800px', padding: '2rem 1rem' }}>
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 'bold',
-          marginBottom: '1rem',
-          color: 'var(--text-primary)'
-        }}>
-          Ask a Question
-        </h1>
+  // Status text for display
+  const getStatusText = () => {
+    switch (status) {
+      case 'idle':
+        return 'Click to start voice recording';
+      case 'starting':
+        return 'Connecting...';
+      case 'recording':
+        return 'Listening... Click to stop';
+      case 'processing':
+        return 'Generating answer...';
+      case 'complete':
+        return 'Query complete';
+      case 'error':
+        return 'Error occurred';
+      default:
+        return '';
+    }
+  };
 
-        <div style={{
-          backgroundColor: 'var(--bg-primary)',
-          padding: '2rem',
-          borderRadius: '0.5rem',
-          boxShadow: 'var(--shadow)',
-          marginBottom: '2rem'
-        }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '1rem'
-          }}>
-            <button
+  // Button text for display
+  const getButtonText = () => {
+    switch (status) {
+      case 'starting':
+        return 'Starting...';
+      case 'recording':
+        return 'Stop Recording';
+      case 'processing':
+        return 'Processing...';
+      default:
+        return 'Start Recording';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FFFEF0]">
+      <Navigation />
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        {/* Page Header */}
+        <GlitchText as="h1" className="text-3xl md:text-4xl mb-8">
+          Ask a Question
+        </GlitchText>
+
+        {/* Recording Card */}
+        <Card className="mb-8">
+          <Card.Body className="flex flex-col items-center py-8">
+            {/* Recording Indicator */}
+            {isRecording && (
+              <RecordingIndicator
+                variant="hazard"
+                active={isRecording}
+                size="lg"
+                className="mb-6"
+              />
+            )}
+
+            {/* Waveform Visualization */}
+            <BrutalWaveform
+              demo={isRecording}
+              active={isRecording}
+              variant={isRecording ? 'recording' : 'waveform'}
+              barCount={32}
+              height={80}
+              className="mb-6"
+            />
+
+            {/* Record Button */}
+            <Button
               onClick={isRecording ? stopRecording : startRecording}
               disabled={status === 'processing' || status === 'starting'}
-              className="btn btn-primary"
-              style={{
-                width: '200px',
-                height: '200px',
-                borderRadius: '50%',
-                fontSize: '1.25rem',
-                backgroundColor: isRecording ? 'var(--error-color)' : 'var(--primary-color)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
+              loading={status === 'starting' || status === 'processing'}
+              variant={isRecording ? 'danger' : 'primary'}
+              size="lg"
+              className="w-48 h-16 text-lg mb-4"
             >
-              {status === 'starting' && 'Starting...'}
-              {status === 'recording' && 'Stop Recording'}
-              {status === 'processing' && 'Processing...'}
-              {(status === 'idle' || status === 'complete' || status === 'error') && 'Start Recording'}
+              {getButtonText()}
+            </Button>
 
-              {isRecording && (
-                <span style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  animation: 'pulse 1.5s ease-in-out infinite'
-                }} />
-              )}
-            </button>
-
-            <p style={{
-              color: 'var(--text-secondary)',
-              textAlign: 'center'
-            }}>
-              {status === 'idle' && 'Click to start voice recording'}
-              {status === 'starting' && 'Connecting...'}
-              {status === 'recording' && 'Listening... Click to stop'}
-              {status === 'processing' && 'Generating answer...'}
-              {status === 'complete' && 'Query complete'}
-              {status === 'error' && 'Error occurred'}
+            {/* Status Text */}
+            <p className="text-brutal-charcoal/70 text-center font-mono text-sm">
+              {getStatusText()}
             </p>
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
 
+        {/* Error Display */}
         {error && (
-          <div style={{
-            backgroundColor: '#FEE2E2',
-            border: '1px solid var(--error-color)',
-            padding: '1rem',
-            borderRadius: '0.5rem',
-            marginBottom: '2rem',
-            color: 'var(--error-color)'
-          }}>
-            {error}
-          </div>
+          <Card className="mb-8 border-status-error">
+            <Card.Body className="bg-status-error/10">
+              <Badge variant="error" className="mb-2">Error</Badge>
+              <p className="text-brutal-charcoal font-mono text-sm">{error}</p>
+            </Card.Body>
+          </Card>
         )}
 
-        {transcript && (
-          <div style={{
-            backgroundColor: 'var(--bg-primary)',
-            padding: '1.5rem',
-            borderRadius: '0.5rem',
-            boxShadow: 'var(--shadow)',
-            marginBottom: '2rem'
-          }}>
-            <h2 style={{
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              marginBottom: '0.5rem',
-              color: 'var(--text-primary)'
-            }}>
+        {/* Transcript Display */}
+        {(transcript || status === 'recording') && (
+          <div className="mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-brutal-charcoal/70 mb-3">
               Your Question
             </h2>
-            <p style={{ color: 'var(--text-secondary)' }}>{transcript}</p>
+            <TerminalTranscript
+              text={transcript}
+              animate={status === 'recording'}
+              showPrompt
+              prompt=">"
+              variant="default"
+              minHeight={80}
+              maxHeight={200}
+            />
           </div>
         )}
 
+        {/* Answer Display */}
         {answer && (
-          <div style={{
-            backgroundColor: 'var(--bg-primary)',
-            padding: '1.5rem',
-            borderRadius: '0.5rem',
-            boxShadow: 'var(--shadow)',
-            marginBottom: '2rem'
-          }}>
-            <h2 style={{
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              marginBottom: '0.5rem',
-              color: 'var(--text-primary)'
-            }}>
-              Answer
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{answer}</p>
+          <Card className="mb-8">
+            <Card.Header>
+              <h2 className="text-sm font-bold uppercase tracking-wider">
+                Answer
+              </h2>
+            </Card.Header>
+            <Card.Body>
+              <p className="text-brutal-charcoal font-mono text-sm leading-relaxed mb-4">
+                {answer}
+              </p>
 
-            {audioUrl && (
-              <audio controls src={audioUrl} style={{ width: '100%' }}>
-                Your browser does not support audio playback.
-              </audio>
-            )}
-          </div>
+              {audioUrl && (
+                <audio controls src={audioUrl} className="w-full">
+                  Your browser does not support audio playback.
+                </audio>
+              )}
+            </Card.Body>
+          </Card>
         )}
 
+        {/* Graph Data Display */}
         {graphData && (
-          <div style={{
-            backgroundColor: 'var(--bg-primary)',
-            padding: '1.5rem',
-            borderRadius: '0.5rem',
-            boxShadow: 'var(--shadow)',
-            marginBottom: '2rem'
-          }}>
-            <h2 style={{
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              marginBottom: '0.5rem',
-              color: 'var(--text-primary)'
-            }}>
-              Knowledge Graph Data
-            </h2>
-            <pre style={{
-              backgroundColor: 'var(--bg-secondary)',
-              padding: '1rem',
-              borderRadius: '0.375rem',
-              overflow: 'auto',
-              fontSize: '0.875rem'
-            }}>
-              {JSON.stringify(graphData, null, 2)}
-            </pre>
-          </div>
+          <Card className="mb-8" variant="dark">
+            <Card.Header>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-accent-primary">
+                Knowledge Graph Data
+              </h2>
+            </Card.Header>
+            <Card.Body>
+              <pre className="font-mono text-xs text-status-success overflow-auto max-h-64 p-4 bg-brutal-black border-2 border-status-success">
+                {JSON.stringify(graphData, null, 2)}
+              </pre>
+            </Card.Body>
+          </Card>
         )}
 
+        {/* Reset Button */}
         {status === 'complete' && (
-          <button
+          <Button
             onClick={resetQuery}
-            className="btn btn-primary"
-            style={{ width: '100%' }}
+            variant="primary"
+            className="w-full"
           >
             Ask Another Question
-          </button>
+          </Button>
         )}
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
     </div>
   );
 }

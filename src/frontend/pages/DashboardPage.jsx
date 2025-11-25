@@ -4,6 +4,13 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import { createLogger } from '../utils/logger';
 import api from '../utils/api.js';
 import Navigation from '../components/Navigation';
+import {
+  GlitchText,
+  Card,
+  Button,
+  Badge,
+  OffsetLayer,
+} from '../design-system';
 
 const logger = createLogger('dashboard');
 const SEED_TIMEOUT_MS = 20000;
@@ -25,9 +32,9 @@ function DashboardPage() {
       const data = await api.seedData({ timeoutMs: SEED_TIMEOUT_MS });
 
       if (data.success) {
-        setSeedMessage('✅ Test data successfully added! Try asking: "Who works on GraphMind?"');
+        setSeedMessage('Test data successfully added! Try asking: "Who works on GraphMind?"');
       } else if (data.existing_data) {
-        setSeedMessage('ℹ️ Your graph already has data. Seed data is only added to empty graphs.');
+        setSeedMessage('Your graph already has data. Seed data is only added to empty graphs.');
       } else {
         const message = data.message || 'Failed to add seed data';
         setSeedError(message);
@@ -44,218 +51,128 @@ function DashboardPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-[#FFFEF0]">
       <Navigation />
-      <div className="container" style={{
-        maxWidth: '800px',
-        padding: '2rem 1rem'
-      }}>
-        <h1 style={{
-          fontSize: '2.5rem',
-          fontWeight: 'bold',
-          marginBottom: '1rem',
-          color: 'var(--text-primary)'
-        }}>
-          Welcome to GraphMind
-        </h1>
-        <p style={{
-          fontSize: '1.125rem',
-          color: 'var(--text-secondary)',
-          marginBottom: '3rem'
-        }}>
-          Your voice-first personal knowledge assistant
-        </p>
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        {/* Page Header */}
+        <div className="mb-12">
+          <GlitchText as="h1" className="text-4xl md:text-5xl mb-4">
+            Welcome to GraphMind
+          </GlitchText>
+          <p className="text-lg text-brutal-charcoal/70 font-mono">
+            Your voice-first personal knowledge assistant
+          </p>
+        </div>
 
-        <div style={{
-          display: 'grid',
-          gap: '1.5rem',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          marginBottom: '3rem'
-        }}>
-          <div
-            onClick={() => navigate('/query')}
-            style={{
-              backgroundColor: 'var(--bg-primary)',
-              padding: '2rem',
-              borderRadius: '0.5rem',
-              boxShadow: 'var(--shadow)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              border: '2px solid transparent'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--primary-color)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'transparent';
-              e.currentTarget.style.boxShadow = 'var(--shadow)';
-            }}
-          >
-            <h2 style={{
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              marginBottom: '0.5rem',
-              color: 'var(--primary-color)'
-            }}>
-              Ask a Question
-            </h2>
-            <p style={{
-              color: 'var(--text-secondary)',
-              marginBottom: '1rem'
-            }}>
-              Use voice to query your knowledge graph
-            </p>
-            <button className="btn btn-primary">
-              Start Recording
-            </button>
-          </div>
+        {/* Action Cards Grid */}
+        <div className="grid gap-6 md:grid-cols-2 mb-12">
+          {/* Ask a Question Card */}
+          <OffsetLayer variant="accent" size="lg">
+            <Card
+              interactive
+              onClick={() => navigate('/query')}
+              className="h-full"
+            >
+              <Card.Body>
+                <h2 className="text-xl font-bold mb-2 text-accent-primary">
+                  Ask a Question
+                </h2>
+                <p className="text-brutal-charcoal/70 mb-4 font-mono text-sm">
+                  Use voice to query your knowledge graph
+                </p>
+                <Button variant="primary" size="sm">
+                  Start Recording
+                </Button>
+              </Card.Body>
+            </Card>
+          </OffsetLayer>
 
-          <div
-            onClick={() => navigate('/history')}
-            style={{
-              backgroundColor: 'var(--bg-primary)',
-              padding: '2rem',
-              borderRadius: '0.5rem',
-              boxShadow: 'var(--shadow)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              border: '2px solid transparent'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--primary-color)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'transparent';
-              e.currentTarget.style.boxShadow = 'var(--shadow)';
-            }}
-          >
-            <h2 style={{
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              marginBottom: '0.5rem',
-              color: 'var(--secondary-color)'
-            }}>
-              View History
-            </h2>
-            <p style={{
-              color: 'var(--text-secondary)',
-              marginBottom: '1rem'
-            }}>
-              Review past queries and answers
-            </p>
-            <button className="btn btn-secondary">
-              Browse History
-            </button>
-          </div>
+          {/* View History Card */}
+          <OffsetLayer size="lg">
+            <Card
+              interactive
+              onClick={() => navigate('/history')}
+              className="h-full"
+            >
+              <Card.Body>
+                <h2 className="text-xl font-bold mb-2 text-brutal-charcoal">
+                  View History
+                </h2>
+                <p className="text-brutal-charcoal/70 mb-4 font-mono text-sm">
+                  Review past queries and answers
+                </p>
+                <Button variant="secondary" size="sm">
+                  Browse History
+                </Button>
+              </Card.Body>
+            </Card>
+          </OffsetLayer>
         </div>
 
         {/* Seed Data Card */}
-        <div style={{
-          backgroundColor: 'var(--bg-primary)',
-          padding: '2rem',
-          borderRadius: '0.5rem',
-          boxShadow: 'var(--shadow)',
-          marginBottom: '3rem'
-        }}>
-          <h2 style={{
-            fontSize: '1.25rem',
-            fontWeight: 'bold',
-            marginBottom: '0.5rem',
-            color: 'var(--text-primary)'
-          }}>
-            Need Test Data?
-          </h2>
-          <p style={{
-            color: 'var(--text-secondary)',
-            marginBottom: '1rem',
-            fontSize: '0.95rem'
-          }}>
-            Add sample knowledge graph data to test voice queries. Includes people, projects, meetings, and more.
-          </p>
+        <Card className="mb-8">
+          <Card.Body>
+            <h2 className="text-lg font-bold mb-2 text-brutal-charcoal">
+              Need Test Data?
+            </h2>
+            <p className="text-brutal-charcoal/70 mb-4 font-mono text-sm">
+              Add sample knowledge graph data to test voice queries. Includes people, projects, meetings, and more.
+            </p>
 
-          <button
-            onClick={handleSeedData}
-            disabled={seedLoading}
-            className="btn btn-primary"
-            style={{
-              marginBottom: seedMessage || seedError ? '1rem' : '0'
-            }}
-          >
-            {seedLoading ? 'Adding Test Data...' : 'Add Test Data'}
-          </button>
+            <Button
+              onClick={handleSeedData}
+              disabled={seedLoading}
+              loading={seedLoading}
+              variant="primary"
+              className="mb-4"
+            >
+              {seedLoading ? 'Adding Test Data...' : 'Add Test Data'}
+            </Button>
 
-          {seedMessage && (
-            <div style={{
-              padding: '0.75rem',
-              backgroundColor: '#e8f5e9',
-              borderLeft: '4px solid #4caf50',
-              borderRadius: '0.25rem',
-              color: '#2e7d32',
-              fontSize: '0.9rem'
-            }}>
-              {seedMessage}
-            </div>
-          )}
+            {seedMessage && (
+              <div className="mt-4 p-4 bg-status-success/10 border-l-4 border-status-success">
+                <Badge variant="success" className="mb-2">Success</Badge>
+                <p className="text-brutal-charcoal font-mono text-sm">{seedMessage}</p>
+              </div>
+            )}
 
-          {seedError && (
-            <div style={{
-              padding: '0.75rem',
-              backgroundColor: '#ffebee',
-              borderLeft: '4px solid #f44336',
-              borderRadius: '0.25rem',
-              color: '#c62828',
-              fontSize: '0.9rem'
-            }}>
-              {seedError}
-            </div>
-          )}
-        </div>
+            {seedError && (
+              <div className="mt-4 p-4 bg-status-error/10 border-l-4 border-status-error">
+                <Badge variant="error" className="mb-2">Error</Badge>
+                <p className="text-brutal-charcoal font-mono text-sm">{seedError}</p>
+              </div>
+            )}
+          </Card.Body>
+        </Card>
 
-        <div style={{
-          backgroundColor: 'var(--bg-primary)',
-          padding: '2rem',
-          borderRadius: '0.5rem',
-          boxShadow: 'var(--shadow)'
-        }}>
-          <h2 style={{
-            fontSize: '1.25rem',
-            fontWeight: 'bold',
-            marginBottom: '1rem',
-            color: 'var(--text-primary)'
-          }}>
-            Getting Started
-          </h2>
-          <ul style={{
-            listStyle: 'none',
-            padding: 0
-          }}>
-            <li style={{
-              padding: '0.75rem 0',
-              borderBottom: '1px solid var(--border-color)'
-            }}>
-              1. Click "Ask a Question" to start a voice query
-            </li>
-            <li style={{
-              padding: '0.75rem 0',
-              borderBottom: '1px solid var(--border-color)'
-            }}>
-              2. Allow microphone access when prompted
-            </li>
-            <li style={{
-              padding: '0.75rem 0',
-              borderBottom: '1px solid var(--border-color)'
-            }}>
-              3. Speak your question clearly
-            </li>
-            <li style={{
-              padding: '0.75rem 0'
-            }}>
-              4. Listen to the AI-generated answer
-            </li>
-          </ul>
-        </div>
+        {/* Getting Started Card */}
+        <Card>
+          <Card.Header>
+            <h2 className="text-lg font-bold text-brutal-charcoal">
+              Getting Started
+            </h2>
+          </Card.Header>
+          <Card.Body>
+            <ol className="space-y-0">
+              <li className="py-3 border-b-2 border-brutal-black/10 font-mono text-sm">
+                <span className="inline-block w-8 text-accent-primary font-bold">01</span>
+                Click "Ask a Question" to start a voice query
+              </li>
+              <li className="py-3 border-b-2 border-brutal-black/10 font-mono text-sm">
+                <span className="inline-block w-8 text-accent-primary font-bold">02</span>
+                Allow microphone access when prompted
+              </li>
+              <li className="py-3 border-b-2 border-brutal-black/10 font-mono text-sm">
+                <span className="inline-block w-8 text-accent-primary font-bold">03</span>
+                Speak your question clearly
+              </li>
+              <li className="py-3 font-mono text-sm">
+                <span className="inline-block w-8 text-accent-primary font-bold">04</span>
+                Listen to the AI-generated answer
+              </li>
+            </ol>
+          </Card.Body>
+        </Card>
       </div>
     </div>
   );

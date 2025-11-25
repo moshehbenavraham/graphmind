@@ -7,7 +7,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import '../styles/QueryHistory.css';
+import { Card, Button, Badge, GlitchText, OffsetLayer, cn } from '../design-system';
+import { motion, AnimatePresence } from 'framer-motion';
+import { brutalStagger } from '../design-system';
 
 const QueryHistory = ({ jwtToken, onQuerySelect }) => {
   const [queries, setQueries] = useState([]);
@@ -139,131 +141,172 @@ const QueryHistory = ({ jwtToken, onQuerySelect }) => {
   /**
    * Empty state
    */
-  if (!isLoading && queries.length === 0) {
+  if (!isLoading && queries.length === 0 && !error) {
     return (
-      <div className="query-history query-history--empty">
-        <div className="query-history__empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="M21 21l-4.35-4.35M11 8v3l2 2"/>
-          </svg>
-        </div>
-        <h3 className="query-history__empty-title">No Query History</h3>
-        <p className="query-history__empty-message">
-          Your voice queries will appear here. Start by asking a question about your knowledge graph.
-        </p>
+      <div className="w-full">
+        <OffsetLayer variant="accent" size="lg">
+          <Card variant="default" className="text-center py-12">
+            <Card.Body>
+              <svg className="w-16 h-16 mx-auto mb-6 text-brutal-charcoal/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35M11 8v3l2 2"/>
+              </svg>
+              <h3 className="text-xl font-bold mb-2">NO QUERY HISTORY</h3>
+              <p className="font-mono text-sm text-brutal-charcoal/70 max-w-md mx-auto">
+                Your voice queries will appear here. Start by asking a question about your knowledge graph.
+              </p>
+            </Card.Body>
+          </Card>
+        </OffsetLayer>
       </div>
     );
   }
 
   return (
-    <div className="query-history">
+    <div className="w-full space-y-6">
       {/* Header */}
-      <div className="query-history__header">
-        <h2 className="query-history__title">Query History</h2>
+      <div className="flex items-center justify-between">
+        <GlitchText as="h2" className="text-2xl">
+          Query History
+        </GlitchText>
         {pagination.total > 0 && (
-          <span className="query-history__count">
+          <Badge variant="accent">
             {pagination.total} {pagination.total === 1 ? 'query' : 'queries'}
-          </span>
+          </Badge>
         )}
       </div>
 
       {/* Error display */}
       {error && (
-        <div className="query-history__error" role="alert">
-          <span>⚠️ {error}</span>
-          <button onClick={() => fetchQueryHistory(pagination.offset)}>
-            Retry
-          </button>
-        </div>
+        <Card variant="default" className="border-status-error">
+          <Card.Body>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Badge variant="error">ERROR</Badge>
+                <span className="font-mono text-sm">{error}</span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => fetchQueryHistory(pagination.offset)}
+              >
+                RETRY
+              </Button>
+            </div>
+          </Card.Body>
+        </Card>
       )}
 
       {/* Loading state */}
       {isLoading && (
-        <div className="query-history__loading">
-          <div className="query-history__spinner"></div>
-          <span>Loading history...</span>
+        <div className="flex items-center justify-center py-12 gap-4">
+          <div className="loading-brutal" />
+          <span className="font-mono text-brutal-charcoal/70">Loading history...</span>
         </div>
       )}
 
       {/* T166: Display query list (question, timestamp) */}
       {!isLoading && queries.length > 0 && (
-        <div className="query-history__list">
-          {queries.map((query) => (
-            <div
-              key={query.query_id}
-              className="query-history__item"
-              onClick={() => handleQueryClick(query)}
-              role="button"
-              tabIndex={0}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') handleQueryClick(query);
-              }}
-            >
-              <div className="query-history__item-main">
-                <div className="query-history__item-question">
-                  {query.question}
-                </div>
-                <div className="query-history__item-meta">
-                  <span className="query-history__item-time">
-                    {formatTimestamp(query.created_at)}
-                  </span>
-                  {query.entity_count !== undefined && (
-                    <span className="query-history__item-stat">
-                      {query.entity_count} {query.entity_count === 1 ? 'entity' : 'entities'}
-                    </span>
-                  )}
-                  {query.latency_ms && (
-                    <span className="query-history__item-stat">
-                      {query.latency_ms}ms
-                    </span>
-                  )}
-                  {query.cached && (
-                    <span className="query-history__item-badge">cached</span>
-                  )}
-                </div>
-              </div>
+        <motion.div
+          className="space-y-3"
+          variants={brutalStagger.container}
+          initial="hidden"
+          animate="show"
+        >
+          <AnimatePresence>
+            {queries.map((query, index) => (
+              <motion.div
+                key={query.query_id}
+                variants={brutalStagger.item}
+                layout
+              >
+                <Card
+                  interactive
+                  onClick={() => handleQueryClick(query)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') handleQueryClick(query);
+                  }}
+                >
+                  <Card.Body>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        {/* Index badge */}
+                        <Badge variant="default" className="mb-2">
+                          #{pagination.offset + index + 1}
+                        </Badge>
 
-              <div className="query-history__item-arrow">
-                <svg viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          ))}
-        </div>
+                        {/* Question */}
+                        <p className="font-mono text-sm leading-relaxed mb-3 line-clamp-2">
+                          {query.question}
+                        </p>
+
+                        {/* Metadata row */}
+                        <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-brutal-charcoal/70">
+                          <span className="tabular-nums">
+                            {formatTimestamp(query.created_at)}
+                          </span>
+                          {query.entity_count !== undefined && (
+                            <Badge variant="info">
+                              {query.entity_count} {query.entity_count === 1 ? 'entity' : 'entities'}
+                            </Badge>
+                          )}
+                          {query.latency_ms && (
+                            <span className="tabular-nums">{query.latency_ms}ms</span>
+                          )}
+                          {query.cached && (
+                            <Badge variant="success">CACHED</Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Arrow indicator */}
+                      <div className="flex-shrink-0 text-brutal-charcoal/50">
+                        <svg className="w-6 h-6" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
 
       {/* T168: Pagination controls */}
-      {queries.length > 0 && (
-        <div className="query-history__pagination">
-          <button
-            className="query-history__pagination-button"
+      {queries.length > 0 && (pagination.offset > 0 || pagination.hasMore) && (
+        <div className="flex items-center justify-between pt-6 border-t-4 border-brutal-black">
+          <Button
+            variant="secondary"
             onClick={handlePrevPage}
             disabled={pagination.offset === 0}
             aria-label="Previous page"
+            className="flex items-center gap-2"
           >
-            <svg viewBox="0 0 20 20" fill="currentColor">
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
-            Previous
-          </button>
+            PREVIOUS
+          </Button>
 
-          <span className="query-history__pagination-info">
-            Showing {pagination.offset + 1}-{Math.min(pagination.offset + pagination.limit, pagination.total)} of {pagination.total}
+          <span className="font-mono text-sm text-brutal-charcoal/70 tabular-nums">
+            {pagination.offset + 1}-{Math.min(pagination.offset + pagination.limit, pagination.total)} of {pagination.total}
           </span>
 
-          <button
-            className="query-history__pagination-button"
+          <Button
+            variant="secondary"
             onClick={handleNextPage}
             disabled={!pagination.hasMore}
             aria-label="Next page"
+            className="flex items-center gap-2"
           >
-            Next
-            <svg viewBox="0 0 20 20" fill="currentColor">
+            NEXT
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
             </svg>
-          </button>
+          </Button>
         </div>
       )}
     </div>

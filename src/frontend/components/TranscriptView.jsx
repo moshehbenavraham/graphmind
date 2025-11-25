@@ -1,4 +1,18 @@
+/**
+ * TranscriptView Component
+ *
+ * Neo-Brutalist display for voice transcripts with real-time and final states.
+ * Uses TerminalTranscript from design system for consistent brutalist styling.
+ */
+
 import React, { useEffect, useState, useRef } from 'react';
+import {
+  Card,
+  Button,
+  Badge,
+  TerminalTranscript,
+  cn,
+} from '../design-system';
 
 const TranscriptView = ({
   partialText,
@@ -8,10 +22,11 @@ const TranscriptView = ({
   isRecording,
 }) => {
   const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const lastUpdateRef = useRef(Date.now());
   const loadingTimeoutRef = useRef(null);
 
-  const LOADING_DELAY_THRESHOLD = 2000; // Show loading after 2 seconds of no updates
+  const LOADING_DELAY_THRESHOLD = 2000;
 
   /**
    * Monitor partial text updates and show loading indicator if delayed
@@ -21,12 +36,10 @@ const TranscriptView = ({
       lastUpdateRef.current = Date.now();
       setShowLoadingIndicator(false);
 
-      // Clear any existing timeout
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
 
-      // Set timeout to show loading indicator if no updates
       loadingTimeoutRef.current = setTimeout(() => {
         const timeSinceLastUpdate = Date.now() - lastUpdateRef.current;
         if (timeSinceLastUpdate >= LOADING_DELAY_THRESHOLD) {
@@ -49,7 +62,6 @@ const TranscriptView = ({
    */
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return '';
-
     try {
       const date = new Date(timestamp);
       return date.toLocaleString('en-US', {
@@ -71,10 +83,22 @@ const TranscriptView = ({
    */
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
-
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  /**
+   * Copy transcript to clipboard
+   */
+  const handleCopyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(finalTranscript);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   /**
@@ -85,289 +109,135 @@ const TranscriptView = ({
   }
 
   return (
-    <div className="transcript-view">
+    <div className="mt-6">
       {/* Real-time partial transcript */}
       {isRecording && (
-        <div className="transcript-partial">
-          <div className="transcript-header">
-            <h3>Live Transcript</h3>
+        <Card className="mb-4">
+          <Card.Header className="flex items-center justify-between">
+            <h3 className="text-lg font-bold uppercase tracking-wider">
+              Live Transcript
+            </h3>
             {showLoadingIndicator && (
-              <span className="loading-indicator">
-                <span className="spinner"></span>
-                Processing...
-              </span>
+              <div className="flex items-center gap-2">
+                <div className="loading-brutal w-3 h-3" />
+                <span className="font-mono text-xs text-brutal-charcoal/70 uppercase">
+                  Processing...
+                </span>
+              </div>
             )}
-          </div>
+          </Card.Header>
+          <Card.Body>
+            <TerminalTranscript
+              text={partialText || 'Start speaking to see your transcript appear here...'}
+              animate={!!partialText}
+              showCursor={true}
+              variant="default"
+              minHeight={80}
+              maxHeight={200}
+            />
 
-          <div className="transcript-content partial">
-            {partialText ? (
-              <p>{partialText}</p>
-            ) : (
-              <p className="placeholder">
-                Start speaking to see your transcript appear here...
-              </p>
+            {showLoadingIndicator && !partialText && (
+              <Badge variant="warning" className="mt-4 w-full justify-center py-2">
+                Waiting for speech to be detected...
+              </Badge>
             )}
-          </div>
-
-          {showLoadingIndicator && !partialText && (
-            <div className="delay-notice">
-              Waiting for speech to be detected...
-            </div>
-          )}
-        </div>
+          </Card.Body>
+        </Card>
       )}
 
       {/* Final completed transcript */}
       {finalTranscript && noteId && (
-        <div className="transcript-complete">
-          <div className="transcript-header">
-            <h3>Saved Note</h3>
-            <div className="success-badge">
-              <span className="checkmark">✓</span>
-              Saved
+        <Card variant="accent">
+          <Card.Header className="flex items-center justify-between">
+            <h3 className="text-lg font-bold uppercase tracking-wider">
+              Saved Note
+            </h3>
+            <Badge variant="success" className="gap-2">
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+              SAVED
+            </Badge>
+          </Card.Header>
+          <Card.Body>
+            <TerminalTranscript
+              text={finalTranscript}
+              animate={false}
+              showCursor={false}
+              variant="success"
+              minHeight={80}
+              maxHeight={300}
+            />
+
+            {/* Metadata */}
+            <div className="mt-6 p-4 bg-brutal-charcoal/5 border-brutal border-brutal-charcoal/20">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex justify-between items-center border-b border-brutal-charcoal/20 pb-2">
+                  <span className="font-mono text-xs uppercase text-brutal-charcoal/70">
+                    Note ID
+                  </span>
+                  <span className="font-mono text-xs bg-brutal-charcoal/10 px-2 py-1">
+                    {noteId.slice(0, 8)}...
+                  </span>
+                </div>
+
+                {metadata.durationSeconds && (
+                  <div className="flex justify-between items-center border-b border-brutal-charcoal/20 pb-2">
+                    <span className="font-mono text-xs uppercase text-brutal-charcoal/70">
+                      Duration
+                    </span>
+                    <span className="font-mono text-xs">
+                      {formatDuration(metadata.durationSeconds)}
+                    </span>
+                  </div>
+                )}
+
+                {metadata.wordCount && (
+                  <div className="flex justify-between items-center border-b border-brutal-charcoal/20 pb-2">
+                    <span className="font-mono text-xs uppercase text-brutal-charcoal/70">
+                      Words
+                    </span>
+                    <span className="font-mono text-xs">
+                      {metadata.wordCount}
+                    </span>
+                  </div>
+                )}
+
+                {metadata.createdAt && (
+                  <div className="flex justify-between items-center border-b border-brutal-charcoal/20 pb-2">
+                    <span className="font-mono text-xs uppercase text-brutal-charcoal/70">
+                      Created
+                    </span>
+                    <span className="font-mono text-xs">
+                      {formatTimestamp(metadata.createdAt)}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="transcript-content final">
-            <p>{finalTranscript}</p>
-          </div>
-
-          <div className="transcript-metadata">
-            <div className="metadata-row">
-              <span className="metadata-label">Note ID:</span>
-              <span className="metadata-value note-id">{noteId}</span>
+            {/* Actions */}
+            <div className="flex gap-4 mt-6">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  window.location.href = `/notes/${noteId}`;
+                }}
+                className="flex-1"
+              >
+                View Full Note
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleCopyTranscript}
+                className={cn('flex-1', copySuccess && 'bg-status-success text-brutal-black')}
+              >
+                {copySuccess ? 'Copied!' : 'Copy Transcript'}
+              </Button>
             </div>
-
-            {metadata.durationSeconds && (
-              <div className="metadata-row">
-                <span className="metadata-label">Duration:</span>
-                <span className="metadata-value">
-                  {formatDuration(metadata.durationSeconds)}
-                </span>
-              </div>
-            )}
-
-            {metadata.wordCount && (
-              <div className="metadata-row">
-                <span className="metadata-label">Words:</span>
-                <span className="metadata-value">{metadata.wordCount}</span>
-              </div>
-            )}
-
-            {metadata.createdAt && (
-              <div className="metadata-row">
-                <span className="metadata-label">Created:</span>
-                <span className="metadata-value">
-                  {formatTimestamp(metadata.createdAt)}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="transcript-actions">
-            <button
-              className="btn-view-note"
-              onClick={() => {
-                // Navigate to note detail view
-                window.location.href = `/notes/${noteId}`;
-              }}
-            >
-              View Full Note
-            </button>
-            <button
-              className="btn-copy-transcript"
-              onClick={() => {
-                navigator.clipboard.writeText(finalTranscript);
-                // Could show toast notification here
-              }}
-            >
-              Copy Transcript
-            </button>
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
       )}
-
-      {/* Styles (could be moved to separate CSS file) */}
-      <style jsx>{`
-        .transcript-view {
-          margin-top: 1.5rem;
-          border-radius: 8px;
-          background: #f8f9fa;
-          overflow: hidden;
-        }
-
-        .transcript-partial,
-        .transcript-complete {
-          padding: 1.5rem;
-        }
-
-        .transcript-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-        }
-
-        .transcript-header h3 {
-          margin: 0;
-          font-size: 1.25rem;
-          color: #333;
-        }
-
-        .loading-indicator {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #666;
-        }
-
-        .spinner {
-          display: inline-block;
-          width: 12px;
-          height: 12px;
-          border: 2px solid #e0e0e0;
-          border-top-color: #007bff;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        .success-badge {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.25rem 0.75rem;
-          background: #28a745;
-          color: white;
-          border-radius: 4px;
-          font-size: 0.875rem;
-          font-weight: 500;
-        }
-
-        .checkmark {
-          font-size: 1rem;
-        }
-
-        .transcript-content {
-          min-height: 100px;
-          padding: 1rem;
-          background: white;
-          border-radius: 6px;
-          border: 1px solid #e0e0e0;
-        }
-
-        .transcript-content.partial {
-          border-left: 3px solid #007bff;
-        }
-
-        .transcript-content.final {
-          border-left: 3px solid #28a745;
-        }
-
-        .transcript-content p {
-          margin: 0;
-          line-height: 1.6;
-          color: #333;
-          font-size: 1rem;
-        }
-
-        .transcript-content .placeholder {
-          color: #999;
-          font-style: italic;
-        }
-
-        .delay-notice {
-          margin-top: 1rem;
-          padding: 0.75rem;
-          background: #fff3cd;
-          border: 1px solid #ffc107;
-          border-radius: 4px;
-          color: #856404;
-          font-size: 0.875rem;
-          text-align: center;
-        }
-
-        .transcript-metadata {
-          margin-top: 1.5rem;
-          padding: 1rem;
-          background: #f1f3f5;
-          border-radius: 6px;
-        }
-
-        .metadata-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 0.5rem 0;
-          border-bottom: 1px solid #e0e0e0;
-        }
-
-        .metadata-row:last-child {
-          border-bottom: none;
-        }
-
-        .metadata-label {
-          font-weight: 600;
-          color: #666;
-          font-size: 0.875rem;
-        }
-
-        .metadata-value {
-          color: #333;
-          font-size: 0.875rem;
-        }
-
-        .metadata-value.note-id {
-          font-family: monospace;
-          font-size: 0.8rem;
-          background: #e0e0e0;
-          padding: 0.2rem 0.5rem;
-          border-radius: 3px;
-        }
-
-        .transcript-actions {
-          display: flex;
-          gap: 1rem;
-          margin-top: 1.5rem;
-        }
-
-        .btn-view-note,
-        .btn-copy-transcript {
-          flex: 1;
-          padding: 0.75rem 1rem;
-          border: none;
-          border-radius: 6px;
-          font-size: 0.95rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .btn-view-note {
-          background: #007bff;
-          color: white;
-        }
-
-        .btn-view-note:hover {
-          background: #0056b3;
-        }
-
-        .btn-copy-transcript {
-          background: white;
-          color: #333;
-          border: 1px solid #ccc;
-        }
-
-        .btn-copy-transcript:hover {
-          background: #f8f9fa;
-          border-color: #999;
-        }
-      `}</style>
     </div>
   );
 };

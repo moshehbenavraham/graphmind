@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Navigation from '../components/Navigation';
 import { api } from '../utils/api';
+import {
+  GlitchText,
+  Card,
+  Button,
+  Badge,
+  OffsetLayer,
+} from '../design-system';
 
 function HistoryPage() {
   const [queries, setQueries] = useState([]);
@@ -55,198 +63,143 @@ function HistoryPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-[#FFFEF0]">
       <Navigation />
-      <div className="container" style={{ maxWidth: '900px', padding: '2rem 1rem' }}>
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 'bold',
-          marginBottom: '1rem',
-          color: 'var(--text-primary)'
-        }}>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Page Header */}
+        <GlitchText as="h1" className="text-3xl md:text-4xl mb-8">
           Query History
-        </h1>
+        </GlitchText>
 
+        {/* Error Display */}
         {error && (
-          <div style={{
-            backgroundColor: '#FEE2E2',
-            border: '1px solid var(--error-color)',
-            padding: '1rem',
-            borderRadius: '0.5rem',
-            marginBottom: '2rem',
-            color: 'var(--error-color)'
-          }}>
-            {error}
-          </div>
+          <Card className="mb-8 border-status-error">
+            <Card.Body className="bg-status-error/10">
+              <Badge variant="error" className="mb-2">Error</Badge>
+              <p className="text-brutal-charcoal font-mono text-sm">{error}</p>
+            </Card.Body>
+          </Card>
         )}
 
+        {/* Loading State */}
         {loading && page === 1 ? (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            padding: '4rem 0'
-          }}>
-            <div className="loading" style={{ width: '3rem', height: '3rem' }}></div>
+          <div className="flex justify-center py-16">
+            <div className="loading-brutal w-12 h-12" />
           </div>
         ) : queries.length === 0 ? (
-          <div style={{
-            backgroundColor: 'var(--bg-primary)',
-            padding: '3rem',
-            borderRadius: '0.5rem',
-            boxShadow: 'var(--shadow)',
-            textAlign: 'center'
-          }}>
-            <p style={{
-              fontSize: '1.125rem',
-              color: 'var(--text-secondary)',
-              marginBottom: '1.5rem'
-            }}>
-              No queries yet. Start by asking a question!
-            </p>
-            <a href="/query" className="btn btn-primary">
-              Ask Your First Question
-            </a>
-          </div>
+          /* Empty State */
+          <OffsetLayer variant="accent" size="lg">
+            <Card className="text-center py-12">
+              <Card.Body>
+                <p className="text-lg text-brutal-charcoal/70 mb-6 font-mono">
+                  No queries yet. Start by asking a question!
+                </p>
+                <Link to="/query">
+                  <Button variant="primary">
+                    Ask Your First Question
+                  </Button>
+                </Link>
+              </Card.Body>
+            </Card>
+          </OffsetLayer>
         ) : (
+          /* Query List */
           <>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-              marginBottom: '2rem'
-            }}>
-              {queries.map((query) => (
-                <div
+            <div className="space-y-4 mb-8">
+              {queries.map((query, index) => (
+                <Card
                   key={query.id}
-                  style={{
-                    backgroundColor: 'var(--bg-primary)',
-                    padding: '1.5rem',
-                    borderRadius: '0.5rem',
-                    boxShadow: 'var(--shadow)',
-                    cursor: 'pointer',
-                    border: '2px solid transparent',
-                    transition: 'all 0.2s'
-                  }}
+                  interactive
                   onClick={() => toggleExpand(query.id)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'transparent';
-                  }}
+                  className={expandedQuery === query.id ? 'border-accent-primary' : ''}
                 >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '0.5rem'
-                  }}>
-                    <h3 style={{
-                      fontSize: '1.125rem',
-                      fontWeight: '600',
-                      color: 'var(--text-primary)',
-                      flex: 1
-                    }}>
-                      {query.query_text || 'No question recorded'}
-                    </h3>
-                    <span style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--text-secondary)',
-                      whiteSpace: 'nowrap',
-                      marginLeft: '1rem'
-                    }}>
-                      {formatDate(query.created_at)}
-                    </span>
-                  </div>
-
-                  {expandedQuery === query.id && (
-                    <div style={{ marginTop: '1rem' }}>
-                      <div style={{
-                        backgroundColor: 'var(--bg-secondary)',
-                        padding: '1rem',
-                        borderRadius: '0.375rem',
-                        marginBottom: '1rem'
-                      }}>
-                        <h4 style={{
-                          fontSize: '0.875rem',
-                          fontWeight: '600',
-                          color: 'var(--text-secondary)',
-                          marginBottom: '0.5rem',
-                          textTransform: 'uppercase'
-                        }}>
-                          Answer
-                        </h4>
-                        <p style={{ color: 'var(--text-primary)' }}>
-                          {query.answer_text || 'No answer available'}
-                        </p>
+                  <Card.Body>
+                    {/* Query Header */}
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="accent" className="text-xs">
+                            #{String(index + 1).padStart(3, '0')}
+                          </Badge>
+                        </div>
+                        <h3 className="font-bold text-brutal-charcoal truncate">
+                          {query.query_text || 'No question recorded'}
+                        </h3>
                       </div>
-
-                      {query.audio_url && (
-                        <div style={{ marginBottom: '1rem' }}>
-                          <h4 style={{
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: 'var(--text-secondary)',
-                            marginBottom: '0.5rem',
-                            textTransform: 'uppercase'
-                          }}>
-                            Audio Answer
-                          </h4>
-                          <audio controls src={query.audio_url} style={{ width: '100%' }}>
-                            Your browser does not support audio playback.
-                          </audio>
-                        </div>
-                      )}
-
-                      {query.graph_context && (
-                        <div>
-                          <h4 style={{
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: 'var(--text-secondary)',
-                            marginBottom: '0.5rem',
-                            textTransform: 'uppercase'
-                          }}>
-                            Graph Data
-                          </h4>
-                          <pre style={{
-                            backgroundColor: 'var(--bg-secondary)',
-                            padding: '1rem',
-                            borderRadius: '0.375rem',
-                            overflow: 'auto',
-                            fontSize: '0.75rem',
-                            maxHeight: '200px'
-                          }}>
-                            {typeof query.graph_context === 'string'
-                              ? query.graph_context
-                              : JSON.stringify(query.graph_context, null, 2)}
-                          </pre>
-                        </div>
-                      )}
+                      <span className="text-xs text-brutal-charcoal/50 font-mono whitespace-nowrap">
+                        {formatDate(query.created_at)}
+                      </span>
                     </div>
-                  )}
 
-                  {expandedQuery !== query.id && (
-                    <p style={{
-                      color: 'var(--text-secondary)',
-                      fontSize: '0.875rem'
-                    }}>
-                      Click to view answer and details
-                    </p>
-                  )}
-                </div>
+                    {/* Expanded Content */}
+                    {expandedQuery === query.id && (
+                      <div className="mt-4 pt-4 border-t-2 border-brutal-black/10 space-y-4">
+                        {/* Answer Section */}
+                        <div className="terminal-brutal">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-3 h-3 bg-status-error border border-brutal-black" />
+                            <div className="w-3 h-3 bg-status-warning border border-brutal-black" />
+                            <div className="w-3 h-3 bg-status-success border border-brutal-black" />
+                            <span className="text-xs uppercase tracking-widest font-bold ml-2">
+                              Answer
+                            </span>
+                          </div>
+                          <p className="text-brutal-cream font-mono text-sm leading-relaxed">
+                            <span className="text-accent-primary">&gt;</span>{' '}
+                            {query.answer_text || 'No answer available'}
+                          </p>
+                        </div>
+
+                        {/* Audio Player */}
+                        {query.audio_url && (
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-brutal-charcoal/70 mb-2">
+                              Audio Answer
+                            </h4>
+                            <audio controls src={query.audio_url} className="w-full">
+                              Your browser does not support audio playback.
+                            </audio>
+                          </div>
+                        )}
+
+                        {/* Graph Context */}
+                        {query.graph_context && (
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-brutal-charcoal/70 mb-2">
+                              Graph Data
+                            </h4>
+                            <pre className="terminal-brutal text-xs overflow-auto max-h-48 text-status-success">
+                              {typeof query.graph_context === 'string'
+                                ? query.graph_context
+                                : JSON.stringify(query.graph_context, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Collapsed Hint */}
+                    {expandedQuery !== query.id && (
+                      <p className="text-brutal-charcoal/50 text-xs font-mono mt-2">
+                        Click to view answer and details
+                      </p>
+                    )}
+                  </Card.Body>
+                </Card>
               ))}
             </div>
 
+            {/* Load More Button */}
             {hasMore && (
-              <div style={{ textAlign: 'center' }}>
-                <button
+              <div className="text-center">
+                <Button
                   onClick={loadMore}
                   disabled={loading}
-                  className="btn btn-secondary"
+                  loading={loading}
+                  variant="secondary"
                 >
                   {loading ? 'Loading...' : 'Load More'}
-                </button>
+                </Button>
               </div>
             )}
           </>

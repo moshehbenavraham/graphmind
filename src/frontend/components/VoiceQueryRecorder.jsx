@@ -2,13 +2,22 @@
  * VoiceQueryRecorder Component (T050-T055)
  * Feature 008: Voice Query Input & Graph Querying
  *
- * Specialized voice recorder for asking questions about the knowledge graph.
+ * Neo-Brutalist voice recorder for asking questions about the knowledge graph.
+ * Uses design system components for brutalist styling.
  * Handles recording, real-time transcription, and query processing.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket.js';
-import '../styles/VoiceQueryRecorder.css';
+import {
+  Button,
+  Card,
+  Badge,
+  RecordingIndicator,
+  BrutalWaveform,
+  TerminalTranscript,
+  cn,
+} from '../design-system';
 
 const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
   // State management
@@ -353,68 +362,107 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
   };
 
   return (
-    <div className="voice-query-recorder">
-      <div className="voice-query-recorder__container">
-        {/* Error display */}
-        {error && (
-          <div className="voice-query-recorder__error" role="alert">
-            <span className="voice-query-recorder__error-icon">⚠️</span>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* T054: Real-time transcript display */}
-        {transcript && (
-          <div className={`voice-query-recorder__transcript ${isTranscriptFinal ? 'voice-query-recorder__transcript--final' : ''}`}>
-            <div className="voice-query-recorder__transcript-label">
-              {isTranscriptFinal ? 'Your Question:' : 'Hearing...'}
-            </div>
-            <div className="voice-query-recorder__transcript-text">
-              "{transcript}"
-            </div>
-          </div>
-        )}
-
-        {/* T055: Recording status indicators */}
-        <div className="voice-query-recorder__status">
-          <div className={`voice-query-recorder__status-indicator voice-query-recorder__status-indicator--${status}`}>
-            {status === 'listening' && <div className="voice-query-recorder__pulse"></div>}
-          </div>
-          <div className="voice-query-recorder__status-text">
-            {getStatusMessage()}
-          </div>
-        </div>
-
-        {/* Timer */}
-        {isRecording && (
-          <div className="voice-query-recorder__timer">
-            {formatTime(recordingTime)}
-          </div>
-        )}
-
-        {/* Record/Stop button */}
-        <button
-          className={`voice-query-recorder__button ${isRecording ? 'voice-query-recorder__button--recording' : ''}`}
-          onClick={isRecording ? stopRecording : startRecording}
-          disabled={status === 'starting' || status === 'processing'}
-          aria-label={isRecording ? 'Stop recording' : 'Ask a question'}
-        >
-          {isRecording ? (
-            <svg className="voice-query-recorder__icon" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          ) : (
-            <svg className="voice-query-recorder__icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-            </svg>
+    <div className="w-full p-6 bg-[#FFFEF0]">
+      <Card className="max-w-2xl mx-auto">
+        <Card.Body className="flex flex-col gap-6">
+          {/* Error display */}
+          {error && (
+            <Badge variant="error" className="w-full justify-center py-3 text-sm">
+              <svg className="w-5 h-5 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </Badge>
           )}
-        </button>
 
-        <div className="voice-query-recorder__label">
-          {isRecording ? 'Stop' : 'Ask a Question'}
-        </div>
-      </div>
+          {/* T054: Real-time transcript display using TerminalTranscript */}
+          <TerminalTranscript
+            text={transcript}
+            animate={!isTranscriptFinal}
+            showCursor={isRecording || status === 'processing'}
+            variant={isTranscriptFinal ? 'success' : 'default'}
+            prompt={isTranscriptFinal ? '?' : '>'}
+            minHeight={80}
+            maxHeight={200}
+          />
+
+          {/* T055: Recording status indicators */}
+          <div className="flex flex-col items-center gap-4">
+            <RecordingIndicator
+              variant="hazard"
+              active={isRecording}
+              size="lg"
+              label={status === 'processing' ? 'PROCESSING' : 'REC'}
+            />
+
+            {/* Waveform visualization */}
+            {isRecording && (
+              <BrutalWaveform
+                demo
+                active={isRecording}
+                variant="recording"
+                barCount={32}
+                height={64}
+              />
+            )}
+
+            {/* Processing spinner */}
+            {status === 'processing' && (
+              <div className="flex items-center gap-3">
+                <div className="loading-brutal w-6 h-6" />
+                <span className="font-mono text-sm uppercase tracking-wider text-accent-primary">
+                  {getStatusMessage()}
+                </span>
+              </div>
+            )}
+
+            {/* Status text */}
+            <span
+              className={cn(
+                'font-mono text-sm font-bold uppercase tracking-wider',
+                status === 'listening' ? 'text-status-error' : 'text-brutal-charcoal/70'
+              )}
+            >
+              {getStatusMessage()}
+            </span>
+
+            {/* Timer */}
+            {isRecording && (
+              <div className="font-mono text-3xl font-bold tabular-nums text-status-error">
+                {formatTime(recordingTime)}
+              </div>
+            )}
+          </div>
+
+          {/* Record/Stop button */}
+          <div className="flex flex-col items-center gap-3">
+            <Button
+              variant={isRecording ? 'danger' : 'primary'}
+              size="lg"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={status === 'starting' || status === 'processing'}
+              loading={status === 'starting'}
+              className="w-20 h-20 p-0 flex items-center justify-center"
+              aria-label={isRecording ? 'Stop recording' : 'Ask a question'}
+            >
+              {isRecording ? (
+                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" />
+                </svg>
+              ) : (
+                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              )}
+            </Button>
+
+            <span className="font-mono text-sm font-bold uppercase tracking-wider text-brutal-charcoal">
+              {isRecording ? 'Stop' : 'Ask a Question'}
+            </span>
+          </div>
+        </Card.Body>
+      </Card>
     </div>
   );
 };

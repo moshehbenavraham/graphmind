@@ -1,13 +1,15 @@
 /**
  * AudioPlayer Component
  *
- * Handles audio playback with play/pause/stop controls.
+ * Neo-Brutalist audio playback with play/pause/stop controls.
  * Uses Web Audio API for progressive playback of chunked audio.
+ * Styled with design system components for consistent brutalist styling.
  *
  * Feature 010: Text-to-Speech Responses - User Story 2
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Button, Card, Badge, cn } from '../design-system';
 
 /**
  * AudioPlayer Component
@@ -36,23 +38,16 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
    */
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // Page becomes hidden (app switch, lock screen, background)
       if (document.hidden && status === 'playing') {
-        // Auto-pause on background
         pauseAudio();
       }
-      // Note: We do NOT auto-resume on visibility return
-      // This respects user control and prevents unexpected audio playback
     };
 
-    // Listen for visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup listener on unmount
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status]); // Re-bind when status changes
+  }, [status]);
 
   /**
    * Initialize Web Audio API context
@@ -70,12 +65,9 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
   const playAudio = async () => {
     try {
       const audioContext = initAudioContext();
-
-      // Resume context if suspended (browser autoplay restrictions)
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
-
       onPlaybackControl('resume');
       startTimeRef.current = Date.now();
     } catch (error) {
@@ -102,7 +94,6 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
         // Already stopped
       }
     }
-
     setCurrentTime(0);
     onPlaybackControl('stop');
   };
@@ -118,185 +109,123 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
   };
 
   /**
-   * Get status icon
+   * Get status badge variant
    */
-  const getStatusIcon = () => {
+  const getStatusVariant = () => {
     switch (status) {
       case 'playing':
-        return '▶️';
+        return 'success';
       case 'paused':
-        return '⏸️';
+        return 'warning';
       case 'stopped':
-        return '⏹️';
+        return 'error';
       default:
-        return '⏸️';
+        return 'default';
     }
   };
 
   /**
-   * Get status color
+   * Get status label
    */
-  const getStatusColor = () => {
+  const getStatusLabel = () => {
     switch (status) {
       case 'playing':
-        return '#22c55e'; // green
+        return 'PLAYING';
       case 'paused':
-        return '#eab308'; // yellow
+        return 'PAUSED';
       case 'stopped':
-        return '#ef4444'; // red
+        return 'STOPPED';
       default:
-        return '#6b7280'; // gray
+        return 'READY';
     }
   };
 
   return (
-    <div className="audio-player" style={styles.container}>
-      {/* Playback status indicator */}
-      <div className="status-indicator" style={{
-        ...styles.statusIndicator,
-        backgroundColor: getStatusColor()
-      }}>
-        <span style={styles.statusIcon}>{getStatusIcon()}</span>
-        <span style={styles.statusText}>
-          {status === 'idle' && 'Ready'}
-          {status === 'playing' && 'Playing'}
-          {status === 'paused' && 'Paused'}
-          {status === 'stopped' && 'Stopped'}
-        </span>
-      </div>
+    <Card className="max-w-md">
+      <Card.Body className="flex flex-col gap-4">
+        {/* Playback status indicator */}
+        <div className="flex items-center justify-between">
+          <Badge variant={getStatusVariant()} className="gap-2">
+            {status === 'playing' && (
+              <span className="w-2 h-2 bg-current animate-brutal-pulse" />
+            )}
+            {getStatusLabel()}
+          </Badge>
 
-      {/* Playback controls */}
-      <div className="playback-controls" style={styles.controls}>
-        {/* Play/Resume button */}
-        {(status === 'idle' || status === 'paused' || status === 'stopped') && (
-          <button
-            onClick={playAudio}
-            style={styles.button}
-            disabled={status === 'idle'}
-            aria-label="Play audio"
-          >
-            ▶️ Play
-          </button>
-        )}
+          {/* Time display */}
+          {duration > 0 && (
+            <span className="font-mono text-sm text-brutal-charcoal/70">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          )}
+        </div>
 
-        {/* Pause button */}
-        {status === 'playing' && (
-          <button
-            onClick={pauseAudio}
-            style={styles.button}
-            aria-label="Pause audio"
-          >
-            ⏸️ Pause
-          </button>
-        )}
-
-        {/* Stop button */}
-        {(status === 'playing' || status === 'paused') && (
-          <button
-            onClick={stopAudio}
-            style={styles.button}
-            aria-label="Stop audio"
-          >
-            ⏹️ Stop
-          </button>
-        )}
-      </div>
-
-      {/* Progress indicator */}
-      {duration > 0 && (
-        <div className="progress" style={styles.progress}>
-          <span style={styles.timeText}>
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
-          <div style={styles.progressBar}>
+        {/* Progress bar */}
+        {duration > 0 && (
+          <div className="w-full h-2 bg-brutal-charcoal/20 border-brutal border-brutal-black">
             <div
-              style={{
-                ...styles.progressFill,
-                width: `${(currentTime / duration) * 100}%`
-              }}
+              className={cn(
+                'h-full transition-all duration-300',
+                status === 'playing' ? 'bg-status-success' :
+                status === 'paused' ? 'bg-status-warning' :
+                'bg-accent-primary'
+              )}
+              style={{ width: `${(currentTime / duration) * 100}%` }}
             />
           </div>
+        )}
+
+        {/* Playback controls */}
+        <div className="flex gap-3 justify-center">
+          {/* Play/Resume button */}
+          {(status === 'idle' || status === 'paused' || status === 'stopped') && (
+            <Button
+              variant="primary"
+              onClick={playAudio}
+              disabled={status === 'idle'}
+              aria-label="Play audio"
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              PLAY
+            </Button>
+          )}
+
+          {/* Pause button */}
+          {status === 'playing' && (
+            <Button
+              variant="secondary"
+              onClick={pauseAudio}
+              aria-label="Pause audio"
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+              </svg>
+              PAUSE
+            </Button>
+          )}
+
+          {/* Stop button */}
+          {(status === 'playing' || status === 'paused') && (
+            <Button
+              variant="danger"
+              onClick={stopAudio}
+              aria-label="Stop audio"
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" />
+              </svg>
+              STOP
+            </Button>
+          )}
         </div>
-      )}
-    </div>
+      </Card.Body>
+    </Card>
   );
 }
-
-/**
- * Component styles
- */
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    padding: '16px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-    maxWidth: '400px',
-  },
-  statusIndicator: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    color: 'white',
-    fontWeight: '500',
-    fontSize: '14px',
-  },
-  statusIcon: {
-    fontSize: '16px',
-  },
-  statusText: {
-    textTransform: 'capitalize',
-  },
-  controls: {
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'center',
-  },
-  button: {
-    padding: '8px 16px',
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    '&:hover': {
-      backgroundColor: '#2563eb',
-    },
-    '&:disabled': {
-      backgroundColor: '#9ca3af',
-      cursor: 'not-allowed',
-    },
-  },
-  progress: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  timeText: {
-    fontSize: '12px',
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  progressBar: {
-    width: '100%',
-    height: '4px',
-    backgroundColor: '#e5e7eb',
-    borderRadius: '2px',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#3b82f6',
-    transition: 'width 0.3s ease',
-  },
-};
 
 export default AudioPlayer;

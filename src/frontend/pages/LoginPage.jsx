@@ -1,6 +1,21 @@
+/**
+ * GraphMind - Login Page
+ *
+ * Neo-brutalist authentication page using design system components.
+ * Features: GlitchText logo, OffsetLayer card effect, Input primitives
+ */
+
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import {
+  Card,
+  Button,
+  Input,
+  GlitchText,
+  OffsetLayer,
+  Badge,
+} from '../design-system';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -64,119 +79,76 @@ function LoginPage() {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      backgroundColor: 'var(--bg-secondary)',
-      padding: '2rem'
-    }}>
-      <div style={{
-        backgroundColor: 'var(--bg-primary)',
-        padding: '2rem',
-        borderRadius: '0.5rem',
-        boxShadow: 'var(--shadow-lg)',
-        width: '100%',
-        maxWidth: '400px'
-      }}>
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 'bold',
-          marginBottom: '0.5rem',
-          color: 'var(--primary-color)'
-        }}>
-          GraphMind
-        </h1>
-        <p style={{
-          color: 'var(--text-secondary)',
-          marginBottom: '2rem'
-        }}>
-          Sign in to your account
-        </p>
+    <div className="min-h-screen flex items-center justify-center p-8 bg-[#FFFEF0]">
+      <div className="w-full max-w-md">
+        <OffsetLayer variant="accent" size="lg">
+          <Card>
+            <Card.Body>
+              {/* Logo/Title */}
+              <div className="mb-8">
+                <GlitchText as="h1" className="text-3xl md:text-4xl mb-2">
+                  GRAPHMIND
+                </GlitchText>
+                <p className="text-brutal-charcoal/70 font-mono text-sm uppercase tracking-wider">
+                  Sign in to your account
+                </p>
+              </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label
-              htmlFor="email"
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                color: 'var(--text-primary)'
-              }}
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              disabled={loading}
-            />
-          </div>
+              {/* Login Form */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <Input
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  disabled={loading}
+                  error={!!error && !email}
+                />
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label
-              htmlFor="password"
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                color: 'var(--text-primary)'
-              }}
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              disabled={loading}
-            />
-          </div>
+                <Input
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  disabled={loading}
+                  error={!!error && !password}
+                />
 
-          {error && (
-            <div className="error-message" style={{ marginBottom: '1rem' }}>
-              {error}
-            </div>
-          )}
+                {/* Error Message */}
+                {error && (
+                  <Badge variant="error" className="w-full justify-center py-3">
+                    {error}
+                  </Badge>
+                )}
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: '100%', marginBottom: '1rem' }}
-            disabled={loading}
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={loading}
+                  className="w-full"
+                >
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
 
-          <p style={{
-            textAlign: 'center',
-            color: 'var(--text-secondary)',
-            fontSize: '0.875rem'
-          }}>
-            Don't have an account?{' '}
-            <Link
-              to="/register"
-              style={{
-                color: 'var(--primary-color)',
-                textDecoration: 'none',
-                fontWeight: '500'
-              }}
-            >
-              Create one
-            </Link>
-          </p>
-        </form>
+                {/* Register Link */}
+                <p className="text-center text-brutal-charcoal/70 font-mono text-sm">
+                  Don't have an account?{' '}
+                  <Link
+                    to="/register"
+                    className="text-accent-primary font-bold uppercase hover:underline hover:underline-offset-4"
+                  >
+                    Create one
+                  </Link>
+                </p>
+              </form>
+            </Card.Body>
+          </Card>
+        </OffsetLayer>
       </div>
     </div>
   );
