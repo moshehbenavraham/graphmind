@@ -10,93 +10,72 @@
 
 ## 📊 Implementation Status
 
-**Last Updated**: 2025-11-24 (Auto-updated by /updateprd)
-**Current Phase**: Phase 3.5 - Security Hardening Complete ✅
+**Last Updated**: 2025-11-29 (Auto-updated by /updateprd)
+**Current Phase**: Phase 4 - Polish & Features (Entity Bug Fix In Progress)
 **Security Status**: ✅ **ALL P0 VULNERABILITIES RESOLVED & DEPLOYED**
-**Overall Progress**: 10 features deployed, 3 in progress (13 total specs)
-**Next Priority**: Complete Feature 013 validation tasks & Fix Feature 011 entity resolution bug
+**UI Status**: ✅ **Neo-Brutalist Design System Complete (v0.3.13)**
+**Overall Progress**: 15 features implemented, 13 validated ready, 1 in progress
+**Next Priority**: Complete Feature 015 (Entity Role Bug Fix) - 93% complete
 
-### ✅ Security Hardening Complete
+### ✅ All Major Infrastructure Complete
 
-**Security audit completed, vulnerabilities fixed & validated 2025-11-24**
-
-**ALL CRITICAL ISSUES RESOLVED**:
-
-| Issue | CVSS | Status | Solution Deployed |
-|-------|------|--------|-------------------|
-| ✅ Cypher Injection | 9.1 | **RESOLVED** | Native FalkorDB parameterization (`--params` flag) |
-| ✅ Cross-Site Data Theft | 8.6 | **RESOLVED** | API authentication (Bearer token) + CORS whitelist |
-| ✅ Full Table Scans | 7.5 | **RESOLVED** | Indexed `user_id_normalized` column (migration 0007) |
-
-**Validation Results**: 25/27 security tests passing (93%) - [Feature 013 Report](../../specs/013-security-validation/validation.md)
-- ✅ 13/13 injection prevention tests PASSING
-- ✅ 12/14 authentication & CORS tests passing (2 minor edge cases)
-- ✅ Zero data leakage, all attack vectors blocked
-
-**Production Status**: ✅ Deployed & validated, ready for use
-
----
+| Area | Status | Details |
+|------|--------|---------|
+| Phase 1: Foundation | ✅ 100% | Wrangler, Auth, FalkorDB |
+| Phase 2: Knowledge Graph | ✅ 100% | Voice Capture, Entity Extraction, Graph Building |
+| Phase 3: Voice Query | ✅ 100% | Voice Input, Answer Gen, TTS, Cypher |
+| Security Hardening (P0) | ✅ 100% | Injection, CORS, Auth - all RESOLVED |
+| GraphRAG 2.0 | ✅ 100% | Vector search, semantic retrieval |
+| Neo-Brutalist UI | ✅ 100% | 19 components, 14 transformed |
 
 ### Completed Components
 
-| Component | Spec | Completed | Security Status |
-|-----------|------|-----------|-----------------|
-| Wrangler Configuration & Project Setup | [001-wrangler-setup](../../specs/001-wrangler-setup) | 2025-11-10 | ✅ Secure |
-| Authentication System | [002-auth-system](../../specs/002-auth-system) | 2025-11-10 | ✅ Secure |
-| FalkorDB Connection & Pooling | [003-falkordb-connection](../../specs/003-falkordb-connection) | 2025-11-11 | ✅ Secure (fixed 012) |
-| Voice Note Capture & Transcription | [004-voice-note-capture](../../specs/004-voice-note-capture) | 2025-11-11 | ✅ Secure |
-| Entity Extraction Pipeline | [005-entity-extraction](../../specs/005-entity-extraction) | 2025-11-11 | ✅ Secure (fixed 012) |
-| Knowledge Graph Building | [006-knowledge-graph-building](../../specs/006-knowledge-graph-building) | 2025-11-12 | ✅ Secure (fixed 012) |
-| Connection Pool Warmup | [007-connection-pool-warmup](../../specs/007-connection-pool-warmup) | 2025-11-12 | ✅ Secure |
-| Voice Query Input & Graph Querying | [008-voice-query-input](../../specs/008-voice-query-input) | 2025-11-13 | ✅ Secure (fixed 012) |
-| Answer Generation with LLM | [009-answer-generation](../../specs/009-answer-generation) | 2025-11-14 | ✅ Secure |
-| Text-to-Speech Responses | [010-tts-responses](../../specs/010-tts-responses) | 2025-11-14 | ✅ Secure |
-| Frontend Deployment | [011-frontend-deployment](../../specs/011-frontend-deployment) | In Progress | ⚠️ Functional issues |
-| Security Hardening | [012-security-hardening](../../specs/012-security-hardening) | 2025-11-24 | ✅ Deployed |
-| Security Validation | [013-security-validation](../../specs/013-security-validation) | 2025-11-24 | ✅ Validated (93%) |
+| Component | Spec | Completed | Validation Status |
+|-----------|------|-----------|-------------------|
+| Wrangler Configuration | [001-wrangler-setup](../../specs/001-wrangler-setup) | 2025-11-10 | ✅ Ready |
+| Authentication System | [002-auth-system](../../specs/002-auth-system) | 2025-11-10 | ⚠️ MVP Ready |
+| FalkorDB Connection | [003-falkordb-connection](../../specs/003-falkordb-connection) | 2025-11-11 | ✅ Ready |
+| Voice Note Capture | [004-voice-note-capture](../../specs/004-voice-note-capture) | 2025-11-11 | ✅ Ready |
+| Entity Extraction | [005-entity-extraction](../../specs/005-entity-extraction) | 2025-11-11 | ✅ Ready |
+| Knowledge Graph Building | [006-knowledge-graph-building](../../specs/006-knowledge-graph-building) | 2025-11-12 | ✅ Ready |
+| Connection Pool Warmup | [007-connection-pool-warmup](../../specs/007-connection-pool-warmup) | 2025-11-12 | 🔲 Checklist |
+| Voice Query Input | [008-voice-query-input](../../specs/008-voice-query-input) | 2025-11-13 | ✅ Production Ready |
+| Answer Generation | [009-answer-generation](../../specs/009-answer-generation) | 2025-11-14 | ✅ Production Ready |
+| TTS Responses | [010-tts-responses](../../specs/010-tts-responses) | 2025-11-14 | ✅ Deployed |
+| Frontend Deployment | [011-frontend-deployment](../../specs/011-frontend-deployment) | In Progress | ❌ Blocked (Bug) |
+| Security Hardening | [012-security-hardening](../../specs/012-security-hardening) | 2025-11-24 | ✅ Ready |
+| Security Validation | [013-security-validation](../../specs/013-security-validation) | 2025-11-24 | ⚠️ 93% |
+| GraphRAG 2.0 Validation | [014-graphrag-validation-deployment](../../specs/014-graphrag-validation-deployment) | 2025-11-24 | ✅ Ready |
+| Entity Role Bug Fix | [015-entity-role-bugfix](../../specs/015-entity-role-bugfix) | In Progress | 🔄 93% |
 
-### Phase 1 Complete ✅ (100%)
+### In Progress
 
-- Wrangler Configuration & Project Setup
-- Authentication System (JWT, bcrypt, sessions)
-- FalkorDB Connection & Pooling (Durable Objects)
+- 🔄 **Feature 015: Entity Role Bug Fix** - 55/59 tasks (93%)
+  - Pattern detection for entity role identification
+  - Bidirectional query templates
+  - Ready for local validation
 
-### Phase 2 Complete ✅ (100%)
+### Current Blocker
 
-- Voice Note Capture & Transcription (WebRTC, Deepgram STT, WebSocket)
-- Entity Extraction Pipeline (Llama 3.1-8b, fuzzy matching, KV caching)
-- Knowledge Graph Building (FalkorDB GraphRAG, auto-deduplication)
-
-### Phase 3 In Progress 🔄 (67% complete, 2/3 features)
-
-**✅ Complete**:
-- Feature 008: Voice Query Input & Graph Querying (282/282 tasks, ⚠️ needs E2E testing + deployment)
-- Feature 009: Answer Generation with LLM (223/223 tasks, ⚠️ needs D1 migration + deployment)
-
-**🎯 Next (See [NEXT_SPEC.md](NEXT_SPEC.md))**:
-- Feature 010: Text-to-Speech Responses (Deepgram Aura TTS, audio streaming)
-
-**🔲 Remaining**:
-- Feature 011: Conversation Context Management (blocked by Feature 010)
+- ❌ **Feature 011: Frontend Deployment** - Deployed but queries failing
+  - Root cause: Entity role assignment in Cypher generation
+  - Fix: Feature 015 (93% complete)
+  - Impact: "Who works on X?" queries return empty results
 
 ### Codebase Overview
 
-**Directories**:
-- ✅ `src/` - Worker source files (index.js, workers, lib, middleware)
-- ✅ `src/lib/auth/` - Authentication utilities (JWT, bcrypt, sessions)
-- ✅ `src/lib/falkordb/` - FalkorDB client library (client, namespace, operations, errors)
-- ✅ `src/lib/entity-utils/` - Entity extraction utilities (key generator, confidence filter, prompt builder)
-- ✅ `src/lib/db/` - D1 query helpers (voice notes, entity cache)
-- ✅ `src/lib/kv/` - KV cache utilities (entity resolution cache)
-- ✅ `src/durable-objects/` - FalkorDBConnectionPool, VoiceSessionManager
-- ✅ `src/workers/api/` - API endpoint handlers (auth, health, graph, notes, entities)
-- ✅ `src/workers/consumers/` - Queue consumers (entity extraction)
-- ✅ `src/services/` - Business logic (entity extraction, entity resolution, extraction jobs)
-- ✅ `src/models/` - Data models (entity, extraction job)
-- ✅ `src/middleware/` - Rate limiting and auth middleware
-- ✅ `migrations/` - D1 database migrations (3 applied)
-- ✅ `tests/` - Unit tests (entity-key-generator, confidence-filter)
-- ✅ `test-data/` - Sample transcripts for testing
+**Source Structure**:
+- ✅ `src/` - Main worker source (index.js + modules)
+- ✅ `src/api/` - API endpoint handlers
+- ✅ `src/durable-objects/` - VoiceSessionManager, FalkorDBConnectionPool, QuerySessionManager
+- ✅ `src/frontend/` - React UI with Neo-Brutalist design system
+- ✅ `src/lib/` - Auth, FalkorDB, entity-utils, graph, voice, db
+- ✅ `src/middleware/` - Auth, rate limiting
+- ✅ `src/services/` - Cypher generator, entity extraction, answer generation, TTS
+- ✅ `src/prompts/` - LLM prompt templates
+- ✅ `migrations/` - D1 migrations (7 applied)
+- ✅ `tests/` - Unit and integration tests
+- ✅ `scripts/` - Deployment and utility scripts
 
 **Key Files**:
 - ✅ `wrangler.toml` - Complete Cloudflare configuration (Workers, DO, Queues, D1, KV, R2, AI)

@@ -1,172 +1,232 @@
-# Next Spec: GraphRAG 2.0 - Vector Search Validation & Production Deployment
+# Next Spec: Entity Role Assignment Bug Fix (Query Template Fix)
 
-**Phase**: Phase 3 - Voice Query (Completion & Validation)
-**Priority**: P1 (Next to Build)
-**Estimated Context**: ~15,000 tokens
+**Phase**: Phase 4 - Polish & Features (Critical Bugfix)
+**Priority**: P0 (Blocker)
+**Estimated Context**: ~12,000 tokens
 **Dependencies**:
-- ✅ Vector infrastructure implemented (EmbeddingService, indexes, backfill endpoint)
-- ✅ Query logic implemented (queryNodesByVector, executeGraphRAG pipeline)
-- ✅ Configuration complete (REST API port, API key auth, environment variables)
+- Feature 011 frontend deployed (blocked by this bug)
+- Feature 014 GraphRAG validation complete
+- All backend infrastructure operational
 **Status**: Ready to Implement
 
 ---
 
 ## What We're Building
 
-This spec covers the validation, testing, and production deployment of the GraphRAG 2.0 vector-native architecture. We're completing the remaining 4 tasks from `docs/architecture/graph-rag-2.0.md` to ensure the vector search system works end-to-end in production.
+This spec fixes the **Entity Role Assignment Bug** that is blocking the entire GraphMind frontend from functioning. Voice queries like "Who works on GraphMind?" return empty results because the Cypher query generator incorrectly treats the extracted entity ("GraphMind") as the SOURCE of the relationship when it should be the TARGET.
 
 ## Why This Next
 
-The vector infrastructure is 85% complete - all components are implemented but **not yet validated**. This is the logical next step because:
+This is the **#1 blocker** preventing GraphMind from being usable:
 
-- **Dependency on**: Vector infrastructure (EmbeddingService, indexes, traversal) - all implemented
-- **Enables**: True semantic search for voice queries ("Who works on AI?" finds GraphMind project)
-- **Phase requirement**: Phase 3 completion requires validated GraphRAG pipeline
-- **Current blocker**: Without validation, we can't verify that vector search actually improves query accuracy
+- **Blocking**: Feature 011 (Frontend) cannot function - users see "I don't have any notes about X" for all relationship queries
+- **Impact**: 100% failure rate for "Who VERBS X?" question patterns
+- **Root Cause Identified**: After 7+ fix attempts, root cause is documented in `specs/011-frontend-deployment/research_current_issue.md`
+- **Phase Context**: Must be fixed before Phase 4 Polish features can be validated
 
-**From graph-rag-2.0.md Section 5 (Remaining Tasks)**:
-1. Verify Backfill Process - Test embedding generation for existing nodes
-2. End-to-End Testing - Test vector search with sample queries, verify graph traversal
-3. Performance Validation - Measure latency for vector search + traversal
-4. Production Deployment - Set secrets, re-enable authentication, deploy Workers
+**Current State**:
+- Backend: Fully operational, security validated (Feature 012-014 complete)
+- Frontend: Deployed but non-functional due to this bug
+- Knowledge Graph: Contains data but queries return empty results
 
 ---
 
 ## Scope (Single Context Window)
 
 **Included**:
-- Backfill process validation (test embedding generation for all 4 node types)
-- End-to-end vector search testing (10+ sample queries)
-- Graph traversal verification (ensure context retrieval works)
-- Performance benchmarking (measure vector search + traversal latency)
-- Production deployment preparation (secrets, authentication, deployment)
-- Integration with existing QuerySessionManager flow
+- Fix entity role assignment in `src/services/cypher-generator.js`
+- Add bidirectional query templates to `src/lib/graph/cypher-templates.js`
+- Implement question pattern detection for source/target determination
+- Add test coverage for relationship query patterns
+- Validate fix with production-like queries
 
 **Explicitly Excluded** (for later specs):
-- Frontend UI for vector search results
-- Advanced vector search features (hybrid search, re-ranking)
-- Multi-model embedding support
-- Vector index tuning and optimization
+- LLM-based semantic role labeling (Option B from research)
+- New Phase 4 features (multi-source ingestion, search, etc.)
+- Frontend UI changes
+- Performance optimization
 
-**Estimated Tokens**: ~15,000 tokens
+**Estimated Tokens**: ~12,000 tokens
 
 ---
 
 ## User Stories (for this spec)
 
-### Story 1: Validate Vector Search Accuracy (P1)
-As a developer, I need to validate that vector search returns semantically relevant nodes so that users get accurate answers to natural language questions.
+### Story 1: Fix "Who VERBS X?" Query Pattern (P0)
+
+**As a** user
+**I want** to ask "Who works on GraphMind?" and get correct results
+**So that** I can discover relationships in my knowledge graph
 
 **Acceptance Criteria**:
-- [ ] Backfill endpoint generates embeddings for all existing nodes without errors
-- [ ] Vector search query "Who works on AI?" returns relevant Project nodes with score ≥ 0.65
-- [ ] Graph traversal from vector matches returns connected Person/Meeting/Topic nodes
-- [ ] End-to-end test suite covers 10+ semantic query scenarios
-- [ ] All vector indexes are queryable (Person, Project, Note, Topic)
+- [ ] Query "Who works on GraphMind?" returns Person nodes connected to GraphMind Project
+- [ ] Query "What does John work on?" returns Project nodes connected to John Person
+- [ ] Entity role (source vs target) correctly determined from question pattern
+- [ ] All existing test scenarios continue to pass
 
-### Story 2: Performance Validation (P1)
-As a product owner, I need to measure vector search performance so that we can confirm it meets our latency targets (<500ms uncached).
+### Story 2: Support Bidirectional Relationship Queries (P1)
 
-**Acceptance Criteria**:
-- [ ] Vector search latency measured for cold queries (<500ms target)
-- [ ] Graph traversal latency measured (should be <100ms with indexes)
-- [ ] End-to-end GraphRAG pipeline latency documented
-- [ ] Performance comparison vs. old text-to-Cypher approach
-- [ ] Load test with 100+ concurrent vector searches
-
-### Story 3: Production Deployment (P1)
-As a DevOps engineer, I need to deploy the GraphRAG 2.0 system to production so that users can benefit from semantic search.
+**As a** developer
+**I want** the query system to support both source-based and target-based relationship queries
+**So that** all natural language question patterns work correctly
 
 **Acceptance Criteria**:
-- [ ] `FALKORDB_REST_API_KEY` set via `npx wrangler secret put`
-- [ ] Authentication re-enabled for backfill endpoint
-- [ ] Updated Workers deployed with vector search code
-- [ ] Smoke tests pass in production environment
-- [ ] Rollback plan documented in case of issues
+- [ ] New `relationshipByTargetTemplate()` function added to cypher-templates.js
+- [ ] Question pattern regex identifies "Who/What VERBS X?" as target-based query
+- [ ] Question pattern regex identifies "What does X VERB?" as source-based query
+- [ ] `buildRelationshipParams()` populates correct parameters based on pattern
 
 ---
 
 ## Technical Approach
 
-This spec focuses on **validation and deployment** of the existing GraphRAG 2.0 implementation. The architecture follows the pipeline defined in `docs/architecture/graph-rag-2.0.md`:
+### Root Cause (from research_current_issue.md)
 
+The bug is in `src/services/cypher-generator.js` function `buildRelationshipParams()`:
+
+```javascript
+// CURRENT BUG (Line 113):
+const sourceEntity = await resolveEntity(entities[0].text, userId, env);
+// ^ Always treats first extracted entity as SOURCE
+
+// For "Who works on GraphMind?":
+// - Extracted entity: "GraphMind" (Project)
+// - Treated as: SOURCE (Person named "GraphMind") <- WRONG
+// - Should be: TARGET (Project named "GraphMind")
 ```
-User Query → Embedding Generation (Workers AI)
-           ↓
-     Vector Search (FalkorDB)
-     [Person, Project, Note, Topic indexes]
-           ↓
-     Top 10 Semantic Matches (score ≥ 0.65)
-           ↓
-     Graph Traversal (1-hop from entry points)
-           ↓
-     Context Aggregation (vector results + neighbors)
-           ↓
-     Answer Generation (Llama 3.1-8b with context)
+
+### Recommended Fix: Option A + Option C Combined
+
+**Option A**: Pattern-based question detection (deterministic, fast)
+**Option C**: Bidirectional templates with explicit source/target params
+
+### Implementation Steps
+
+#### 1. Add Question Pattern Detection
+
+Add to `src/lib/graph/cypher-templates.js`:
+
+```javascript
+const QUESTION_PATTERNS = {
+  // "Who/What VERBS on/for X?" -> X is TARGET, query for SOURCE
+  WHO_VERBS_X: /^(who|what)\s+(\w+s?)\s+(on|for|with|to)\s+(.+)\??$/i,
+
+  // "What does X VERB?" -> X is SOURCE, query for TARGET
+  WHAT_DOES_X_VERB: /^what\s+does\s+(.+)\s+(\w+)\s*(on|for|with)?\??$/i,
+
+  // "Who/what is/are X?" -> X is entity lookup
+  WHO_IS_X: /^(who|what)\s+(is|are)\s+(.+)\??$/i,
+};
+
+export function identifyEntityRole(question, entities) {
+  const q = question.trim();
+
+  // "Who works on X?" -> entity X is TARGET
+  if (QUESTION_PATTERNS.WHO_VERBS_X.test(q)) {
+    return { role: 'target', pattern: 'WHO_VERBS_X' };
+  }
+
+  // "What does X work on?" -> entity X is SOURCE
+  if (QUESTION_PATTERNS.WHAT_DOES_X_VERB.test(q)) {
+    return { role: 'source', pattern: 'WHAT_DOES_X_VERB' };
+  }
+
+  // Default: entity is SOURCE (backward compatible)
+  return { role: 'source', pattern: 'default' };
+}
+```
+
+#### 2. Add Bidirectional Template
+
+Add to `src/lib/graph/cypher-templates.js`:
+
+```javascript
+export function relationshipByTargetTemplate(userNamespace, sourceType, relType, targetType, targetName) {
+  return `
+    MATCH (source:${sourceType})-[r:${relType}]->(target:${targetType})
+    WHERE target.name = $target_name
+    AND target.user_id_normalized = $user_namespace
+    RETURN source, r, target
+    LIMIT 100
+  `;
+}
+```
+
+#### 3. Fix buildRelationshipParams()
+
+Update `src/services/cypher-generator.js`:
+
+```javascript
+async function buildRelationshipParams(question, entities, env, userNamespace, userId) {
+  const { role, pattern } = identifyEntityRole(question, entities);
+  const resolvedEntity = await resolveEntity(entities[0].text, userId, env);
+
+  if (role === 'target') {
+    // Entity is the TARGET of the relationship
+    return {
+      target_name: resolvedEntity.name,
+      user_namespace: userNamespace,
+      query_direction: 'by_target',
+      // Source will be wildcard (the "who")
+    };
+  } else {
+    // Entity is the SOURCE of the relationship (default)
+    return {
+      source_name: resolvedEntity.name,
+      user_namespace: userNamespace,
+      query_direction: 'by_source',
+    };
+  }
+}
+```
+
+#### 4. Update generateCypherQuery() to Use Direction
+
+```javascript
+if (template === 'relationship_query') {
+  const params = await buildRelationshipParams(question, entities, env, userNamespace, userId);
+
+  if (params.query_direction === 'by_target') {
+    cypher = relationshipByTargetTemplate(
+      userNamespace,
+      mapping.source,  // e.g., 'Person'
+      mapping.type,    // e.g., 'WORKS_ON'
+      mapping.target,  // e.g., 'Project'
+      params.target_name
+    );
+  } else {
+    cypher = relationshipQueryTemplate(
+      userNamespace,
+      mapping.source,
+      params.source_name,
+      mapping.type,
+      mapping.target,
+      'outgoing'
+    );
+  }
+}
 ```
 
 ### Cloudflare Components
-- **Workers AI**: `@cf/baai/bge-base-en-v1.5` (embedding model)
-- **Workers**: Backfill endpoint, QuerySessionManager integration
-- **D1**: Store embeddings metadata (optional)
-- **KV**: Cache vector search results (1-hour TTL)
+- **Workers**: `src/services/cypher-generator.js` (main fix)
+- **No D1/KV/R2 changes** - this is logic-only fix
 
-### FalkorDB Integration
-- **Vector Indexes**: 4 indexes (Person, Project, Note, Topic) with dimension=768, similarity=cosine
-- **Vector Search**: `CALL db.idx.vector.queryNodes()` procedure
-- **Graph Traversal**: Cypher queries to expand context from entry points
-- **REST API**: Port 3001 with API key authentication
-
-### Testing Strategy
-1. **Unit Tests**: Test EmbeddingService, queryNodesByVector wrapper
-2. **Integration Tests**: Test backfill process, vector search with real FalkorDB
-3. **End-to-End Tests**: Test full GraphRAG pipeline (query → embedding → search → traversal → answer)
-4. **Performance Tests**: Benchmark vector search latency, load testing
-5. **Production Smoke Tests**: Verify deployment in production environment
+### FalkorDB
+- **No schema changes** - only query generation logic
+- **Query templates**: Add `relationshipByTargetTemplate()`
 
 ---
 
 ## Implementation Steps
 
-### 1. Backfill Validation
-- Create test script to call `/api/admin/backfill-embeddings` endpoint
-- Verify embeddings are generated for all node types (Person, Project, Note, Topic)
-- Check FalkorDB for embedding properties on nodes
-- Validate embedding dimensions (should be 768)
-
-### 2. Vector Search Testing
-- Write test queries that require semantic understanding:
-  - "Who works on artificial intelligence?" (should find AI projects)
-  - "Tell me about machine learning" (should find ML-related nodes)
-  - "What meetings discussed data science?" (should find relevant meetings)
-- Verify vector search returns results with scores ≥ 0.65
-- Test all 4 node type indexes
-
-### 3. Graph Traversal Testing
-- Take top vector search results as entry points
-- Execute traversal queries to find connected nodes
-- Verify connected nodes are relevant (e.g., Person nodes connected to Project nodes)
-- Test 1-hop and 2-hop traversal
-
-### 4. End-to-End Pipeline Testing
-- Integrate vector search into QuerySessionManager flow
-- Test full pipeline: user question → embedding → vector search → traversal → answer
-- Compare answer quality vs. old text-to-Cypher approach
-- Validate context aggregation (vector matches + graph neighbors)
-
-### 5. Performance Benchmarking
-- Measure vector search latency (cold queries)
-- Measure graph traversal latency
-- Measure end-to-end pipeline latency
-- Run load tests with 100+ concurrent searches
-- Document performance improvements
-
-### 6. Production Deployment
-- Set `FALKORDB_REST_API_KEY` secret in Cloudflare
-- Re-enable authentication for backfill endpoint
-- Deploy updated Workers with vector search code
-- Run production smoke tests
-- Monitor for errors and performance issues
+1. **Read existing code** - Understand current implementation in cypher-generator.js and cypher-templates.js
+2. **Add pattern detection** - Implement `identifyEntityRole()` function with regex patterns
+3. **Add target template** - Create `relationshipByTargetTemplate()` function
+4. **Fix buildRelationshipParams()** - Use pattern detection to set correct role
+5. **Update generateCypherQuery()** - Select template based on query direction
+6. **Add unit tests** - Test pattern detection and template selection
+7. **Integration test** - Test full pipeline with "Who works on X?" queries
+8. **Validate in frontend** - Confirm fix works end-to-end
 
 ---
 
@@ -174,56 +234,79 @@ User Query → Embedding Generation (Workers AI)
 
 This spec is complete when:
 
-- [ ] Backfill process successfully generates embeddings for 100% of existing nodes
-- [ ] Vector search returns semantically relevant results (verified with 10+ test queries)
-- [ ] Graph traversal retrieves connected context from vector entry points
-- [ ] End-to-end GraphRAG pipeline latency is <500ms (uncached)
-- [ ] Performance benchmarks show improvement over old text-to-Cypher approach
-- [ ] Production deployment succeeds with all smoke tests passing
-- [ ] Documentation updated with vector search usage examples
-- [ ] Rollback plan documented and tested
+- [ ] "Who works on GraphMind?" returns Person nodes (not empty)
+- [ ] "What does John work on?" returns Project nodes
+- [ ] "Tell me about GraphMind" continues to work (regression test)
+- [ ] All 5+ question patterns from research doc work correctly
+- [ ] Unit tests cover pattern detection logic (>90% coverage)
+- [ ] Integration tests validate full query pipeline
+- [ ] Frontend voice queries return correct results
+- [ ] Feature 011 validation.md status changes from BLOCKED to PASSING
+
+---
+
+## Test Cases (from research_current_issue.md)
+
+| Question | Expected Source | Expected Target | Expected Result |
+|----------|-----------------|-----------------|-----------------|
+| "Who works on GraphMind?" | Person (wildcard) | Project "GraphMind" | List of people |
+| "What does John work on?" | Person "John" | Project (wildcard) | List of projects |
+| "What projects involve AI?" | Project (wildcard) | Topic "AI" | List of projects |
+| "Who knows about machine learning?" | Person (wildcard) | Topic "machine learning" | List of people |
+| "Tell me about GraphMind" | N/A (entity lookup) | N/A | GraphMind details |
 
 ---
 
 ## Next After This
 
 Once this spec is complete, the next logical steps will be:
-1. **Feature 011 Completion**: Resume frontend deployment (currently blocked by entity resolution bug)
-2. **Phase 4 Features**: Multi-source ingestion, UI polish, advanced search
-3. **Vector Search Enhancements**: Hybrid search (vector + keyword), re-ranking, multi-model embeddings
+1. **Feature 011 Validation**: Mark frontend deployment as complete (unblocked)
+2. **Phase 4 Features**: Multi-source ingestion, search, entity management
+3. **User Acceptance Testing**: End-to-end testing with real users
 
 ---
 
 ## References
 
-- **Architecture Doc**: [docs/architecture/graph-rag-2.0.md](/home/aiwithapex/projects/graphmind/docs/architecture/graph-rag-2.0.md)
-- **PRD Phase 3**: [docs/PRD/phases/phase-3-voice-query.md](/home/aiwithapex/projects/graphmind/docs/PRD/phases/phase-3-voice-query.md)
-- **Implementation Report**: [docs/PRD/IMPLEMENTATION_REPORT.md](/home/aiwithapex/projects/graphmind/docs/PRD/IMPLEMENTATION_REPORT.md)
-- **Security Audit**: [docs/graph-query-audit.md](/home/aiwithapex/projects/graphmind/docs/graph-query-audit.md)
-- **FalkorDB Vector Search Docs**: https://docs.falkordb.com/vector-search.html
+- **Research Doc**: [specs/011-frontend-deployment/research_current_issue.md](/home/aiwithapex/projects/graphmind/specs/011-frontend-deployment/research_current_issue.md)
+- **Bug Location**: `src/services/cypher-generator.js:107-149`
+- **Template Location**: `src/lib/graph/cypher-templates.js`
+- **Feature 011 Spec**: [specs/011-frontend-deployment/spec.md](/home/aiwithapex/projects/graphmind/specs/011-frontend-deployment/spec.md)
+- **PRD Phase 4**: [docs/PRD/phases/phase-4-polish.md](/home/aiwithapex/projects/graphmind/docs/PRD/phases/phase-4-polish.md)
 
 ---
 
 ## Technical Notes
 
-### Existing Implementation Files
-- `src/services/embedding.js` - EmbeddingService class (158 lines)
-- `src/workers/api/admin/backfill-embeddings.js` - Backfill endpoint (122 lines)
-- `src/lib/falkordb/client.js` - queryNodesByVector() wrapper (32 lines)
-- `src/durable-objects/QuerySessionManager.js` - executeGraphRAG() pipeline (84 lines)
-- `src/lib/graph/cypher-templates.js` - traversalQueryTemplate() (15 lines)
-- `scripts/vector-index.js` - Vector index creation script (91 lines)
+### Key Files to Modify
 
-### Key Configuration
-- **Embedding Model**: `@cf/baai/bge-base-en-v1.5` (768 dimensions)
-- **Vector Indexes**: Person.embedding, Project.embedding, Note.embedding, Topic.embedding
-- **Similarity Function**: Cosine similarity
-- **Threshold**: 0.65 (scores below this are filtered out)
-- **Limit**: Top 10 results per node type (40 total across 4 types)
+1. **`src/services/cypher-generator.js`** (primary fix)
+   - `buildRelationshipParams()` - Fix entity role assignment
+   - `generateCypherQuery()` - Use direction-aware template selection
 
-### Known Issues (From graph-rag-2.0.md)
-- ✅ Port configuration fixed (6380 → 3001)
-- ✅ API key authentication added
-- ✅ FalkorDBConnectionPool preserves apiKey in config
-- 🔲 Backfill endpoint authentication needs re-enabling for production
-- 🔲 Performance benchmarks pending (expected 250x improvement)
+2. **`src/lib/graph/cypher-templates.js`** (template additions)
+   - Add `identifyEntityRole()` function
+   - Add `relationshipByTargetTemplate()` function
+   - Export new functions
+
+3. **`tests/unit/cypher-generator.test.js`** (new tests)
+   - Pattern detection tests
+   - Template selection tests
+   - Parameter building tests
+
+### Risk Assessment
+
+- **Low Risk**: Pattern-based detection is deterministic and testable
+- **Backward Compatible**: Default behavior remains "entity as source"
+- **Scoped Change**: Only affects relationship query generation, not entity lookups
+
+### Known Edge Cases
+
+1. Questions with multiple entities: "Does John work on GraphMind?" (both known)
+   - Solution: Match both source AND target in query
+
+2. Ambiguous questions: "Tell me about the relationship between John and GraphMind"
+   - Solution: Fall back to bidirectional query returning all relationships
+
+3. Entity not found: "Who works on NonExistent?"
+   - Solution: Return empty result with helpful message (existing behavior)

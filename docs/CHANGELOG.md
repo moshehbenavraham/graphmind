@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [0.4.0] - 2025-11-29
+
+### Added
+
+- **Feature 015: Entity Role Bug Fix** - Pattern-based entity role detection for voice queries
+  - `identifyEntityRole()` function with regex pattern detection
+  - `relationshipByTargetTemplate()` for target-based queries
+  - Question pattern matching for "Who VERBS X?" vs "What does X VERB?" patterns
+  - 55/59 tasks complete (93%), ready for local validation
+
+- **GraphRAG 2.0 Infrastructure** - Vector-first semantic search
+  - 768-dimension embeddings for 61 nodes (Person, Project, Topic)
+  - Vector search with cosine similarity scoring
+  - Hybrid search combining vector + graph traversal
+
+### Changed
+
+- **PRD Documentation Update** - Comprehensive status refresh via `/updateprd`
+  - Updated `docs/PRD/README_PRD.md` with current implementation progress
+  - Updated `docs/PRD/REQUIREMENTS-PRD.md` with 15 completed features
+  - Updated phase documents (Phase 3: 100%, Phase 4: 25%)
+  - All 15 specs now tracked with validation status
+
+- **Project Status** - Phase 4 progress: 15% → 25%
+  - Neo-Brutalist UI design system complete (v0.3.5-0.3.13)
+  - Security hardening complete (Features 012-014)
+  - Entity role bug fix in progress (Feature 015: 93%)
+
+### Performance
+
+- Vector search: Sub-millisecond query times (<1ms)
+- Pattern detection: <1ms (target met)
+- Graph queries: 9ms uncached, 8ms cached
+
+### Documentation
+
+- **Implementation Tracking** - specs/015-entity-role-bugfix/
+  - spec.md, design.md, tasks.md, validation.md complete
+
+- **PRD Updates** - docs/PRD/
+  - README_PRD.md: Current status section updated
+  - REQUIREMENTS-PRD.md: Implementation status updated
+  - phases/phase-3-voice-query.md: 100% complete
+  - phases/phase-4-polish.md: 25% complete with implementation status
+
+### Next Steps
+
+- Complete Feature 015 remaining 4 tasks (local validation)
+- Deploy entity role fix to production
+- Mark Feature 011 (Frontend) as fully functional
+- Continue Phase 4 features (search, entity management)
+
 ## [0.3.13] - 2025-11-25
 
 ### Changed
@@ -684,3 +736,9 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 0.4.0   | 2025-11-29   | Feature 015 Entity Role Bug Fix (93%), PRD documentation update, GraphRAG 2.0 |
+| 0.3.13  | 2025-11-25   | Neo-Brutalist UI complete (Session 9), 6 legacy CSS files deleted |
+| 0.3.12  | 2025-11-25   | Voice components integration (Session 8) |
+| 0.3.5   | 2025-11-25   | Neo-Brutalist Design System primitives (Session 1) |
+| 0.3.4   | 2025-11-24   | GraphRAG 2.0 vector search, embeddings backfill |
+| 0.3.3   | 2025-11-24   | FalkorDB local dev config fixes |
