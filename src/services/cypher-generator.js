@@ -11,6 +11,7 @@ import {
   selectCypherTemplate,
   extractEntityReferences,
   buildCypherQuery,
+  identifyEntityRole,  // NEW: Feature 015 - Entity role detection
   RELATIONSHIP_MAPPINGS,
   TIME_PERIOD_MAPPINGS
 } from '../lib/graph/cypher-templates.js';
@@ -120,74 +121,74 @@ async function buildEntityLookupParams(question, entities, env, userNamespace, u
  * Build parameters for relationship query
  * Pattern: "What projects did Sarah work on?"
  *
- * Enhanced with semantic inference for "who works on X" patterns
- * when entity type is unknown (empty cache).
+ * FIXED (Feature 015): Now uses identifyEntityRole() to correctly determine
+ * whether the extracted entity is the SOURCE or TARGET of the relationship.
+ *
+ * This fixes the critical bug where "Who works on GraphMind?" incorrectly
+ * treated GraphMind as the source instead of the target.
  */
 async function buildRelationshipParams(question, entities, env, userNamespace, userId) {
   if (entities.length === 0) {
     throw new Error('No entities found in question');
   }
 
-  // Resolve source entity
-  const sourceEntity = await resolveEntity(entities[0].text, userId, env);
+  // NEW: Identify entity role based on question pattern (Feature 015)
+  const { role, pattern, queryDirection } = identifyEntityRole(question, entities);
+
+  console.log('[CypherGenerator] Entity role identified (Feature 015)', {
+    question: question.substring(0, 50),
+    role,
+    pattern,
+    queryDirection,
+    entity: entities[0].text
+  });
+
+  // Resolve entity (get canonical name and type)
+  const resolvedEntity = await resolveEntity(entities[0].text, userId, env);
 
   // Detect relationship type from question
   const lowerQuestion = question.toLowerCase();
   let relType = 'RELATED_TO';
-  let targetType = '*';
-  let direction = 'outgoing';
-  let sourceType = sourceEntity.type;
+  let sourceType = 'Person';  // Default source type
+  let targetType = '*';       // Default target type
 
   for (const [phrase, mapping] of Object.entries(RELATIONSHIP_MAPPINGS)) {
     if (lowerQuestion.includes(phrase)) {
       relType = mapping.type;
-
-      // If entity type is known, use standard direction logic
-      if (sourceEntity.type) {
-        if (mapping.target && sourceEntity.type.toLowerCase() === mapping.target.toLowerCase()) {
-          direction = 'incoming';
-          targetType = mapping.source || '*';
-        } else {
-          direction = 'outgoing';
-          targetType = mapping.target || '*';
-        }
-      } else {
-        // SEMANTIC INFERENCE: Entity type unknown - infer from question pattern
-        // "who works on X" -> X is likely Project, we want incoming Person
-        // "what does X work on" -> X is likely Person, we want outgoing Project
-        const inferredType = inferEntityTypeFromQuestion(lowerQuestion, phrase, mapping, sourceEntity.name);
-
-        if (inferredType) {
-          console.log('[CypherGenerator] Semantic inference:', {
-            question: lowerQuestion.substring(0, 50),
-            entityName: sourceEntity.name,
-            inferredType: inferredType.sourceType,
-            direction: inferredType.direction
-          });
-
-          sourceType = inferredType.sourceType;
-          direction = inferredType.direction;
-          targetType = inferredType.targetType;
-        } else {
-          // Fallback: default to outgoing
-          direction = 'outgoing';
-          targetType = mapping.target || '*';
-        }
-      }
-
+      sourceType = mapping.source || 'Person';
+      targetType = mapping.target || '*';
       break;
     }
   }
 
-  return {
-    userNamespace,
-    sourceType: sourceType || 'Person',
-    sourceName: sourceEntity.name,
-    source_name: sourceEntity.name,
-    relType,
-    targetType,
-    direction
-  };
+  // Build parameters based on entity role (Feature 015 fix)
+  if (queryDirection === 'by_target') {
+    // Entity is the TARGET - we're finding sources
+    // "Who works on GraphMind?" -> GraphMind is target, find Person sources
+    return {
+      userNamespace,
+      sourceType: sourceType,  // The type we're looking for (Person)
+      targetType: resolvedEntity.type || targetType,  // The known entity type (Project)
+      targetName: resolvedEntity.name,
+      target_name: resolvedEntity.name,  // Query parameter
+      relType,
+      direction: 'incoming',  // Semantic: incoming relationships TO target
+      queryDirection
+    };
+  } else {
+    // Entity is the SOURCE - we're finding targets (original behavior)
+    // "What does John work on?" -> John is source, find Project targets
+    return {
+      userNamespace,
+      sourceType: resolvedEntity.type || sourceType,
+      sourceName: resolvedEntity.name,
+      source_name: resolvedEntity.name,  // Query parameter
+      targetType,
+      relType,
+      direction: 'outgoing',
+      queryDirection
+    };
+  }
 }
 
 /**

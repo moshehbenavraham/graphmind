@@ -60,6 +60,31 @@ LIMIT 100;`;
 }
 
 /**
+ * Pattern 2b: Relationship Query by TARGET (reverse lookup) - Feature 015
+ * Use Case: "Who works on GraphMind?", "Who leads the API team?"
+ *
+ * Finds SOURCE entities that have a relationship TO the known TARGET.
+ * This is the key fix for the entity role bug where questions like
+ * "Who works on X?" were incorrectly treating X as the source.
+ *
+ * @param {string} userNamespace - User's FalkorDB graph namespace
+ * @param {string} sourceType - Expected source entity type (Person, etc.) or '*' for wildcard
+ * @param {string} relType - Relationship type (WORKS_ON, LEADS, etc.)
+ * @param {string} targetType - Target entity type (Project, etc.)
+ * @returns {string} Cypher query
+ */
+export function relationshipByTargetTemplate(userNamespace, sourceType, relType, targetType) {
+  // Handle wildcard source type
+  const sourcePattern = sourceType === '*' ? '' : `:${sourceType}`;
+
+  return `MATCH (source${sourcePattern})-[r:${relType}]->(target:${targetType})
+WHERE toLower(target.name) = toLower($target_name)
+RETURN source, r, target, type(r) as relationship_type
+ORDER BY source.name
+LIMIT 100;`;
+}
+
+/**
  * Pattern 3: Temporal Query (Date filtering)
  * Use Case: "What did I do last week?", "Who did I meet this month?"
  *
@@ -229,6 +254,105 @@ export const TIME_PERIOD_MAPPINGS = {
 };
 
 /**
+ * Question pattern classifiers for entity role detection (Feature 015)
+ *
+ * Each pattern identifies whether the extracted entity is the
+ * SOURCE (performs action) or TARGET (receives action) of a relationship.
+ *
+ * This fixes the critical bug where "Who works on GraphMind?" incorrectly
+ * treated GraphMind as the source instead of the target.
+ */
+export const QUESTION_PATTERNS = {
+  // "Who/What VERBS on/for X?" -> X is TARGET, find SOURCE
+  // Examples: "Who works on GraphMind?", "What contributes to the project?"
+  WHO_VERBS_X: /^(who|what)\s+(\w+s?)\s+(on|for|with|to|at)\s+(.+?)\??$/i,
+
+  // "Who VERBS X?" without preposition (e.g., "Who leads GraphMind?", "Who manages the team?")
+  // Matches specific action verbs that typically have a Person as source and Project/Team as target
+  WHO_VERBS_X_NO_PREP: /^(who|what)\s+(leads?|manages?|runs?|owns?|created?|built|designed|attended|joined)\s+(.+?)\??$/i,
+
+  // "What does X VERB?" -> X is SOURCE, find TARGET
+  // Examples: "What does John work on?", "What did Sarah build?"
+  WHAT_DOES_X_VERB: /^what\s+(does|did|do)\s+(.+?)\s+(\w+)\s*(on|for|with)?\??$/i,
+
+  // "What X VERBS on?" -> X is SOURCE (e.g., "What projects does John work on?")
+  WHAT_X_VERBS: /^what\s+(\w+)\s+(does|did|do)\s+(.+?)\s+(\w+)\s*(on|for|with)?\??$/i,
+
+  // "Who/What is X?" -> Entity lookup, not relationship
+  WHO_IS_X: /^(who|what)\s+(is|are)\s+(.+?)\??$/i,
+
+  // "Tell me about X" -> Entity lookup
+  TELL_ME_ABOUT: /^(tell\s+me\s+about|describe|explain)\s+(.+?)\??$/i
+};
+
+/**
+ * Identify the role of extracted entities based on question pattern
+ *
+ * This function determines whether the extracted entity should be treated as
+ * the SOURCE or TARGET of a relationship query. This is critical for generating
+ * correct Cypher queries.
+ *
+ * @param {string} question - Natural language question
+ * @param {Array} entities - Extracted entity references
+ * @returns {Object} { role: 'source'|'target'|'subject', pattern: string, queryDirection: string }
+ */
+export function identifyEntityRole(question, entities) {
+  const q = question.trim();
+
+  // Pattern 1: "Who/What VERBS on/for X?" -> X is TARGET
+  if (QUESTION_PATTERNS.WHO_VERBS_X.test(q)) {
+    return {
+      role: 'target',
+      pattern: 'WHO_VERBS_X',
+      queryDirection: 'by_target'  // Find sources given target
+    };
+  }
+
+  // Pattern 2: "Who VERBS X?" (no preposition) -> X is TARGET
+  if (QUESTION_PATTERNS.WHO_VERBS_X_NO_PREP.test(q)) {
+    return {
+      role: 'target',
+      pattern: 'WHO_VERBS_X_NO_PREP',
+      queryDirection: 'by_target'
+    };
+  }
+
+  // Pattern 3: "What does X VERB?" -> X is SOURCE
+  if (QUESTION_PATTERNS.WHAT_DOES_X_VERB.test(q)) {
+    return {
+      role: 'source',
+      pattern: 'WHAT_DOES_X_VERB',
+      queryDirection: 'by_source'  // Find targets given source
+    };
+  }
+
+  // Pattern 4: "What projects does X work on?" -> X is SOURCE
+  if (QUESTION_PATTERNS.WHAT_X_VERBS.test(q)) {
+    return {
+      role: 'source',
+      pattern: 'WHAT_X_VERBS',
+      queryDirection: 'by_source'
+    };
+  }
+
+  // Entity lookup patterns (not relationship queries)
+  if (QUESTION_PATTERNS.WHO_IS_X.test(q) || QUESTION_PATTERNS.TELL_ME_ABOUT.test(q)) {
+    return {
+      role: 'subject',
+      pattern: 'ENTITY_LOOKUP',
+      queryDirection: 'lookup'
+    };
+  }
+
+  // Default: Treat entity as SOURCE (backward compatible)
+  return {
+    role: 'source',
+    pattern: 'default',
+    queryDirection: 'by_source'
+  };
+}
+
+/**
  * Select appropriate Cypher template based on question pattern
  *
  * @param {string} question - Natural language question
@@ -393,12 +517,21 @@ export function extractEntityReferences(question) {
 /**
  * Build complete Cypher query from template and parameters
  *
+ * Updated for Feature 015: Now supports queryDirection parameter for
+ * bidirectional relationship queries.
+ *
  * @param {string} template - Template identifier
  * @param {Object} params - Query parameters
  * @returns {Object} { cypher, parameters, templateUsed }
  */
 export function buildCypherQuery(template, params) {
-  const { userNamespace, entityType, entityName, sourceType, sourceName, relType, targetType, dateProperty, duration, filterProperty, filterValue, condition } = params;
+  const {
+    userNamespace, entityType, entityName,
+    sourceType, sourceName, targetType, targetName,
+    relType, dateProperty, duration,
+    filterProperty, filterValue, condition,
+    queryDirection  // NEW: 'by_source', 'by_target', or 'lookup'
+  } = params;
 
   let cypher;
   const parameters = {};
@@ -410,8 +543,30 @@ export function buildCypherQuery(template, params) {
       break;
 
     case 'relationship_query':
-      cypher = relationshipQueryTemplate(userNamespace, sourceType, sourceName, relType, targetType, params.direction);
-      parameters.source_name = sourceName;
+      // NEW: Select template based on query direction (Feature 015)
+      if (queryDirection === 'by_target') {
+        // Query by target - find sources for known target
+        // "Who works on GraphMind?" -> GraphMind is target, find Person sources
+        cypher = relationshipByTargetTemplate(
+          userNamespace,
+          sourceType,
+          relType,
+          targetType
+        );
+        parameters.target_name = targetName;
+      } else {
+        // Query by source - find targets for known source (original behavior)
+        // "What does John work on?" -> John is source, find Project targets
+        cypher = relationshipQueryTemplate(
+          userNamespace,
+          sourceType,
+          sourceName,
+          relType,
+          targetType,
+          params.direction
+        );
+        parameters.source_name = sourceName;
+      }
       break;
 
     case 'temporal_query':
