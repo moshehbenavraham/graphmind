@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load sample transcripts
-const samplesPath = path.join(__dirname, '../../test-data/sample-transcripts.json');
+const samplesPath = path.join(__dirname, '../test-data/sample-transcripts.json');
 const samples = JSON.parse(fs.readFileSync(samplesPath, 'utf-8'));
 
 console.log('='.repeat(80));

@@ -220,13 +220,29 @@ export const useQuerySession = (options = {}) => {
       updateStatus(QueryStatus.ERROR);
       onError?.(err);
     },
-    autoConnect: false,
+    autoConnect: true, // useWebSocket will connect when websocketUrl is set
   });
 
   /**
    * Start a new query session
    */
   const startSession = useCallback(async () => {
+    // CRITICAL: Prevent double session creation
+    // This guards against rapid button clicks or React StrictMode double-invocation
+    if (status !== QueryStatus.IDLE && status !== QueryStatus.ERROR && status !== QueryStatus.COMPLETE) {
+      logger.warn('session.start_blocked', 'Session start blocked - already in progress', { status });
+      return null;
+    }
+
+    // Also check if we already have an active WebSocket
+    if (websocketUrl) {
+      logger.warn('session.start_blocked', 'Session start blocked - WebSocket URL already set', {
+        status,
+        hasWebsocketUrl: true,
+      });
+      return null;
+    }
+
     try {
       setError('');
       updateStatus(QueryStatus.STARTING);
@@ -282,7 +298,7 @@ export const useQuerySession = (options = {}) => {
 
       throw err;
     }
-  }, [updateStatus, onError]);
+  }, [status, websocketUrl, updateStatus, onError]);
 
   /**
    * Send audio chunk via WebSocket
@@ -353,23 +369,19 @@ export const useQuerySession = (options = {}) => {
     reset();
   }, [disconnect, reset]);
 
-  /**
-   * Connect WebSocket when URL is available
-   */
-  useEffect(() => {
-    if (websocketUrl && !isConnected && !isConnecting) {
-      connect();
-    }
-  }, [websocketUrl, isConnected, isConnecting, connect]);
+  // NOTE: Removed manual connect useEffect - useWebSocket handles this with autoConnect: true
 
   /**
-   * Cleanup on unmount
+   * Cleanup on unmount only
+   * IMPORTANT: Empty dependency array ensures this only runs on unmount,
+   * not when disconnect function reference changes (which causes premature disconnection)
    */
   useEffect(() => {
     return () => {
       disconnect();
     };
-  }, [disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     // State

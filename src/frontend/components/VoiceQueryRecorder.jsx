@@ -154,7 +154,7 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
       setError('Connection error. Please try again.');
       if (onError) onError(err);
     },
-    autoConnect: false, // Manual connection after session init
+    autoConnect: true, // useWebSocket will connect when websocketUrl is set
   });
 
   /**
@@ -180,7 +180,10 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
 
       const data = await response.json();
       setSessionId(data.session_id);
-      setWebsocketUrl(data.websocket_url);
+
+      // Append JWT token to WebSocket URL for authentication
+      const wsUrl = `${data.websocket_url}?token=${jwtToken}`;
+      setWebsocketUrl(wsUrl);
 
       return data;
     } catch (err) {
@@ -227,21 +230,12 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
     stopAudioCapture();
   };
 
-  /**
-   * Connect WebSocket when URL is available
-   */
-  useEffect(() => {
-    if (websocketUrl && !isConnected && !isConnecting) {
-      connect();
-    }
-
-    return () => {
-      disconnect();
-    };
-  }, [websocketUrl, isConnected, isConnecting, connect, disconnect]);
+  // NOTE: Removed manual connect useEffect - useWebSocket handles this with autoConnect: true
 
   /**
-   * Cleanup on unmount
+   * Cleanup on unmount only
+   * IMPORTANT: Empty dependency array ensures this only runs on unmount,
+   * not when function references change (which causes premature disconnection)
    */
   useEffect(() => {
     return () => {
@@ -249,7 +243,8 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
       cleanupAudio();
       disconnect();
     };
-  }, [cleanupAudio, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Get status message for UI (T055)

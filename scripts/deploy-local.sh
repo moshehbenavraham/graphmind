@@ -9,10 +9,141 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
+
+# =============================================================================
+# Functions
+# =============================================================================
+
+show_help() {
+    echo "GraphMind Local Development Deployment Script"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --stop        Stop all running services and exit"
+    echo "  --stop-all    Stop all services including Docker container"
+    echo "  --help        Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0              # Start all services (clean rebuild)"
+    echo "  $0 --stop       # Stop all services (keep Docker running)"
+    echo "  $0 --stop-all   # Stop everything including FalkorDB Docker"
+    echo ""
+}
+
+stop_services() {
+    local stop_docker="${1:-false}"
+
+    echo "============================================"
+    echo -e "${YELLOW}Stopping GraphMind Services...${NC}"
+    echo "============================================"
+    echo ""
+
+    echo -e "${BLUE}[1/4] Stopping application processes...${NC}"
+    pkill -9 -f "cloudflared tunnel run" >/dev/null 2>&1 && echo "  - Stopped: cloudflared tunnel" || true
+    pkill -9 -f "falkordb-rest-api.js" >/dev/null 2>&1 && echo "  - Stopped: FalkorDB REST API" || true
+    pkill -9 -f "wrangler dev" >/dev/null 2>&1 && echo "  - Stopped: Wrangler dev server" || true
+    pkill -9 -f "wrangler tail" >/dev/null 2>&1 && echo "  - Stopped: Wrangler tail" || true
+    pkill -9 -f "workerd" >/dev/null 2>&1 && echo "  - Stopped: workerd" || true
+    pkill -9 -f "vite" >/dev/null 2>&1 && echo "  - Stopped: Vite dev server" || true
+    echo -e "${GREEN}Done${NC}"
+    echo ""
+
+    echo -e "${BLUE}[2/4] Releasing ports (8787, 5173, 3001)...${NC}"
+    lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 8787" || true
+    lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 5173" || true
+    lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 3001" || true
+    echo -e "${GREEN}Done${NC}"
+    echo ""
+
+    echo -e "${BLUE}[3/4] Verifying all processes stopped...${NC}"
+    sleep 1
+    REMAINING=$(ps aux | grep -E "wrangler dev|workerd|vite|falkordb-rest-api" | grep -v grep | wc -l)
+    if [ "$REMAINING" -gt 0 ]; then
+        echo -e "${YELLOW}  Warning: $REMAINING processes still running, force killing...${NC}"
+        pkill -9 -f "wrangler" >/dev/null 2>&1 || true
+        pkill -9 -f "workerd" >/dev/null 2>&1 || true
+        pkill -9 -f "vite" >/dev/null 2>&1 || true
+        pkill -9 -f "falkordb-rest-api" >/dev/null 2>&1 || true
+        sleep 1
+    fi
+    echo -e "${GREEN}Done${NC}"
+    echo ""
+
+    echo -e "${BLUE}[4/4] Docker container...${NC}"
+    if [ "$stop_docker" = "true" ]; then
+        if docker ps | grep -q falkordb-local; then
+            docker stop falkordb-local >/dev/null 2>&1
+            echo "  - Stopped: FalkorDB Docker container"
+        else
+            echo "  - FalkorDB Docker container was not running"
+        fi
+    else
+        if docker ps | grep -q falkordb-local; then
+            echo -e "  - ${YELLOW}FalkorDB Docker container left running${NC}"
+            echo "    (use --stop-all to stop Docker too)"
+        else
+            echo "  - FalkorDB Docker container was not running"
+        fi
+    fi
+    echo -e "${GREEN}Done${NC}"
+    echo ""
+
+    # Final port status
+    echo "============================================"
+    echo -e "${BLUE}Port Status:${NC}"
+    echo "============================================"
+    for port in 3001 5173 8787; do
+        if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  Port $port: ${RED}IN USE${NC}"
+            lsof -Pi :$port -sTCP:LISTEN 2>/dev/null | tail -1 | awk '{print "            PID: "$2" ("$1")"}'
+        else
+            echo -e "  Port $port: ${GREEN}FREE${NC}"
+        fi
+    done
+    echo ""
+
+    echo "============================================"
+    echo -e "${GREEN}All services stopped!${NC}"
+    echo "============================================"
+}
+
+# =============================================================================
+# Argument Parsing
+# =============================================================================
+
+case "${1:-}" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    --stop)
+        stop_services false
+        exit 0
+        ;;
+    --stop-all)
+        stop_services true
+        exit 0
+        ;;
+    "")
+        # No arguments - continue with normal startup
+        ;;
+    *)
+        echo -e "${RED}Unknown option: $1${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
+
+# =============================================================================
+# Main Script - Start Services
+# =============================================================================
 
 # Load .env into environment
 if [ -f "$PROJECT_ROOT/.env" ]; then
@@ -194,6 +325,14 @@ fi
 echo ""
 
 echo -e "${YELLOW}[5/8] Starting FalkorDB REST API wrapper...${NC}"
+# Final check that port 3001 is available
+if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}✖ Port 3001 is already in use!${NC}"
+    echo "  Process using port 3001:"
+    lsof -Pi :3001 -sTCP:LISTEN
+    exit 1
+fi
+
 # Force connection to local Docker container (ignoring .env tunnel config)
 FALKORDB_HOST="localhost" FALKORDB_PORT="6380" node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
 REST_API_PID=$!
@@ -212,6 +351,14 @@ fi
 echo ""
 
 echo -e "${YELLOW}[6/8] Starting frontend dev server...${NC}"
+# Final check that port 5173 is available
+if lsof -Pi :5173 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}✖ Port 5173 is already in use!${NC}"
+    echo "  Process using port 5173:"
+    lsof -Pi :5173 -sTCP:LISTEN
+    exit 1
+fi
+
 cd src/frontend
 # Force API URL to localhost for local deployment, overriding any .env files
 VITE_API_BASE_URL="http://localhost:8787" npm run dev > /tmp/vite-dev.log 2>&1 &
@@ -318,9 +465,7 @@ echo "  Workers:   tail -f /tmp/wrangler-dev.log"
 echo "  FalkorDB:  docker logs -f falkordb-local"
 echo ""
 echo "=> To stop services:"
-echo "  pkill -f vite"
-echo "  pkill -f \"wrangler dev\""
-echo "  pkill -f falkordb-rest-api"
-echo "  docker stop falkordb-local"
+echo "  ./scripts/deploy-local.sh --stop      # Stop all (keep Docker)"
+echo "  ./scripts/deploy-local.sh --stop-all  # Stop everything"
 echo ""
 echo -e "${GREEN}✔ Local environment ready! Open http://localhost:5173 in your browser${NC}"
