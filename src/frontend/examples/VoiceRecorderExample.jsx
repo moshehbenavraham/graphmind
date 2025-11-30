@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import VoiceRecorder from './VoiceRecorder';
+import VoiceRecorder from '../components/VoiceRecorder';
 
 /**
  * Example usage of VoiceRecorder component

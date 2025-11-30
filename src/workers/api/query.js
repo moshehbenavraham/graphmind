@@ -18,7 +18,7 @@ import { createLogger } from '../../utils/logger.js';
 /**
  * Add CORS headers to response
  * @param {Response} response - Response object
- * @param {string} origin - Request origin
+ * @param {string|null} origin - Request origin
  * @returns {Response} Response with CORS headers
  */
 function addCorsHeaders(response, origin) {
@@ -30,9 +30,9 @@ function addCorsHeaders(response, origin) {
   ];
 
   // Allow origin if in whitelist or if localhost (development)
-  const isAllowed = allowedOrigins.includes(origin) || origin?.startsWith('http://localhost');
+  const isAllowed = origin && (allowedOrigins.includes(origin) || origin.startsWith('http://localhost'));
 
-  if (isAllowed) {
+  if (isAllowed && origin) {
     response.headers.set('Access-Control-Allow-Origin', origin);
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -45,7 +45,7 @@ function addCorsHeaders(response, origin) {
 
 /**
  * Handle CORS preflight requests
- * @param {string} origin - Request origin
+ * @param {string|null} origin - Request origin
  * @returns {Response} Preflight response
  */
 function handleCorsPreflightRequest(origin) {

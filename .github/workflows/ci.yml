@@ -42,8 +42,7 @@ jobs:
         run: npm ci
 
       - name: Run type check
-        run: npm run type-check
-        continue-on-error: true
+        run: npm run typecheck
 
   test:
     name: Test
@@ -65,7 +64,6 @@ jobs:
 
       - name: Run tests
         run: npm test
-        continue-on-error: true
 
   build:
     name: Build
@@ -84,7 +82,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        continue-on-error: true
 
   security:
     name: Security Audit
@@ -100,4 +97,3 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true

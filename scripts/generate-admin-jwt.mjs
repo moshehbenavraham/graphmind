@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference types="node" />
+
 /**
  * Generate Admin JWT Token
  *
@@ -12,7 +15,19 @@
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 
+/**
+ * @typedef {Object} JWTClaims
+ * @property {string} sub - Subject (user ID)
+ * @property {string} email - User email
+ * @property {string} namespace - User namespace
+ * @property {string} role - User role
+ * @property {boolean} is_admin - Admin flag
+ * @property {number} iat - Issued at timestamp
+ * @property {number} exp - Expiration timestamp
+ */
+
 // Get JWT secret from environment
+/** @type {string|undefined} */
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
@@ -37,6 +52,7 @@ for (const arg of args) {
 }
 
 // Create JWT claims with admin privileges
+/** @type {JWTClaims} */
 const claims = {
   sub: userId,
   email: email,
@@ -47,8 +63,8 @@ const claims = {
   exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
 };
 
-// Sign the token
-const token = jwt.sign(claims, JWT_SECRET);
+// Sign the token (JWT_SECRET is guaranteed to be defined after the check above)
+const token = jwt.sign(claims, /** @type {string} */ (JWT_SECRET));
 
 console.log('=== Admin JWT Token Generated ===');
 console.log('');

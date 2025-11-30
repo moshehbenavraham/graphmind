@@ -33,6 +33,7 @@ export async function handleGetMe(request, env) {
   // T072: Calculate token expiration info
   // Extract token to get exp claim
   const authHeader = request.headers.get('Authorization');
+  // @ts-ignore - authHeader is guaranteed by requireAuth middleware
   const token = authHeader.split(' ')[1];
 
   // Decode token to get expiration (already verified by middleware)

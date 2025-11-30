@@ -114,12 +114,7 @@ export function generateToken(payload, secret) {
  *
  * @param {string} token - JWT token to verify
  * @param {string} secret - JWT signing secret
- * @returns {Object} Decoded token claims
- * @returns {string} claims.sub - User ID
- * @returns {string} claims.email - User email
- * @returns {string} claims.namespace - FalkorDB namespace
- * @returns {number} claims.iat - Issued at timestamp
- * @returns {number} claims.exp - Expiration timestamp
+ * @returns {{sub: string, email: string, namespace: string, iat: number, exp: number}} Decoded token claims
  * @throws {Error} If token is invalid, expired, or signature doesn't match
  *
  * Error Codes:
@@ -137,7 +132,9 @@ export function verifyToken(token, secret) {
     }
 
     // Verify signature and expiration
-    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+    const decoded = /** @type {{sub: string, email: string, namespace: string, iat: number, exp: number}} */ (
+      jwt.verify(token, secret, { algorithms: ['HS256'] })
+    );
     return decoded;
 
   } catch (error) {

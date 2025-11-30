@@ -80,9 +80,7 @@ export async function insertVoiceNote(env, noteData) {
  * @param {string} userId - User identifier for data isolation
  * @param {number} [limit=20] - Maximum number of notes to return
  * @param {number} [offset=0] - Number of notes to skip for pagination
- * @returns {Promise<Object>} Object containing notes array and total count
- * @returns {Array<Object>} returns.notes - Array of note objects
- * @returns {number} returns.total - Total number of notes for user
+ * @returns {Promise<{notes: Array<Object>, total: number}>} Object containing notes array and total count
  * @throws {Error} If database operation fails
  *
  * @example

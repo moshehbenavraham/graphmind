@@ -46,6 +46,7 @@ export async function handleGetEntity(request, env, user, entityId) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       });

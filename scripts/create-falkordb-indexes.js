@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @ts-check
+/// <reference types="node" />
+/// <reference path="../src/lib/falkordb/types.js" />
 
 /**
  * FalkorDB Index Creation Script
@@ -19,7 +22,21 @@
 import { createRestClient } from '../src/lib/falkordb/rest-client.js';
 
 /**
+ * @typedef {import('../src/lib/falkordb/types.js').RestClient} RestClient
+ * @typedef {import('../src/lib/falkordb/types.js').IndexDefinition} IndexDefinition
+ * @typedef {import('../src/lib/falkordb/types.js').IndexResult} IndexResult
+ */
+
+/**
+ * @typedef {Object} IndexCategories
+ * @property {IndexDefinition[]} userIsolation
+ * @property {IndexDefinition[]} nameSearch
+ * @property {IndexDefinition[]} entityTraceability
+ */
+
+/**
  * All indexes to create
+ * @type {IndexCategories}
  */
 const INDEXES = {
   // User isolation indexes (CRITICAL for multi-tenancy)
@@ -56,6 +73,9 @@ const INDEXES = {
 
 /**
  * Generate Cypher CREATE INDEX command
+ * @param {string} nodeType - Node type to index
+ * @param {string} property - Property name to index
+ * @returns {string} Cypher command
  */
 function generateIndexCommand(nodeType, property) {
   return `CREATE INDEX FOR (n:${nodeType}) ON (n.${property})`;
@@ -63,6 +83,7 @@ function generateIndexCommand(nodeType, property) {
 
 /**
  * Generate Cypher command to list all indexes
+ * @returns {string} Cypher command
  */
 function generateListIndexesCommand() {
   return 'CALL db.indexes()';
@@ -70,6 +91,10 @@ function generateListIndexesCommand() {
 
 /**
  * Check if index already exists
+ * @param {any[]} indexes - Array of existing indexes
+ * @param {string} nodeType - Node type to check
+ * @param {string} property - Property name to check
+ * @returns {boolean}
  */
 function indexExists(indexes, nodeType, property) {
   if (!indexes || !Array.isArray(indexes)) {
@@ -90,6 +115,12 @@ function indexExists(indexes, nodeType, property) {
 
 /**
  * Create a single index
+ * @param {RestClient} client - REST client instance
+ * @param {string} graphName - Graph database name
+ * @param {string} nodeType - Node type
+ * @param {string} property - Property name
+ * @param {string} purpose - Index purpose
+ * @returns {Promise<IndexResult>}
  */
 async function createIndex(client, graphName, nodeType, property, purpose) {
   try {
@@ -114,6 +145,11 @@ async function createIndex(client, graphName, nodeType, property, purpose) {
 
 /**
  * Create all indexes in a category
+ * @param {RestClient} client - REST client instance
+ * @param {string} graphName - Graph database name
+ * @param {string} categoryName - Category name for logging
+ * @param {IndexDefinition[]} indexes - Array of index definitions
+ * @returns {Promise<IndexResult[]>}
  */
 async function createIndexCategory(client, graphName, categoryName, indexes) {
   console.log(`\n📊 Creating ${categoryName} indexes...`);
@@ -133,6 +169,9 @@ async function createIndexCategory(client, graphName, categoryName, indexes) {
 
 /**
  * List all existing indexes
+ * @param {RestClient} client - REST client instance
+ * @param {string} graphName - Graph database name
+ * @returns {Promise<any[]>}
  */
 async function listExistingIndexes(client, graphName) {
   try {
@@ -170,8 +209,8 @@ async function main() {
   // Create client (connect to REST API wrapper on port 3001)
   const client = createRestClient({
     host: 'localhost',
-    port: '3001', // REST API wrapper port
-    user: process.env.FALKORDB_USER || 'default',
+    port: 3001, // REST API wrapper port
+    username: process.env.FALKORDB_USER || 'default',
     password: process.env.FALKORDB_PASSWORD || '',
   });
 

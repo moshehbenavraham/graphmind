@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB Graph Operations
  *
@@ -10,14 +13,27 @@
 import { executeCypher } from './client.js';
 
 /**
+ * @typedef {import('./types.js').RestClient} RestClient
+ * @typedef {import('./types.js').QueryStatistics} QueryStatistics
+ * @typedef {import('./types.js').CreateNodeOptions} CreateNodeOptions
+ * @typedef {import('./types.js').CreateNodeResult} CreateNodeResult
+ * @typedef {import('./types.js').QueryNodeOptions} QueryNodeOptions
+ * @typedef {import('./types.js').QueryNodeResult} QueryNodeResult
+ * @typedef {import('./types.js').DeleteNodeOptions} DeleteNodeOptions
+ * @typedef {import('./types.js').DeleteNodeResult} DeleteNodeResult
+ * @typedef {import('./types.js').CreateRelationshipOptions} CreateRelationshipOptions
+ * @typedef {import('./types.js').CreateRelationshipResult} CreateRelationshipResult
+ * @typedef {import('./types.js').QueryRelationshipOptions} QueryRelationshipOptions
+ * @typedef {import('./types.js').QueryRelationshipResult} QueryRelationshipResult
+ */
+
+/**
  * Create a node in the graph
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Graph database name
- * @param {Object} options - Node creation options
- * @param {string} options.label - Node label (e.g., 'Person', 'Topic', 'Note')
- * @param {Object} options.properties - Node properties as key-value pairs
- * @returns {Promise<Object>} Created node data
+ * @param {CreateNodeOptions} options - Node creation options
+ * @returns {Promise<CreateNodeResult>} Created node data
  *
  * @example
  * const node = await createNode(client, 'user_123_graph', {
@@ -57,13 +73,10 @@ export async function createNode(client, graphName, options) {
 /**
  * Query nodes from the graph
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Graph database name
- * @param {Object} options - Query options
- * @param {string} [options.label] - Node label to filter by
- * @param {Object} [options.where] - Property filters (exact match)
- * @param {number} [options.limit=100] - Maximum nodes to return
- * @returns {Promise<Object>} Query result with nodes
+ * @param {QueryNodeOptions} [options] - Query options
+ * @returns {Promise<QueryNodeResult>} Query result with nodes
  *
  * @example
  * const result = await queryNodes(client, 'user_123_graph', {
@@ -108,12 +121,10 @@ export async function queryNodes(client, graphName, options = {}) {
 /**
  * Delete a node from the graph
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Graph database name
- * @param {Object} options - Delete options
- * @param {string} [options.label] - Node label to filter by
- * @param {Object} options.where - Property filters to identify node(s) to delete
- * @returns {Promise<Object>} Delete result with statistics
+ * @param {DeleteNodeOptions} options - Delete options
+ * @returns {Promise<DeleteNodeResult>} Delete result with statistics
  *
  * @example
  * const result = await deleteNode(client, 'user_123_graph', {
@@ -158,14 +169,10 @@ export async function deleteNode(client, graphName, options) {
 /**
  * Create a relationship between two nodes
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Graph database name
- * @param {Object} options - Relationship creation options
- * @param {Object} options.from - Source node matcher { label, where }
- * @param {Object} options.to - Target node matcher { label, where }
- * @param {string} options.type - Relationship type (e.g., 'KNOWS', 'CREATED', 'MENTIONS')
- * @param {Object} [options.properties={}] - Relationship properties
- * @returns {Promise<Object>} Created relationship data
+ * @param {CreateRelationshipOptions} options - Relationship creation options
+ * @returns {Promise<CreateRelationshipResult>} Created relationship data
  *
  * @example
  * const rel = await createRelationship(client, 'user_123_graph', {
@@ -238,14 +245,10 @@ export async function createRelationship(client, graphName, options) {
 /**
  * Query relationships from the graph
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Graph database name
- * @param {Object} options - Query options
- * @param {string} [options.type] - Relationship type to filter by
- * @param {Object} [options.fromLabel] - Source node label
- * @param {Object} [options.toLabel] - Target node label
- * @param {number} [options.limit=100] - Maximum relationships to return
- * @returns {Promise<Object>} Query result with relationships
+ * @param {QueryRelationshipOptions} [options] - Query options
+ * @returns {Promise<QueryRelationshipResult>} Query result with relationships
  *
  * @example
  * const result = await queryRelationships(client, 'user_123_graph', {

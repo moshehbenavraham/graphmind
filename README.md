@@ -245,6 +245,50 @@ npm run deploy
 npm test
 ```
 
+### Type Checking
+
+This project uses JSDoc + TypeScript for type checking without a build step. This provides ~80% of TypeScript benefits with minimal disruption.
+
+```bash
+# One-time type check
+npm run typecheck
+
+# Watch mode (continuous checking)
+npm run typecheck:watch
+```
+
+**Adding Types to New Files:**
+
+Add `// @ts-check` at the top of any JavaScript file to enable type checking:
+
+```javascript
+// @ts-check
+/// <reference path="../types/cloudflare.d.ts" />
+
+/**
+ * @param {string} name - User name
+ * @param {number} age - User age
+ * @returns {string} Greeting message
+ */
+function greet(name, age) {
+  return `Hello ${name}, you are ${age} years old`;
+}
+```
+
+**Type Definition Files:**
+- `types/cloudflare.d.ts` - Cloudflare Workers bindings (Env, ExecutionContext)
+- `types/common.d.ts` - Shared project types (ErrorWithCode, Logger)
+- `src/lib/falkordb/types.js` - FalkorDB type definitions
+- `src/durable-objects/types.js` - Durable Object types
+
+**IDE Support:**
+- VSCode: Automatic (uses .vscode/settings.json)
+- WebStorm: Enable TypeScript service for JavaScript
+- Vim/Neovim: Use coc-tsserver or nvim-lspconfig
+
+**Pre-commit Hook:**
+Type checking runs automatically on commit via Husky. Commits will fail if type errors are present.
+
 ## Troubleshooting
 
 ### Port Conflicts

@@ -72,25 +72,76 @@ echo -e "${GREEN}✔ Services stopped${NC}"
 echo ""
 
 echo -e "${YELLOW}[2/11] Cleaning all build artifacts and caches...${NC}"
-rm -rf dist/ .wrangler/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
+# Clean build artifacts
+rm -rf dist/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
+
+# HARD CLEAR: All wrangler state including KV, D1, R2 caches
+echo "  - Clearing all .wrangler state (KV, D1, R2 caches)..."
+rm -rf .wrangler/ 2>/dev/null || true
+
+# Clean npm caches
+echo "  - Clearing npm caches..."
 npm cache clean --force >/dev/null 2>&1 || true
 (cd src/frontend && npm cache clean --force >/dev/null 2>&1 || true)
-echo -e "${GREEN}✔ Build artifacts cleaned${NC}"
+
+# Clean any TypeScript/esbuild caches
+rm -rf .tsbuildinfo tsconfig.tsbuildinfo 2>/dev/null || true
+
+# Clean any stale lock files that might cause issues
+rm -rf package-lock.json.bak 2>/dev/null || true
+
+echo -e "${GREEN}✔ All build artifacts and caches cleared${NC}"
 echo ""
 
-echo -e "${YELLOW}[3/11] Installing fresh dependencies...${NC}"
+echo -e "${YELLOW}[3/11] Installing fresh dependencies and upgrading tools...${NC}"
+
+# Upgrade npm itself first
+echo "  - Checking npm version..."
+NPM_CURRENT=$(npm --version)
+echo "    Current npm: $NPM_CURRENT"
+npm install -g npm@latest 2>/dev/null || echo "    (npm global upgrade skipped - may need sudo)"
+
+# Install dependencies
 rm -rf node_modules/
 npm install
-echo "  - Updating Wrangler to latest..."
+
+# Upgrade Wrangler to latest
+echo "  - Upgrading Wrangler to latest..."
+WRANGLER_OLD=$(npx wrangler --version 2>/dev/null | head -1 || echo "unknown")
 npm install -D wrangler@latest
+WRANGLER_NEW=$(npx wrangler --version 2>/dev/null | head -1 || echo "unknown")
+echo "    Wrangler: $WRANGLER_OLD -> $WRANGLER_NEW"
+
+# Security: Fix known vulnerabilities
+echo "  - Running npm audit fix..."
+npm audit fix --force 2>/dev/null || npm audit fix 2>/dev/null || echo "    No critical fixes needed"
+
+# Check for outdated dependencies (informational)
+echo "  - Checking for outdated packages..."
+npm outdated 2>/dev/null | head -10 || echo "    All packages up to date"
+
 cd src/frontend
 rm -rf node_modules/
 npm install
+
+# Security: Fix frontend vulnerabilities
+echo "  - Running npm audit fix for frontend..."
+npm audit fix --force 2>/dev/null || npm audit fix 2>/dev/null || echo "    No critical fixes needed"
+
+# Check frontend outdated packages
+echo "  - Checking frontend outdated packages..."
+npm outdated 2>/dev/null | head -10 || echo "    All packages up to date"
+
 cd "$PROJECT_ROOT"
-echo -e "${GREEN}✔ Dependencies installed${NC}"
+echo -e "${GREEN}✔ Dependencies installed, tools upgraded, and security audited${NC}"
 echo ""
 
 echo -e "${YELLOW}[4/11] Starting FalkorDB Docker container...${NC}"
+
+# Pull latest FalkorDB image
+echo "  - Pulling latest FalkorDB image..."
+docker pull falkordb/falkordb:latest
+
 if docker ps -a | grep -q falkordb-local; then
     echo "  - Removing existing container..."
     docker rm -f falkordb-local >/dev/null 2>&1 || true
@@ -136,6 +187,22 @@ fi
 echo ""
 
 echo -e "${YELLOW}[6/11] Starting Cloudflare Tunnel...${NC}"
+
+# Check and upgrade cloudflared
+echo "  - Checking cloudflared version..."
+CLOUDFLARED_CURRENT=$(cloudflared --version 2>/dev/null | head -1 || echo "not installed")
+echo "    Current: $CLOUDFLARED_CURRENT"
+
+# Try to update cloudflared (different methods based on install type)
+echo "  - Attempting cloudflared upgrade..."
+cloudflared update 2>/dev/null || \
+  (which apt-get >/dev/null && apt-get update && apt-get install -y cloudflared 2>/dev/null) || \
+  (which brew >/dev/null && brew upgrade cloudflared 2>/dev/null) || \
+  echo "    (cloudflared upgrade skipped - update manually if needed)"
+
+CLOUDFLARED_NEW=$(cloudflared --version 2>/dev/null | head -1 || echo "unknown")
+echo "    Version: $CLOUDFLARED_NEW"
+
 cloudflared tunnel run falkordb-tunnel > /tmp/cloudflared.log 2>&1 &
 TUNNEL_PID=$!
 echo "  - Tunnel started (PID: $TUNNEL_PID)"

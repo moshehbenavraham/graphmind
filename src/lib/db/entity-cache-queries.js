@@ -177,12 +177,12 @@ export async function createEntity(db, entity) {
  * @param {string} entityKey - Normalized entity key
  * @param {string} userId - User ID
  * @param {string} noteId - Voice note ID
- * @param {number} newConfidence - New confidence score (optional, updates if higher)
+ * @param {number} [newConfidence] - New confidence score (optional, updates if higher)
  * @returns {Promise<boolean>} True if updated successfully
  */
-export async function updateEntityMention(db, entityKey, userId, noteId, newConfidence = null) {
+export async function updateEntityMention(db, entityKey, userId, noteId, newConfidence = undefined) {
   // If confidence provided, update if higher than current
-  const confidenceUpdate = newConfidence !== null
+  const confidenceUpdate = newConfidence !== undefined
     ? `, confidence = CASE WHEN ? > confidence THEN ? ELSE confidence END`
     : '';
 
@@ -196,7 +196,8 @@ export async function updateEntityMention(db, entityKey, userId, noteId, newConf
     WHERE entity_key = ? AND user_id = ?
   `;
 
-  const bindings = newConfidence !== null
+  /** @type {(string | number)[]} */
+  const bindings = newConfidence !== undefined
     ? [noteId, newConfidence, newConfidence, entityKey, userId]
     : [noteId, entityKey, userId];
 
@@ -286,11 +287,11 @@ export async function addEntityAlias(db, entityKey, userId, newAlias) {
  *
  * @param {Object} db - D1 database binding
  * @param {string} userId - User ID
- * @param {string} entityType - Entity type filter (optional)
+ * @param {string} [entityType] - Entity type filter (optional)
  * @param {number} limit - Max results (default: 100)
  * @returns {Promise<Array>} Array of entity records
  */
-export async function getEntitiesByUser(db, userId, entityType = null, limit = 100) {
+export async function getEntitiesByUser(db, userId, entityType = undefined, limit = 100) {
   let query = `
     SELECT
       cache_id,
@@ -310,6 +311,7 @@ export async function getEntitiesByUser(db, userId, entityType = null, limit = 1
     WHERE user_id = ?
   `;
 
+  /** @type {(string | number)[]} */
   const bindings = [userId];
 
   if (entityType) {

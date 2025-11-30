@@ -72,6 +72,15 @@ async function isTokenBlacklisted(token, kv) {
 }
 
 /**
+ * @typedef {Object} UserContext
+ * @property {string} user_id - User UUID
+ * @property {string} email - User email
+ * @property {string} namespace - FalkorDB namespace
+ * @property {string} [role] - User role (e.g., 'admin')
+ * @property {boolean} [is_admin] - Alternative admin flag
+ */
+
+/**
  * Authenticate request and extract user context
  *
  * Validates JWT token and returns user information.
@@ -80,10 +89,7 @@ async function isTokenBlacklisted(token, kv) {
  * @param {Object} env - Worker environment bindings
  * @param {string} env.JWT_SECRET - JWT signing secret
  * @param {Object} [env.KV] - Optional KV binding for token blacklist
- * @returns {Promise<Object|null>} User context or null if authentication fails
- * @returns {string} user.user_id - User UUID
- * @returns {string} user.email - User email
- * @returns {string} user.namespace - FalkorDB namespace
+ * @returns {Promise<UserContext|null>} User context or null if authentication fails
  */
 export async function authenticateRequest(request, env) {
   try {
@@ -106,11 +112,14 @@ export async function authenticateRequest(request, env) {
     }
 
     // Extract user context from claims
+    // @ts-ignore - claims may include additional fields from JWT
     const user = {
       user_id: claims.sub,
       email: claims.email,
       namespace: claims.namespace,
+      // @ts-ignore - role and is_admin are optional extended claims
       role: claims.role,       // Admin role check
+      // @ts-ignore - role and is_admin are optional extended claims
       is_admin: claims.is_admin // Alternative admin flag
     };
 

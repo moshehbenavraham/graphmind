@@ -19,16 +19,25 @@
 export const ErrorCodes = {
   // Client Errors (4xx)
   INVALID_INPUT: 'INVALID_INPUT',
+  INVALID_REQUEST: 'INVALID_REQUEST',
+  INVALID_NODE_TYPE: 'INVALID_NODE_TYPE',
+  INVALID_PROPERTIES: 'INVALID_PROPERTIES',
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   DUPLICATE_EMAIL: 'DUPLICATE_EMAIL',
+  DUPLICATE_RESOURCE: 'DUPLICATE_RESOURCE',
   RATE_LIMITED: 'RATE_LIMITED',
 
   // Server Errors (5xx)
   SERVER_ERROR: 'SERVER_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  DATABASE_ERROR: 'DATABASE_ERROR'
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  NODE_CREATION_FAILED: 'NODE_CREATION_FAILED',
+  NODE_UPDATE_FAILED: 'NODE_UPDATE_FAILED',
+  NODE_DELETION_FAILED: 'NODE_DELETION_FAILED',
+  RELATIONSHIP_CREATION_FAILED: 'RELATIONSHIP_CREATION_FAILED',
+  QUERY_EXECUTION_FAILED: 'QUERY_EXECUTION_FAILED'
 };
 
 /**
@@ -37,7 +46,7 @@ export const ErrorCodes = {
  * @param {string} message - Human-readable error message
  * @param {string} code - Error code from ErrorCodes
  * @param {number} status - HTTP status code
- * @param {Object} [details] - Optional additional error context
+ * @param {Object|null} [details] - Optional additional error context
  * @returns {Response} JSON response with error
  */
 export function errorResponse(message, code, status, details = null) {
@@ -63,6 +72,10 @@ export function errorResponse(message, code, status, details = null) {
 
 /**
  * 400 Bad Request - Invalid input
+ *
+ * @param {string} message - Error message
+ * @param {Object|null} [details] - Optional error details
+ * @returns {Response} 400 Bad Request response
  */
 export function badRequestError(message, details = null) {
   return errorResponse(
@@ -182,4 +195,35 @@ export function validationError(errors) {
     'Validation failed',
     { validation_errors: errors }
   );
+}
+
+/**
+ * Database/Query error - For database operations that fail
+ *
+ * @param {string} message - Error message
+ * @param {Object} [details] - Additional error context
+ * @returns {Response} 500 Internal Server Error with database error code
+ */
+export function databaseError(message = 'Database operation failed', details = null) {
+  return errorResponse(
+    message,
+    ErrorCodes.DATABASE_ERROR,
+    500,
+    details
+  );
+}
+
+/**
+ * Create error with custom code
+ *
+ * Allows using error codes not in the predefined ErrorCodes enum.
+ *
+ * @param {string} message - Error message
+ * @param {string} code - Custom error code
+ * @param {number} status - HTTP status code
+ * @param {Object} [details] - Additional error context
+ * @returns {Response} Error response
+ */
+export function customError(message, code, status, details = null) {
+  return errorResponse(message, code, status, details);
 }

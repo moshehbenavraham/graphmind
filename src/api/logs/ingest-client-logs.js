@@ -97,7 +97,7 @@ export async function handleClientLogs(request, env) {
   try {
     body = await request.json();
   } catch (error) {
-    logger.warn('client_logs.parse_failed', 'Invalid JSON payload', { message: error.message });
+    logger.warn('Invalid JSON payload', { event: 'client_logs.parse_failed', message: error.message });
     return badRequestError('Invalid JSON payload');
   }
 
@@ -124,7 +124,8 @@ export async function handleClientLogs(request, env) {
     console.log(JSON.stringify(record));
   });
 
-  logger.info('client_logs.received', 'Client logs ingested', {
+  logger.info('Client logs ingested', {
+    event: 'client_logs.received',
     count: sanitized.length,
     dropped,
     client_ip: clientIp

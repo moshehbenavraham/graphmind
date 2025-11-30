@@ -293,8 +293,8 @@ function BrutalWaveform({
         height={height}
         className="block"
         style={{
-          imageRendering: 'pixelated',
-          // Fallback for Firefox
+          // Use crisp-edges for cross-browser pixelated rendering
+          // (works in Firefox, Chrome, Safari)
           imageRendering: 'crisp-edges',
         }}
         role="img"

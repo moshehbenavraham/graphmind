@@ -108,11 +108,11 @@ LIMIT 50;`;
  *
  * @param {string} userNamespace - User's FalkorDB graph namespace
  * @param {string} entityType - Entity type (Person, Project, Technology, etc.)
- * @param {string} filterProperty - Optional filter property name
- * @param {any} filterValue - Optional filter value
+ * @param {string} [filterProperty] - Optional filter property name
+ * @param {any} [filterValue] - Optional filter value
  * @returns {string} Cypher query
  */
-export function listQueryTemplate(userNamespace, entityType, filterProperty = null, filterValue = null) {
+export function listQueryTemplate(userNamespace, entityType, filterProperty = undefined, filterValue = undefined) {
   let whereClause = '';
   if (filterProperty && filterValue) {
     whereClause = `WHERE n.${filterProperty} = $filter_value\n`;

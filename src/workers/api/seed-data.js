@@ -154,16 +154,17 @@ async function addSeedData(env, userId) {
   const poolStub = env.FALKORDB_POOL.get(poolId);
 
   // Step 1: Create people, projects, and technologies
+  // IMPORTANT: All nodes must include user_id for proper isolation and querying
   const query1 = `
     CREATE
-      (p1:Person {name: "Alice Johnson", role: "CEO", email: "alice@example.com"}),
-      (p2:Person {name: "Bob Smith", role: "CTO", email: "bob@example.com"}),
-      (p3:Person {name: "Carol White", role: "Designer", email: "carol@example.com"}),
-      (proj1:Project {name: "GraphMind", status: "active", priority: "high"}),
-      (proj2:Project {name: "Mobile App", status: "planning", priority: "medium"}),
-      (tech1:Technology {name: "Cloudflare Workers", category: "infrastructure"}),
-      (tech2:Technology {name: "FalkorDB", category: "database"}),
-      (tech3:Technology {name: "React", category: "frontend"}),
+      (p1:Person {name: "Alice Johnson", role: "CEO", email: "alice@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (p2:Person {name: "Bob Smith", role: "CTO", email: "bob@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (p3:Person {name: "Carol White", role: "Designer", email: "carol@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (proj1:Project {name: "GraphMind", status: "active", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (proj2:Project {name: "Mobile App", status: "planning", priority: "medium", user_id: $user_id, entity_id: randomUUID()}),
+      (tech1:Technology {name: "Cloudflare Workers", category: "infrastructure", user_id: $user_id, entity_id: randomUUID()}),
+      (tech2:Technology {name: "FalkorDB", category: "database", user_id: $user_id, entity_id: randomUUID()}),
+      (tech3:Technology {name: "React", category: "frontend", user_id: $user_id, entity_id: randomUUID()}),
       (p1)-[:LEADS]->(proj1),
       (p2)-[:WORKS_ON]->(proj1),
       (p3)-[:WORKS_ON]->(proj1),
@@ -176,18 +177,19 @@ async function addSeedData(env, userId) {
   `;
 
   // Step 2: Add meetings and topics
+  // Match by user_id to ensure we're connecting to the right nodes
   const query2 = `
     MATCH
-      (alice:Person {name: "Alice Johnson"}),
-      (bob:Person {name: "Bob Smith"}),
-      (carol:Person {name: "Carol White"}),
-      (gm:Project {name: "GraphMind"})
+      (alice:Person {name: "Alice Johnson", user_id: $user_id}),
+      (bob:Person {name: "Bob Smith", user_id: $user_id}),
+      (carol:Person {name: "Carol White", user_id: $user_id}),
+      (gm:Project {name: "GraphMind", user_id: $user_id})
     CREATE
-      (m1:Meeting {title: "GraphMind Kickoff", date: "2025-01-10", duration: 60}),
-      (m2:Meeting {title: "Design Review", date: "2025-01-15", duration: 45}),
-      (topic1:Topic {name: "Voice AI", category: "feature"}),
-      (topic2:Topic {name: "Knowledge Graph", category: "architecture"}),
-      (topic3:Topic {name: "User Interface", category: "design"}),
+      (m1:Meeting {title: "GraphMind Kickoff", date: "2025-01-10", duration: 60, user_id: $user_id, entity_id: randomUUID()}),
+      (m2:Meeting {title: "Design Review", date: "2025-01-15", duration: 45, user_id: $user_id, entity_id: randomUUID()}),
+      (topic1:Topic {name: "Voice AI", category: "feature", user_id: $user_id, entity_id: randomUUID()}),
+      (topic2:Topic {name: "Knowledge Graph", category: "architecture", user_id: $user_id, entity_id: randomUUID()}),
+      (topic3:Topic {name: "User Interface", category: "design", user_id: $user_id, entity_id: randomUUID()}),
       (alice)-[:ATTENDED]->(m1),
       (bob)-[:ATTENDED]->(m1),
       (carol)-[:ATTENDED]->(m1),
@@ -203,18 +205,19 @@ async function addSeedData(env, userId) {
   `;
 
   // Step 3: Add tasks and decisions
+  // Match by user_id to ensure we're connecting to the right nodes
   const query3 = `
     MATCH
-      (alice:Person {name: "Alice Johnson"}),
-      (bob:Person {name: "Bob Smith"}),
-      (carol:Person {name: "Carol White"}),
-      (gm:Project {name: "GraphMind"})
+      (alice:Person {name: "Alice Johnson", user_id: $user_id}),
+      (bob:Person {name: "Bob Smith", user_id: $user_id}),
+      (carol:Person {name: "Carol White", user_id: $user_id}),
+      (gm:Project {name: "GraphMind", user_id: $user_id})
     CREATE
-      (task1:Task {title: "Implement voice transcription", status: "completed", priority: "high"}),
-      (task2:Task {title: "Design dashboard UI", status: "in_progress", priority: "high"}),
-      (task3:Task {title: "Setup database", status: "completed", priority: "high"}),
-      (dec1:Decision {title: "Use FalkorDB for knowledge graph", date: "2025-01-05", rationale: "Better performance for graph queries"}),
-      (dec2:Decision {title: "Deploy on Cloudflare Workers", date: "2025-01-08", rationale: "Global edge network, low latency"}),
+      (task1:Task {title: "Implement voice transcription", status: "completed", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (task2:Task {title: "Design dashboard UI", status: "in_progress", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (task3:Task {title: "Setup database", status: "completed", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (dec1:Decision {title: "Use FalkorDB for knowledge graph", date: "2025-01-05", rationale: "Better performance for graph queries", user_id: $user_id, entity_id: randomUUID()}),
+      (dec2:Decision {title: "Deploy on Cloudflare Workers", date: "2025-01-08", rationale: "Global edge network, low latency", user_id: $user_id, entity_id: randomUUID()}),
       (bob)-[:ASSIGNED_TO]->(task1),
       (carol)-[:ASSIGNED_TO]->(task2),
       (bob)-[:ASSIGNED_TO]->(task3),
@@ -238,9 +241,9 @@ async function addSeedData(env, userId) {
           config,
           userId,
           operations: [
-            { cypher: query1, params: {} },
-            { cypher: query2, params: {} },
-            { cypher: query3, params: {} }
+            { cypher: query1, params: { user_id: userId } },
+            { cypher: query2, params: { user_id: userId } },
+            { cypher: query3, params: { user_id: userId } }
           ]
         })
       });

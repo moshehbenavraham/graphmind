@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB Error Normalization
  *
@@ -5,6 +8,11 @@
  * Provides clear, actionable error messages for troubleshooting.
  *
  * @module lib/falkordb/errors
+ */
+
+/**
+ * @typedef {import('./types.js').NormalizedError} NormalizedError
+ * @typedef {import('./types.js').ErrorResponse} ErrorResponse
  */
 
 /**
@@ -40,9 +48,16 @@ const ERROR_MAPPINGS = {
 /**
  * Normalize FalkorDB error to consistent format
  *
- * @param {Error} error - Original error from FalkorDB/Redis
+ * @param {Error & {code?: string, httpStatus?: number, originalMessage?: string, query?: string, graphName?: string, host?: string, port?: string|number, userId?: string}} error - Original error from FalkorDB/Redis
  * @param {Object} [context={}] - Additional context for error message
- * @returns {Error} Normalized error with httpStatus property
+ * @param {string} [context.host] - FalkorDB host
+ * @param {string|number} [context.port] - FalkorDB port
+ * @param {string} [context.graphName] - Graph name
+ * @param {string} [context.query] - Cypher query
+ * @param {string} [context.userId] - User ID for context
+ * @param {number} [context.operationCount] - Operation count for metrics
+ * @param {string} [context.operation] - Operation name for context
+ * @returns {NormalizedError} Normalized error with httpStatus property
  *
  * @example
  * try {
@@ -59,6 +74,7 @@ export function normalizeError(error, context = {}) {
     // Merge new context if provided
     if (context.query && !error.query) error.query = context.query;
     if (context.graphName && !error.graphName) error.graphName = context.graphName;
+    // @ts-ignore - error is already normalized
     return error;
   }
 
@@ -89,7 +105,8 @@ export function normalizeError(error, context = {}) {
   }
 
   // Create normalized error
-  const normalizedError = new Error(mapping.message);
+  /** @type {NormalizedError} */
+  const normalizedError = /** @type {NormalizedError} */ (new Error(mapping.message));
   normalizedError.httpStatus = mapping.status;
   normalizedError.code = errorCode;
   normalizedError.originalMessage = errorMessage;
@@ -114,9 +131,9 @@ export function normalizeError(error, context = {}) {
 /**
  * Create a user-friendly error response for API endpoints
  *
- * @param {Error} error - Normalized error
+ * @param {NormalizedError} error - Normalized error
  * @param {boolean} [includeDetails=false] - Include technical details (dev mode only)
- * @returns {Object} Error response object
+ * @returns {ErrorResponse} Error response object
  *
  * @example
  * const error = normalizeError(dbError, { host: 'db.example.com' });
@@ -166,7 +183,7 @@ export function createErrorResponse(error, includeDetails = false) {
  *
  * Some errors are temporary and can be retried with exponential backoff.
  *
- * @param {Error} error - Error to check
+ * @param {NormalizedError | Error & {code?: string}} error - Error to check
  * @returns {boolean} True if error is retryable
  */
 export function isRetryableError(error) {
@@ -178,7 +195,7 @@ export function isRetryableError(error) {
     'MAXCLIENTS',
   ];
 
-  return retryableCodes.includes(error.code);
+  return error.code ? retryableCodes.includes(error.code) : false;
 }
 
 /**

@@ -2,7 +2,7 @@
 import { EmbeddingService } from '../../../services/embedding.js';
 import { internalServerError, badRequestError } from '../../../utils/errors.js';
 import { requireAdmin } from '../../../middleware/auth.js';
-import { checkRateLimit, rateLimitError } from '../../../middleware/rate-limit.js';
+import { checkRateLimitSimple, rateLimitError } from '../../../middleware/rateLimit.js';
 
 /**
  * Extract value from FalkorDB raw format
@@ -46,7 +46,7 @@ export async function handleBackfillEmbeddings(request, env) {
         // T103: Rate limiting (1 request/hour per admin)
         if (env.KV) {
             const rateLimitKey = `backfill:${user.user_id}`;
-            const rateLimit = await checkRateLimit(rateLimitKey, 1, 3600, env.KV); // 1 req/hour
+            const rateLimit = await checkRateLimitSimple(rateLimitKey, 1, 3600, env.KV); // 1 req/hour
 
             if (!rateLimit.allowed) {
                 return rateLimitError(rateLimit.reset);

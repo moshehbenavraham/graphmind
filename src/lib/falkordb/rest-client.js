@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB REST API Client
  *
@@ -8,15 +11,16 @@
  */
 
 /**
+ * @typedef {import('./types.js').FalkorDBConfig} FalkorDBConfig
+ * @typedef {import('./types.js').RestClient} RestClient
+ * @typedef {import('./types.js').RestApiResponse} RestApiResponse
+ */
+
+/**
  * Create a FalkorDB REST API client
  *
- * @param {Object} config - Connection configuration
- * @param {string} config.host - FalkorDB host
- * @param {number} config.port - FalkorDB port
- * @param {string} config.username - FalkorDB username
- * @param {string} config.password - FalkorDB password
- * @param {string} config.apiKey - REST API authentication key (Feature 012 - Security Hardening)
- * @returns {Object} REST API client with query methods
+ * @param {FalkorDBConfig} config - Connection configuration
+ * @returns {RestClient} REST API client with query methods
  */
 export function createRestClient(config) {
   const { host, port, username, password, apiKey } = config;
@@ -285,8 +289,8 @@ function convertRestResultToRedisFormat(restResult) {
 /**
  * Connect to FalkorDB via REST API
  *
- * @param {Object} config - Connection configuration
- * @returns {Promise<Object>} Connected REST client
+ * @param {FalkorDBConfig} config - Connection configuration
+ * @returns {Promise<RestClient>} Connected REST client
  */
 export async function connectRest(config) {
   const client = createRestClient(config);

@@ -1,10 +1,21 @@
+// @ts-check
+/// <reference types="node" />
 
 import { createClient } from 'redis';
 
+/**
+ * @typedef {import('redis').RedisClientType} RedisClient
+ */
+
+/** @type {ReturnType<typeof createClient>} */
 const client = createClient({
     url: 'redis://localhost:6380'
 });
 
+/**
+ * Seed test data into FalkorDB
+ * @returns {Promise<void>}
+ */
 async function seed() {
     await client.connect();
 

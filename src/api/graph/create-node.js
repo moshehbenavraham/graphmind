@@ -9,6 +9,8 @@
 
 import { buildMergeNode } from '../../lib/graph/cypher-builder.js';
 import { invalidateAllGraphCaches } from '../../lib/graph/cache-invalidator.js';
+import { badRequestError, customError } from '../../utils/errors.js';
+import { ErrorCodes } from '../../utils/errors.js';
 
 // Valid node types
 const VALID_NODE_TYPES = ['Person', 'Project', 'Meeting', 'Topic', 'Technology', 'Location', 'Organization'];
@@ -29,41 +31,25 @@ export async function handleCreateNode(request, env, user) {
 
     // Validate required fields
     if (!type || !properties) {
-      return new Response(JSON.stringify({
-        error: {
-          code: 'INVALID_REQUEST',
-          message: 'Missing required fields: type, properties',
-        },
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return badRequestError('Missing required fields: type, properties');
     }
 
     // Validate node type
     if (!VALID_NODE_TYPES.includes(type)) {
-      return new Response(JSON.stringify({
-        error: {
-          code: 'INVALID_NODE_TYPE',
-          message: `Invalid node type: ${type}. Must be one of: ${VALID_NODE_TYPES.join(', ')}`,
-        },
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return customError(
+        `Invalid node type: ${type}. Must be one of: ${VALID_NODE_TYPES.join(', ')}`,
+        ErrorCodes.INVALID_NODE_TYPE,
+        400
+      );
     }
 
     // Validate required property: name
     if (!properties.name || properties.name.trim() === '') {
-      return new Response(JSON.stringify({
-        error: {
-          code: 'INVALID_PROPERTIES',
-          message: 'Property "name" is required and cannot be empty',
-        },
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return customError(
+        'Property "name" is required and cannot be empty',
+        ErrorCodes.INVALID_PROPERTIES,
+        400
+      );
     }
 
     // Generate entity_id for new node
@@ -93,6 +79,7 @@ export async function handleCreateNode(request, env, user) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -124,14 +111,10 @@ export async function handleCreateNode(request, env, user) {
 
   } catch (error) {
     console.error('[CreateNode] Error:', error);
-    return new Response(JSON.stringify({
-      error: {
-        code: 'NODE_CREATION_FAILED',
-        message: error.message,
-      },
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return customError(
+      error.message,
+      ErrorCodes.NODE_CREATION_FAILED,
+      500
+    );
   }
 }

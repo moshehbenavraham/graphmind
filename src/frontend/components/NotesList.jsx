@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, Button, Badge, GlitchText, OffsetLayer, cn } from '../design-system';
 import { motion, AnimatePresence } from 'framer-motion';
 import { brutalStagger } from '../design-system';
+import { usePaginatedFetch } from '../hooks/useFetch';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('NotesList');
 
 /**
  * NotesList Component (Tasks T085-T091)
@@ -17,119 +21,35 @@ import { brutalStagger } from '../design-system';
  * - T089: Pagination controls (prev/next, page numbers)
  * - T090: Empty state with onboarding message
  * - T091: Loading and error state handling
+ *
+ * Refactored to use usePaginatedFetch hook for data fetching (Phase 2).
  */
-const NotesList = ({ onNoteSelect, authToken }) => {
-  // State management
-  const [notes, setNotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    total: 0,
+const NotesList = ({ onNoteSelect }) => {
+  /**
+   * T085: Fetch notes using usePaginatedFetch hook
+   * T086: Notes returned in reverse chronological order via order_by param
+   */
+  const {
+    data: notes,
+    loading,
+    error,
+    pagination,
+    refetch,
+    goToPage,
+    nextPage,
+    prevPage,
+    getPageNumbers,
+    hasNextPage,
+    hasPrevPage,
+  } = usePaginatedFetch('/api/notes', {
     limit: 20,
-    offset: 0,
-    has_more: false,
-    current_page: 1,
-    total_pages: 1
+    orderBy: 'created_at_desc',
+    extractData: (response) => response.notes || [],
+    extractPagination: (response) => response.pagination || {},
+    onError: (err) => {
+      logger.error('fetch.error', 'Failed to fetch notes', { message: err.message });
+    },
   });
-
-  /**
-   * T085: Fetch notes from API on mount and when pagination changes
-   */
-  useEffect(() => {
-    fetchNotes();
-  }, [pagination.offset]);
-
-  /**
-   * Fetch notes from API endpoint
-   */
-  const fetchNotes = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Build query parameters
-      const params = new URLSearchParams({
-        limit: pagination.limit.toString(),
-        offset: pagination.offset.toString(),
-        order_by: 'created_at_desc'
-      });
-
-      // Make API request
-      const response = await fetch(`/api/notes?${params}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized. Please log in again.');
-        } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        } else {
-          throw new Error(`Failed to load notes (${response.status})`);
-        }
-      }
-
-      const data = await response.json();
-
-      // T086: Notes are already in reverse chronological order from API
-      setNotes(data.notes || []);
-
-      // Update pagination state
-      const totalPages = Math.ceil(data.pagination.total / data.pagination.limit);
-      setPagination({
-        total: data.pagination.total,
-        limit: data.pagination.limit,
-        offset: data.pagination.offset,
-        has_more: data.pagination.has_more,
-        current_page: Math.floor(data.pagination.offset / data.pagination.limit) + 1,
-        total_pages: totalPages
-      });
-    } catch (err) {
-      console.error('Failed to fetch notes:', err);
-      setError(err.message || 'Failed to load notes. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * T089: Navigate to next page
-   */
-  const handleNextPage = () => {
-    if (pagination.has_more) {
-      setPagination(prev => ({
-        ...prev,
-        offset: prev.offset + prev.limit
-      }));
-    }
-  };
-
-  /**
-   * T089: Navigate to previous page
-   */
-  const handlePrevPage = () => {
-    if (pagination.offset > 0) {
-      setPagination(prev => ({
-        ...prev,
-        offset: Math.max(0, prev.offset - prev.limit)
-      }));
-    }
-  };
-
-  /**
-   * T089: Jump to specific page
-   */
-  const handlePageClick = (pageNumber) => {
-    const newOffset = (pageNumber - 1) * pagination.limit;
-    setPagination(prev => ({
-      ...prev,
-      offset: newOffset
-    }));
-  };
 
   /**
    * T087: Truncate transcript to excerpt (first 100 chars)
@@ -183,55 +103,6 @@ const NotesList = ({ onNoteSelect, authToken }) => {
   };
 
   /**
-   * T089: Generate page number buttons (show max 5 pages at a time)
-   */
-  const getPageNumbers = () => {
-    const { current_page, total_pages } = pagination;
-    const pages = [];
-
-    if (total_pages <= 5) {
-      // Show all pages if 5 or fewer
-      for (let i = 1; i <= total_pages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Show current page and 2 before/after
-      let start = Math.max(1, current_page - 2);
-      let end = Math.min(total_pages, current_page + 2);
-
-      // Adjust if at start or end
-      if (current_page <= 3) {
-        end = 5;
-      } else if (current_page >= total_pages - 2) {
-        start = total_pages - 4;
-      }
-
-      // Add first page and ellipsis if needed
-      if (start > 1) {
-        pages.push(1);
-        if (start > 2) {
-          pages.push('...');
-        }
-      }
-
-      // Add page range
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
-
-      // Add ellipsis and last page if needed
-      if (end < total_pages) {
-        if (end < total_pages - 1) {
-          pages.push('...');
-        }
-        pages.push(total_pages);
-      }
-    }
-
-    return pages;
-  };
-
-  /**
    * Handle note click
    */
   const handleNoteClick = (noteId) => {
@@ -240,8 +111,11 @@ const NotesList = ({ onNoteSelect, authToken }) => {
     }
   };
 
+  // Get array of notes (default to empty array)
+  const notesList = notes || [];
+
   // T091: Loading state
-  if (loading && notes.length === 0) {
+  if (loading && notesList.length === 0) {
     return (
       <div className="w-full max-w-5xl mx-auto p-6">
         <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
@@ -265,7 +139,7 @@ const NotesList = ({ onNoteSelect, authToken }) => {
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-status-error mb-1">FAILED TO LOAD NOTES</h3>
                 <p className="font-mono text-sm text-brutal-charcoal/70 mb-4">{error}</p>
-                <Button variant="danger" onClick={fetchNotes}>
+                <Button variant="danger" onClick={refetch}>
                   TRY AGAIN
                 </Button>
               </div>
@@ -277,7 +151,7 @@ const NotesList = ({ onNoteSelect, authToken }) => {
   }
 
   // T090: Empty state
-  if (notes.length === 0) {
+  if (notesList.length === 0) {
     return (
       <div className="w-full max-w-5xl mx-auto p-6">
         <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
@@ -321,7 +195,7 @@ const NotesList = ({ onNoteSelect, authToken }) => {
         animate="show"
       >
         <AnimatePresence mode="popLayout">
-          {notes.map((note, index) => (
+          {notesList.map((note) => (
             <motion.div
               key={note.note_id}
               variants={brutalStagger.item}
@@ -380,8 +254,8 @@ const NotesList = ({ onNoteSelect, authToken }) => {
         <div className="flex items-center justify-center gap-4 pt-6 border-t-4 border-brutal-black">
           <Button
             variant="secondary"
-            onClick={handlePrevPage}
-            disabled={pagination.current_page === 1}
+            onClick={prevPage}
+            disabled={!hasPrevPage}
             aria-label="Previous page"
             className="flex items-center gap-2"
           >
@@ -409,7 +283,7 @@ const NotesList = ({ onNoteSelect, authToken }) => {
                       ? 'bg-accent-primary text-brutal-black'
                       : 'bg-brutal-white text-brutal-black hover:bg-brutal-black hover:text-brutal-white'
                   )}
-                  onClick={() => handlePageClick(page)}
+                  onClick={() => goToPage(page)}
                   aria-label={`Page ${page}`}
                   aria-current={page === pagination.current_page ? 'page' : undefined}
                 >
@@ -421,8 +295,8 @@ const NotesList = ({ onNoteSelect, authToken }) => {
 
           <Button
             variant="secondary"
-            onClick={handleNextPage}
-            disabled={!pagination.has_more}
+            onClick={nextPage}
+            disabled={!hasNextPage}
             aria-label="Next page"
             className="flex items-center gap-2"
           >
@@ -435,7 +309,7 @@ const NotesList = ({ onNoteSelect, authToken }) => {
       )}
 
       {/* Loading overlay during pagination */}
-      {loading && notes.length > 0 && (
+      {loading && notesList.length > 0 && (
         <div className="absolute inset-0 bg-brutal-cream/80 flex items-center justify-center z-10">
           <div className="loading-brutal" />
         </div>

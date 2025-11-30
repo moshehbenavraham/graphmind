@@ -166,7 +166,7 @@ export function buildGetNeighborhood(entityId, depth = 1) {
  * @param {number} limit - Max results (default 50)
  * @returns {Object} {cypher, params}
  */
-export function buildSearchEntities(query, nodeType = null, limit = 50) {
+export function buildSearchEntities(query, nodeType = undefined, limit = 50) {
   const typeFilter = nodeType ? `:${nodeType}` : '';
 
   const cypher = `

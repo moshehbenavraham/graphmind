@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, Button, Badge, cn } from '../design-system';
 import { motion, AnimatePresence } from 'framer-motion';
 import { brutalEnter, brutalExit } from '../design-system';
+import { useFetch } from '../hooks/useFetch';
+import { api } from '../utils/api';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('NoteDetail');
 
 /**
  * NoteDetail Component (Tasks T092-T098)
@@ -17,67 +22,34 @@ import { brutalEnter, brutalExit } from '../design-system';
  * - T096: Handle DELETE /api/notes/:note_id request
  * - T097: Remove from list without full refresh (callback)
  * - T098: Back navigation to list
+ *
+ * Refactored to use useFetch hook for data fetching (Phase 2).
  */
-const NoteDetail = ({ noteId, onBack, onNoteDeleted, authToken }) => {
-  // State management
-  const [note, setNote] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const NoteDetail = ({ noteId, onBack, onNoteDeleted }) => {
+  // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
   /**
-   * T092: Fetch note when noteId changes
+   * T092: Fetch note using useFetch hook
+   * Automatically refetches when noteId changes
    */
-  useEffect(() => {
-    if (noteId) {
-      fetchNote();
-    } else {
-      setNote(null);
-      setLoading(false);
+  const {
+    data: note,
+    loading,
+    error,
+    refetch,
+  } = useFetch(
+    () => noteId ? `/api/notes/${noteId}` : null,
+    {
+      deps: [noteId],
+      skip: !noteId,
+      onError: (err) => {
+        logger.error('fetch.error', 'Failed to fetch note', { noteId, message: err.message });
+      },
     }
-  }, [noteId]);
-
-  /**
-   * Fetch note details from API
-   */
-  const fetchNote = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(`/api/notes/${noteId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized. Please log in again.');
-        } else if (response.status === 403) {
-          throw new Error('You do not have permission to view this note.');
-        } else if (response.status === 404) {
-          throw new Error('Note not found. It may have been deleted.');
-        } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        } else {
-          throw new Error(`Failed to load note (${response.status})`);
-        }
-      }
-
-      const data = await response.json();
-      setNote(data);
-    } catch (err) {
-      console.error('Failed to fetch note:', err);
-      setError(err.message || 'Failed to load note. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  );
 
   /**
    * T095: Show delete confirmation modal
@@ -98,32 +70,14 @@ const NoteDetail = ({ noteId, onBack, onNoteDeleted, authToken }) => {
   /**
    * T096: Delete note via API
    */
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     try {
       setDeleting(true);
       setDeleteError(null);
 
-      const response = await fetch(`/api/notes/${noteId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized. Please log in again.');
-        } else if (response.status === 403) {
-          throw new Error('You do not have permission to delete this note.');
-        } else if (response.status === 404) {
-          throw new Error('Note not found. It may have already been deleted.');
-        } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        } else {
-          throw new Error(`Failed to delete note (${response.status})`);
-        }
-      }
+      logger.info('delete.start', 'Deleting note', { noteId });
+      await api.request(`/api/notes/${noteId}`, { method: 'DELETE' });
+      logger.info('delete.success', 'Note deleted', { noteId });
 
       // T097: Notify parent to remove from list without full refresh
       if (onNoteDeleted) {
@@ -138,12 +92,12 @@ const NoteDetail = ({ noteId, onBack, onNoteDeleted, authToken }) => {
         onBack();
       }
     } catch (err) {
-      console.error('Failed to delete note:', err);
+      logger.error('delete.error', 'Failed to delete note', { noteId, message: err.message });
       setDeleteError(err.message || 'Failed to delete note. Please try again.');
     } finally {
       setDeleting(false);
     }
-  };
+  }, [noteId, onNoteDeleted, onBack]);
 
   /**
    * T094: Format date in full format
@@ -276,7 +230,7 @@ const NoteDetail = ({ noteId, onBack, onNoteDeleted, authToken }) => {
                 <h3 className="text-lg font-bold text-status-error mb-1">FAILED TO LOAD NOTE</h3>
                 <p className="font-mono text-sm text-brutal-charcoal/70 mb-4">{error}</p>
                 <div className="flex gap-3">
-                  <Button variant="danger" onClick={fetchNote}>
+                  <Button variant="danger" onClick={refetch}>
                     TRY AGAIN
                   </Button>
                   <Button variant="secondary" onClick={onBack}>

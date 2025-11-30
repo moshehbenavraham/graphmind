@@ -21,7 +21,8 @@ export async function handleTestRedisDirect(request, env) {
     console.log('[TestRedisDirect] Connecting to', { host, port, useTLS });
 
     // Create Redis client
-    const client = createRedis(url, { tls: useTLS });
+    // Note: redis-on-workers handles TLS automatically based on rediss:// protocol
+    const client = createRedis(url);
 
     // Test 1: PING
     console.log('[TestRedisDirect] Testing PING...');

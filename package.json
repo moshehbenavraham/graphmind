@@ -19,15 +19,25 @@
     "cf-typegen": "wrangler types",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "typecheck": "tsc --project jsconfig.json --noEmit",
+    "typecheck:watch": "tsc --project jsconfig.json --noEmit --watch",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251128.0",
     "@faker-js/faker": "^10.1.0",
+    "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.10.1",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/coverage-v8": "^4.0.14",
     "@vitest/ui": "^4.0.9",
+    "husky": "^9.1.7",
+    "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.9",
-    "wrangler": "^4.50.0",
+    "wrangler": "^4.51.0",
     "ws": "^8.18.3"
   },
   "engines": {
@@ -38,6 +48,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "falkordb": "^6.3.1",
+    "itty-router": "^5.0.22",
     "jsonwebtoken": "^9.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -83,8 +83,10 @@ export function formatProperties(properties) {
   const parts = [];
 
   for (const [key, value] of Object.entries(properties)) {
-    // Skip internal properties
-    if (key.startsWith('_') || key === 'id') continue;
+    // Skip internal properties and embeddings (large vector arrays useless for LLM)
+    if (key.startsWith('_') || key === 'id' || key === 'embedding') continue;
+    // Skip large string values that look like embeddings (e.g., "[0.058502, 0.029694, ...]")
+    if (typeof value === 'string' && value.length > 200 && value.startsWith('[')) continue;
 
     // Format temporal properties specially
     if (isTemporalProperty(key)) {
@@ -155,6 +157,7 @@ export function formatDate(date) {
   }
 
   // Format as "Month Day, Year"
+  /** @type {Intl.DateTimeFormatOptions} */
   const options = { year: 'numeric', month: 'long', day: 'numeric' };
   return dateObj.toLocaleDateString('en-US', options);
 }

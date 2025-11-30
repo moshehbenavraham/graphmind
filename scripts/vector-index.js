@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// @ts-check
+/// <reference types="node" />
+/// <reference path="../src/lib/falkordb/types.js" />
 
 /**
  * FalkorDB Vector Index Creation Script
@@ -20,9 +23,23 @@
 import 'dotenv/config';
 import { createRestClient } from '../src/lib/falkordb/rest-client.js';
 
+/**
+ * @typedef {import('../src/lib/falkordb/types.js').RestClient} RestClient
+ * @typedef {import('../src/lib/falkordb/types.js').IndexResult} IndexResult
+ */
+
+/**
+ * @typedef {Object} VectorIndexDef
+ * @property {string} type - Node type
+ * @property {string} property - Property name
+ */
+
+/** @type {number} */
 const VECTOR_DIMENSION = 768;
+/** @type {string} */
 const SIMILARITY_FUNCTION = 'cosine';
 
+/** @type {VectorIndexDef[]} */
 const VECTOR_INDEXES = [
     { type: 'Person', property: 'embedding' },
     { type: 'Project', property: 'embedding' },
@@ -32,6 +49,9 @@ const VECTOR_INDEXES = [
 
 /**
  * Generate Cypher CREATE VECTOR INDEX command
+ * @param {string} nodeType - Node type to index
+ * @param {string} property - Property name to index
+ * @returns {string} Cypher command
  */
 function generateVectorIndexCommand(nodeType, property) {
     return `CREATE VECTOR INDEX FOR (n:${nodeType}) ON (n.${property}) OPTIONS {dimension: ${VECTOR_DIMENSION}, similarityFunction: '${SIMILARITY_FUNCTION}'}`;
@@ -39,6 +59,11 @@ function generateVectorIndexCommand(nodeType, property) {
 
 /**
  * Create a single vector index
+ * @param {RestClient} client - REST client instance
+ * @param {string} graphName - Graph database name
+ * @param {string} nodeType - Node type to index
+ * @param {string} property - Property name to index
+ * @returns {Promise<IndexResult>}
  */
 async function createVectorIndex(client, graphName, nodeType, property) {
     try {
@@ -76,8 +101,8 @@ async function main() {
     // Create client (connect to REST API wrapper on port 3001)
     const client = createRestClient({
         host: 'localhost',
-        port: '3001', // REST API wrapper port
-        user: process.env.FALKORDB_USER || 'default',
+        port: 3001, // REST API wrapper port
+        username: process.env.FALKORDB_USER || 'default',
         password: process.env.FALKORDB_PASSWORD || '',
         apiKey: process.env.FALKORDB_REST_API_KEY,
     });

@@ -2,6 +2,8 @@
  * Test simple Cypher query
  */
 
+import { badRequestError, internalServerError } from '../../utils/errors.js';
+
 export async function handleTestSimpleCypher(request, env) {
   try {
     console.log('[TestSimpleCypher] Starting test...');
@@ -9,10 +11,7 @@ export async function handleTestSimpleCypher(request, env) {
     const { userId, cypher } = body;
 
     if (!userId) {
-      return new Response(JSON.stringify({ error: 'Missing userId in request body' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return badRequestError('Missing userId in request body');
     }
 
     const doId = env.FALKORDB_POOL.idFromName('pool');
@@ -37,6 +36,7 @@ export async function handleTestSimpleCypher(request, env) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -55,12 +55,7 @@ export async function handleTestSimpleCypher(request, env) {
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({
-      error: error.message,
-      stack: error.stack
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    console.error('[TestSimpleCypher] Error:', error);
+    return internalServerError(error.message);
   }
 }

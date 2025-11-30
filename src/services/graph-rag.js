@@ -26,7 +26,7 @@ import { EmbeddingService } from './embedding.js';
 export async function processEntities(env, userId, entities, transcript) {
   // T138: Structured logging for GraphRAG service
   const logger = createLogger('GraphRAG', { userId, operation: 'processEntities' });
-  const perfTracker = createPerformanceTracker('processEntities', logger);
+  const perfTracker = createPerformanceTracker('processEntities', /** @type {any} */ (logger));
 
   logger.info('Process entities started', {
     input_entities_count: entities.length,
@@ -274,6 +274,7 @@ async function createNodes(env, userId, nodes) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -368,6 +369,7 @@ async function createRelationships(env, userId, relationships) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -432,6 +434,7 @@ export async function updateNode(env, userId, entityId, properties) {
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+        apiKey: env.FALKORDB_REST_API_KEY,
       },
     }),
   });
@@ -468,6 +471,7 @@ export async function createRelationship(env, userId, fromEntityId, toEntityId, 
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+        apiKey: env.FALKORDB_REST_API_KEY,
       },
     }),
   });
@@ -526,6 +530,7 @@ async function rollbackNodes(env, userId, nodeIds) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       });

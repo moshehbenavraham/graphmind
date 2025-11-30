@@ -19,7 +19,7 @@ import { generateEntityKey } from '../../lib/entity-utils/entity-key-generator.j
  * @param {Object} params - URL parameters
  * @param {string} params.userId - User ID from JWT
  * @param {string} params.noteId - Note ID from URL
- * @returns {Response} HTTP response
+ * @returns {Promise<Response>} HTTP response
  */
 export async function getEntitiesForNote(request, env, params) {
   const { userId, noteId } = params;
@@ -66,7 +66,7 @@ export async function getEntitiesForNote(request, env, params) {
  * @param {Object} params - Parameters
  * @param {string} params.userId - User ID from JWT
  * @param {string} params.entityKey - Entity key from URL (optional)
- * @returns {Response} HTTP response
+ * @returns {Promise<Response>} HTTP response
  */
 export async function lookupEntityCache(request, env, params) {
   const { userId, entityKey: urlEntityKey } = params;

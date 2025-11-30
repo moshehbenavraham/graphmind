@@ -235,3 +235,6 @@ CLAUDE.md
 AGENTS.md
 .mcp.json
 falkordb-data/
+
+# Test coverage output
+coverage/

@@ -58,18 +58,22 @@ export async function handleLogin(request, env) {
     // T051: Validate input
     const validation = validateLoginInput(body);
     if (!validation.valid) {
+      // @ts-ignore - errors is defined when valid is false
       return validationError(validation.errors);
     }
 
+    // @ts-ignore - sanitized is defined when valid is true
     const { email, password } = validation.sanitized;
 
     // T052: Check login rate limit
     const rateLimit = await checkLoginRateLimit(email, env.KV);
 
     if (rateLimit.blocked) {
+      // @ts-ignore - retryAfter is defined when blocked is true
       const minutes = Math.ceil(rateLimit.retryAfter / 60);
       return rateLimitError(
         `Too many failed login attempts. Please try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`,
+        // @ts-ignore - retryAfter is defined when blocked is true
         rateLimit.retryAfter
       );
     }

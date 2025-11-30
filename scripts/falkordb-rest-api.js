@@ -1,3 +1,7 @@
+// @ts-check
+/// <reference types="node" />
+/// <reference types="express" />
+
 /**
  * FalkorDB REST API Wrapper
  *
@@ -8,6 +12,12 @@
 require('dotenv').config(); // Load environment variables from .env
 const express = require('express');
 const { createClient } = require('redis');
+
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ */
 
 const app = express();
 app.use(express.json());
@@ -34,6 +44,7 @@ app.use((req, res, next) => {
 
   const origin = req.headers.origin;
   const isAllowed = allowedOrigins.some(pattern => {
+    if (!origin) return false;
     return typeof pattern === 'string' ? pattern === origin : pattern.test(origin);
   });
 
@@ -180,8 +191,9 @@ app.post('/api/graph/:graphName/query', async (req, res) => {
     const args = [
       'GRAPH.QUERY',
       graphName,
-      fullQuery,
-      '--compact'  // Compact result format (recommended)
+      fullQuery
+      // Removed --compact: non-compact format returns readable property names
+      // instead of indexes that require schema lookup to decode
     ];
 
     const startTime = Date.now();
@@ -228,59 +240,119 @@ app.delete('/api/graph/:graphName', async (req, res) => {
 });
 
 /**
- * Parse FalkorDB result from Redis protocol format
+ * Parse FalkorDB result from Redis protocol format (non-compact mode)
+ *
+ * Non-compact format uses [key, value] pairs for nodes/edges/maps:
+ * - Node: [["id", 1], ["labels", ["Person"]], ["properties", [[...pairs...]]]]
+ * - Edge: [["id", 1], ["type", "WORKS_ON"], ["src_node", 1], ["dest_node", 3], ["properties", [...]]]
+ * - Map: [[key, value], [key, value], ...]
  */
+
 /**
- * Extract a value from FalkorDB's raw format
- * FalkorDB returns values as [type, value] arrays:
- * - Type 1: null
- * - Type 2: string
- * - Type 3: integer
- * - Type 4: boolean
- * - Type 5: double
- * - Type 6: array
- * - Type 7: edge
- * - Type 8: node
- * - Type 9: path
- * - Type 10: map
- * - Type 11: point
+ * Check if an array looks like a [key, value] pair
+ */
+function isKeyValuePair(arr) {
+  return Array.isArray(arr) && arr.length === 2 && typeof arr[0] === 'string';
+}
+
+/**
+ * Convert an array of [key, value] pairs to an object
+ */
+function pairsToObject(pairs) {
+  const obj = {};
+  for (const pair of pairs) {
+    if (isKeyValuePair(pair)) {
+      const [key, value] = pair;
+      obj[key] = extractValue(value);
+    }
+  }
+  return obj;
+}
+
+/**
+ * Check if the value looks like a FalkorDB node structure
+ * Nodes have: id, labels, properties
+ */
+function isNodeStructure(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return false;
+  // Check if first element is ["id", number]
+  const first = arr[0];
+  return isKeyValuePair(first) && first[0] === 'id';
+}
+
+/**
+ * Check if the value looks like a FalkorDB edge structure
+ * Edges have: id, type, src_node, dest_node, properties
+ */
+function isEdgeStructure(arr) {
+  if (!Array.isArray(arr) || arr.length < 4) return false;
+  const keys = arr.filter(isKeyValuePair).map(p => p[0]);
+  return keys.includes('type') && keys.includes('src_node');
+}
+
+/**
+ * Extract a value from FalkorDB's non-compact format
+ * Recursively converts nested structures to JavaScript objects
  */
 function extractValue(val) {
   if (val === null || val === undefined) return null;
-  // If it's already a plain value (not array), return as-is
+
+  // If it's a primitive, return as-is
   if (!Array.isArray(val)) return val;
-  // If it's [type, value] format, extract the value
-  if (val.length >= 2) {
-    const [type, value] = val;
-    // Recursively handle nested arrays/maps
-    if (Array.isArray(value)) {
-      return value.map(extractValue);
-    }
-    return value;
+
+  // Empty array
+  if (val.length === 0) return [];
+
+  // Check if this is a node structure (has id, labels, properties)
+  if (isNodeStructure(val)) {
+    return pairsToObject(val);
   }
-  // Fallback
-  return val[0] ?? null;
+
+  // Check if this is an edge structure (has type, src_node, dest_node)
+  if (isEdgeStructure(val)) {
+    return pairsToObject(val);
+  }
+
+  // Check if this looks like an array of key-value pairs (map/properties)
+  if (val.every(isKeyValuePair)) {
+    return pairsToObject(val);
+  }
+
+  // Otherwise, recursively process array elements
+  return val.map(extractValue);
 }
 
 /**
  * Extract column name from FalkorDB header format
- * Headers come as [[type, name], ...] where type indicates column type
+ * In non-compact mode, headers are just strings: ["source", "r", "target"]
  */
 function extractColumnName(col, index) {
-  if (Array.isArray(col) && col.length >= 2) {
-    return col[1]; // Return the name part
-  }
   if (typeof col === 'string') {
     return col;
+  }
+  if (Array.isArray(col) && col.length >= 2) {
+    return col[1]; // Fallback for compact format
   }
   return `col_${index}`;
 }
 
+/**
+ * @typedef {Object} ParsedFalkorDBResult
+ * @property {any[]} data - Parsed result rows
+ * @property {{columns?: string[], rawColumns?: any[]}} metadata - Query metadata
+ * @property {Record<string, string|number>} statistics - Query statistics
+ */
+
+/**
+ * @param {any} result
+ * @returns {ParsedFalkorDBResult}
+ */
 function parseFalkorDBResult(result) {
   if (!result || !Array.isArray(result)) {
     return { data: [], metadata: {}, statistics: {} };
   }
 
+  /** @type {ParsedFalkorDBResult} */
   const parsed = {
     data: [],
     metadata: {},
@@ -321,7 +393,8 @@ function parseFalkorDBResult(result) {
           if (match) {
             const [, key, value] = match;
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
-            parsed.statistics[normalizedKey] = isNaN(value) ? value : parseFloat(value);
+            const numValue = parseFloat(value);
+            parsed.statistics[normalizedKey] = isNaN(numValue) ? value : numValue;
           }
         }
       });

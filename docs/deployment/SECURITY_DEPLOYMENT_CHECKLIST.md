@@ -374,10 +374,129 @@ Deployment is considered successful when ALL of the following are true:
 
 ---
 
+## API Key Rotation Procedure
+
+This section documents how to rotate the `FALKORDB_REST_API_KEY` for security hygiene or in case of key compromise.
+
+### When to Rotate Keys
+
+- **Scheduled**: Every 90 days (quarterly)
+- **Immediate**: If key may have been exposed (logs, screenshots, code commits)
+- **Immediate**: If employee with key access leaves organization
+- **Immediate**: After any security incident
+
+### Rotation Steps (Zero-Downtime)
+
+#### 1. Generate New Key
+
+```bash
+# Generate a new 32-byte API key (64 hex characters)
+openssl rand -hex 32 > /tmp/new-api-key.txt
+cat /tmp/new-api-key.txt
+```
+
+Save the new key securely in a password manager.
+
+#### 2. Update REST API Server to Accept Both Keys
+
+Temporarily configure the REST API to accept both old and new keys:
+
+```bash
+# On the server running scripts/falkordb-rest-api.js
+# Option 1: Set both keys in environment (comma-separated)
+export FALKORDB_REST_API_KEY="<new-key>,<old-key>"
+
+# Option 2: Or update .env to have both (during transition only)
+FALKORDB_REST_API_KEY=<new-key>,<old-key>
+```
+
+Restart the REST API server.
+
+#### 3. Update Cloudflare Workers Secret
+
+```bash
+# Set the new key in Workers
+cat /tmp/new-api-key.txt | npx wrangler secret put FALKORDB_REST_API_KEY --env production
+
+# Verify the secret was updated
+npx wrangler secret list --env production
+```
+
+The Workers deployment automatically picks up the new secret.
+
+#### 4. Test New Key
+
+```bash
+# Test that Workers can connect with the new key
+curl https://graphmind-api.your-domain.workers.dev/api/health/falkordb
+
+# Expected: 200 OK with healthy status
+```
+
+#### 5. Finalize Rotation
+
+Once verified:
+
+```bash
+# Remove the old key from REST API server
+export FALKORDB_REST_API_KEY="<new-key-only>"
+
+# Or update .env
+FALKORDB_REST_API_KEY=<new-key-only>
+```
+
+Restart the REST API server.
+
+#### 6. Verify and Cleanup
+
+```bash
+# Verify old key no longer works (from external system)
+curl -X POST https://your-rest-api.com/api/graph/test/query \
+  -H "Authorization: Bearer <OLD_KEY>" \
+  -d '{"query":"MATCH (n) RETURN n LIMIT 1","params":{}}'
+# Expected: 403 Forbidden
+
+# Cleanup temporary files
+rm /tmp/new-api-key.txt
+
+# Document rotation in ops log
+echo "$(date): FALKORDB_REST_API_KEY rotated" >> /var/log/graphmind-ops.log
+```
+
+### Emergency Rotation (Key Compromise)
+
+If the key may have been compromised, perform immediate rotation:
+
+1. **Generate new key immediately** (Step 1 above)
+2. **Update REST API with new key ONLY** (skip dual-key phase)
+3. **Update Workers secret immediately** (Step 3 above)
+4. **Monitor for unauthorized access attempts** in logs
+5. **Review logs for suspicious activity** during exposure window
+
+### Key Storage Best Practices
+
+- Store keys in a password manager (1Password, Bitwarden)
+- Never commit keys to Git (use `wrangler secret` for Workers)
+- Never log keys (ensure logging doesn't include auth headers)
+- Limit key access to operations personnel only
+- Document who has access to keys
+
+### Rotation Schedule
+
+| Quarter | Rotation Date | Status |
+|---------|---------------|--------|
+| Q1 2025 | March 1 | Pending |
+| Q2 2025 | June 1 | Pending |
+| Q3 2025 | September 1 | Pending |
+| Q4 2025 | December 1 | Pending |
+
+---
+
 ## References
 
 - Security Audit: docs/graph-query-audit.md
 - Rollback Procedures: docs/deployment/ROLLBACK.md
 - Security Testing: docs/deployment/SECURITY_TESTING.md
+- Infrastructure Audit: docs/infrastructure/infrastructure-audit.md
 - Spec 012: specs/012-security-hardening/
 - Spec 013: specs/013-security-validation/

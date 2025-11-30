@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Begin Changelog Entries Here - We do not use "unreleased" so all entries should have a version
 ---
 
+## [0.4.1] - 2025-11-30
+
+### Fixed
+
+**Critical: FalkorDB REST API Authentication (15+ files)**
+- Added missing `apiKey: env.FALKORDB_REST_API_KEY` to all FalkorDB config objects
+- Files: graph-rag.js, search-entities.js, get-graph.js, get-stats.js, create-node.js, delete-node.js, update-node.js, create-relationship.js, delete-relationship.js, get-entity.js, test-simple-cypher.js
+
+**Seed Data User Isolation (`src/workers/api/seed-data.js`)**
+- Added `user_id: $user_id` and `entity_id: randomUUID()` to all CREATE statements
+- Search queries now return correct user-scoped results
+
+**Response Parser Format Mismatch (3 files)**
+- Fixed array destructuring on object responses from FalkorDB REST API
+- `search-entities.js`: Handle `{n, types}` object format
+- `get-graph.js`: Handle `{n, relationships, connected_nodes}` object format
+- `get-stats.js`: Handle `{node_count, rel_count, entity_breakdown, most_connected}` object format
+
+**Stats FalkorDB String Parsing (`src/api/graph/get-stats.js`)**
+- Added `parseFalkorDBArray()` helper to parse FalkorDB's non-JSON string format
+- Converts `"[{type: Task, count: 3}]"` to proper JSON arrays
+
+**CSS Duplicate Key (`src/frontend/design-system/voice/BrutalWaveform.jsx`)**
+- Removed duplicate `imageRendering` property in JSX style object
+
+### Technical Details
+
+**Files Modified:** 18 files total
+- `src/services/graph-rag.js` (5 locations)
+- `src/api/graph/*.js` (10 files)
+- `src/api/test/test-simple-cypher.js`
+- `src/workers/api/seed-data.js`
+- `src/frontend/design-system/voice/BrutalWaveform.jsx`
+
+**Root Cause:** Feature 012 (Security Hardening) added Bearer token authentication to FalkorDB REST API, but not all consuming code was updated to pass the `apiKey` config parameter.
+
 ## [0.4.0] - 2025-11-29
 
 ### Added
@@ -736,9 +772,8 @@ We keep here a brief history (5 entries + the entries in this file) in the form 
 
 | Version | Release Date | Key Features |
 |---------|--------------|--------------|
+| 0.4.1   | 2025-11-30   | Critical bugfix: FalkorDB auth, response parsing, seed data user_id |
 | 0.4.0   | 2025-11-29   | Feature 015 Entity Role Bug Fix (93%), PRD documentation update, GraphRAG 2.0 |
 | 0.3.13  | 2025-11-25   | Neo-Brutalist UI complete (Session 9), 6 legacy CSS files deleted |
 | 0.3.12  | 2025-11-25   | Voice components integration (Session 8) |
 | 0.3.5   | 2025-11-25   | Neo-Brutalist Design System primitives (Session 1) |
-| 0.3.4   | 2025-11-24   | GraphRAG 2.0 vector search, embeddings backfill |
-| 0.3.3   | 2025-11-24   | FalkorDB local dev config fixes |

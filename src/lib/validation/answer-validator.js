@@ -292,8 +292,9 @@ function validateDates(answerDates, resultDates) {
   // More sophisticated validation can be added later
   for (const date of answerDates) {
     // Accept dates if they're in reasonable range
-    const year = parseInt(date.match(/\d{4}/)?.[0]);
-    if (year && (year < 2020 || year > 2030)) {
+    const yearMatch = date.match(/\d{4}/);
+    const year = yearMatch ? parseInt(yearMatch[0]) : NaN;
+    if (!isNaN(year) && (year < 2020 || year > 2030)) {
       issues.push(`Suspicious date: ${date}`);
     }
   }

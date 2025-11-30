@@ -12,6 +12,17 @@
  * - Press Ctrl+Shift+D (or Cmd+Shift+D on Mac) to toggle panel
  * - Or call window.graphmindDebug.toggle() in console
  * - Or call window.graphmindDebug.enable() / .disable()
+ *
+ * ARCHITECTURE NOTE: Inline Styles (Intentional)
+ * ----------------------------------------------
+ * This component intentionally uses inline styles instead of the design system.
+ * Reasons:
+ * 1. Dev tooling isolation: Debug panel should work regardless of design system state
+ * 2. Zero CSS dependencies: Prevents circular issues if CSS fails to load
+ * 3. Consistent appearance: Looks the same across all themes/contexts
+ * 4. Self-contained: Can be copied to other projects without style dependencies
+ *
+ * This is an intentional exception documented in frontend-audit.md (Phase 3).
  */
 
 import { useState, useEffect, useRef } from 'react';

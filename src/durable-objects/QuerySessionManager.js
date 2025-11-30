@@ -1,53 +1,37 @@
+// @ts-check
+/// <reference types="@cloudflare/workers-types" />
+
 /**
- * QuerySessionManager Durable Object (Feature 008)
+ * QuerySessionManager Durable Object
  *
  * Manages WebSocket connections for voice query sessions.
- * Each query session gets a dedicated DO instance for:
- * - WebSocket connection management
- * - Audio chunk buffering and sequencing
- * - Real-time transcription via Deepgram Nova-3
- * - Cypher query generation and execution
- * - Result formatting and delivery
- *
- * Lifecycle:
- * 1. Created on POST /api/query/start
- * 2. Accepts WebSocket connection
- * 3. Processes audio chunks and streams transcripts
- * 4. Generates Cypher query from transcript
- * 5. Executes query against FalkorDB
- * 6. Saves query to D1 and caches in KV
- * 7. Hibernates after session completion
+ * Acts as a thin coordinator, delegating to extracted services:
+ * - AudioStreamHandler: Audio chunk buffering
+ * - TranscriptionService: Audio-to-text transcription
+ * - QueryOrchestrator: Query routing and execution
+ * - TTSStreamHandler: TTS synthesis and streaming
+ * - AnswerGenerator: Natural language answer generation
  *
  * @module durable-objects/QuerySessionManager
  */
 
-import { transcribeAudioChunk } from '../lib/audio/transcription.js';
-import { validateAudioChunk, getValidationErrorMessage, isRecoverableValidationError } from '../lib/audio/validation.js';
+/**
+ * @typedef {import('./types.js').SessionMetadata} SessionMetadata
+ * @typedef {import('./types.js').PerformanceMetrics} PerformanceMetrics
+ * @typedef {import('../services/transcription-service.js').TranscriptionResult} TranscriptionResult
+ */
+
 import { createLogger } from '../utils/logger.js';
+import { generateGraphName } from '../lib/falkordb/namespace.js';
 
-// Query generation and execution
-import { generateCypherQuery } from '../services/cypher-generator.js';
-import { autoFormatResults, formatEmptyResults, formatErrorResults } from '../services/result-formatter.js';
-
-// Caching and persistence
-import { getCachedQuery, setCachedQuery } from '../lib/graph/query-cache.js';
-
-// Answer generation (Feature 009)
+// Extracted services
+import { createAudioStreamHandler } from '../services/audio-stream-handler.js';
+import { createTranscriptionService } from '../services/transcription-service.js';
+import { createQueryOrchestrator } from '../services/query-orchestrator.js';
+import { createTTSStreamHandler } from '../services/tts-stream-handler.js';
 import { AnswerGenerator } from '../services/answer-generator.js';
 import { updateQueryAnswer } from '../lib/db/voice-queries.js';
 import { formatResultsAsBulletList } from '../lib/graph/context-formatter.js';
-
-// Text-to-Speech (Feature 010)
-import { createTTSSynthesizer } from '../services/tts-synthesizer.js';
-import { createAudioCache } from '../lib/audio/audio-cache.js';
-import { base64ToChunk, chunkAudio, createChunkMessage, reassembleChunks } from '../lib/audio/audio-chunker.js';
-
-// GraphRAG (Feature 008 - GraphRAG 2.0)
-import { EmbeddingService } from '../services/embedding.js';
-import { traversalQueryTemplate } from '../lib/graph/cypher-templates.js';
-
-// Query Router (GraphRAG-first architecture)
-import { QueryRouter } from '../services/query-router.js';
 
 /**
  * Maximum session duration in milliseconds (5 minutes)
@@ -62,14 +46,6 @@ const MAX_SESSION_DURATION = 5 * 60 * 1000;
 const TIMEOUT_WARNING_THRESHOLD = 4 * 60 * 1000;
 
 /**
- * Minimum transcription confidence threshold (70%)
- * @const {number}
- */
-const MIN_CONFIDENCE_THRESHOLD = 0.7;
-
-import { generateGraphName } from '../lib/falkordb/namespace.js';
-
-/**
  * Generate a unique query ID
  * @returns {string} Query ID in format "query_" + UUID
  */
@@ -80,8 +56,7 @@ function generateQueryId() {
 /**
  * QuerySessionManager Durable Object
  *
- * Manages a single voice query session with WebSocket communication,
- * audio processing, query generation, and result delivery.
+ * Thin coordinator for voice query sessions.
  */
 export class QuerySessionManager {
   /**
@@ -93,64 +68,51 @@ export class QuerySessionManager {
     this.state = state;
     this.env = env;
 
-    // WebSocket connection
+    /** @type {WebSocket|null} */
     this.websocket = null;
 
-    // Audio chunk buffer (for handling out-of-order delivery)
-    this.audioBuffer = [];
-
-    // Transcript accumulation
-    this.transcript = '';
-    this.partialTranscript = '';
-    this.transcriptConfidence = 0;
-
-    // Query state
-    this.question = null;
-    this.cypherQuery = null;
-    this.queryResults = null;
-
-    // Session metadata
+    /** @type {SessionMetadata} */
     this.sessionMetadata = {
       session_id: null,
       query_id: null,
       user_id: null,
       user_namespace: null,
-      start_time: null,
-      last_chunk_time: null,
-      chunk_count: 0,
-      expected_sequence: 0
+      start_time: null
     };
 
-    // Timeout tracking
+    /** @type {ReturnType<typeof setTimeout>|null} */
     this.timeoutHandle = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
     this.warningTimeoutHandle = null;
 
-    // Session state
+    /** @type {boolean} */
     this.sessionActive = false;
 
-    // Performance tracking
+    // Composed services (initialized on WebSocket connect)
+    /** @type {any} */
+    this.audioHandler = null;
+    /** @type {any} */
+    this.transcriptionService = null;
+    /** @type {any} */
+    this.queryOrchestrator = null;
+    /** @type {any} */
+    this.ttsHandler = null;
+    /** @type {any} */
+    this.answerGenerator = null;
+
+    /** @type {string|null} */
+    this.question = null;
+    /** @type {any} */
+    this.queryResults = null;
+
+    /** @type {PerformanceMetrics} */
     this.performanceMetrics = {
       transcription_start: null,
       transcription_end: null,
-      cypher_generation_start: null,
-      cypher_generation_end: null,
-      query_execution_start: null,
-      query_execution_end: null,
-      answer_generation_start: null,
-      answer_generation_end: null
-    };
-
-    // Answer generation state (Feature 009)
-    this.answerGenerationAttempts = 0;
-    this.lastGeneratedAnswer = null;
-
-    // Audio playback state (Feature 010 - US2)
-    this.audioPlaybackState = {
-      status: 'idle', // 'idle' | 'playing' | 'paused' | 'stopped'
-      currentChunk: 0,
-      totalChunks: 0,
-      audioBuffer: null, // Buffered chunks for resumable playback
-      isPaused: false
+      query_start: null,
+      query_end: null,
+      answer_start: null,
+      answer_end: null
     };
 
     // Logger (will be initialized with context)
@@ -158,29 +120,7 @@ export class QuerySessionManager {
   }
 
   /**
-   * Build FalkorDB connection config from environment variables
-   * @returns {{host: string, port: number, username: string, password: string}}
-   */
-  buildFalkorConfig() {
-    const host = this.env.FALKORDB_HOST;
-    const username = this.env.FALKORDB_USER || 'default';
-    const password = this.env.FALKORDB_PASSWORD || '';
-    const rawPort = this.env.FALKORDB_PORT;
-    const portNumber = Number(rawPort);
-
-    // Default to 443 for https hosts, 3001 for local dev (REST API)
-    const defaultPort = host && host.startsWith('http') ? 443 : 3001;
-    const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
-
-    if (!host) {
-      throw new Error('FALKORDB_HOST is not configured');
-    }
-
-    return { host, port, username, password, apiKey: this.env.FALKORDB_REST_API_KEY };
-  }
-
-  /**
-   * Main fetch handler - handles HTTP requests and WebSocket upgrades
+   * Main fetch handler
    * @param {Request} request - Incoming HTTP request
    * @returns {Promise<Response>} HTTP response
    */
@@ -188,18 +128,15 @@ export class QuerySessionManager {
     const url = new URL(request.url);
 
     try {
-      // Handle WebSocket upgrade requests
       if (request.headers.get('Upgrade') === 'websocket') {
         return await this.handleWebSocketUpgrade(request);
       }
 
-      // Handle status check requests
       if (url.pathname === '/status') {
         return new Response(JSON.stringify({
           active: this.sessionActive,
           session_id: this.sessionMetadata.session_id,
           query_id: this.sessionMetadata.query_id,
-          chunk_count: this.sessionMetadata.chunk_count,
           question: this.question,
           has_results: !!this.queryResults
         }), {
@@ -208,7 +145,6 @@ export class QuerySessionManager {
         });
       }
 
-      // Unhandled path
       return new Response('Not Found', { status: 404 });
     } catch (error) {
       this.logger.error('Error in fetch handler', error);
@@ -217,7 +153,7 @@ export class QuerySessionManager {
   }
 
   /**
-   * Handle WebSocket upgrade and establish connection
+   * Handle WebSocket upgrade
    * @param {Request} request - HTTP request with Upgrade header
    * @returns {Promise<Response>} WebSocket response
    */
@@ -234,7 +170,6 @@ export class QuerySessionManager {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    // Accept WebSocket connection
     server.accept();
 
     // Initialize session
@@ -253,10 +188,18 @@ export class QuerySessionManager {
       user_id: userId
     }, this.env);
 
-    // DEBUG: Log extracted userId and generated namespace
+    // Initialize composed services
+    this.audioHandler = createAudioStreamHandler(this.logger);
+    this.transcriptionService = createTranscriptionService(this.env, this.logger);
+    this.queryOrchestrator = createQueryOrchestrator(this.env, this.logger);
+    this.ttsHandler = createTTSStreamHandler(this.env, this.logger);
+    this.answerGenerator = new AnswerGenerator(this.env, {
+      waitUntil: (promise) => promise.catch(err => this.logger.error('Background task failed', err))
+    });
+
     this.logger.info('WebSocket connection established', {
-      extracted_user_id: userId,
-      generated_user_namespace: this.sessionMetadata.user_namespace,
+      user_id: userId,
+      user_namespace: this.sessionMetadata.user_namespace,
       session_id: sessionId,
       query_id: this.sessionMetadata.query_id
     });
@@ -277,791 +220,279 @@ export class QuerySessionManager {
     // Set session timeout
     this.setSessionTimeout();
 
-    return new Response(null, {
-      status: 101,
-      webSocket: client
-    });
+    return new Response(null, { status: 101, webSocket: client });
   }
 
   /**
-   * Handle WebSocket messages from client
+   * Handle WebSocket messages
    * @param {MessageEvent} event - WebSocket message event
    */
   async handleMessage(event) {
     try {
-      // Log raw message data for debugging
-      this.logger.info('Raw WebSocket message received', {
-        data_type: typeof event.data,
-        data_length: event.data?.length || event.data?.byteLength || 0,
-        is_array_buffer: event.data instanceof ArrayBuffer,
-        is_string: typeof event.data === 'string',
-        data_preview: typeof event.data === 'string'
-          ? event.data.substring(0, 100)
-          : '[binary data]'
-      });
-
-      // Convert event.data to string if it's binary (ArrayBuffer or Blob)
       let messageText;
       if (typeof event.data === 'string') {
-        // Already a string - use directly
         messageText = event.data;
       } else if (event.data instanceof ArrayBuffer) {
-        // ArrayBuffer - decode to string
         const decoder = new TextDecoder('utf-8');
         messageText = decoder.decode(event.data);
-        this.logger.info('Decoded ArrayBuffer to string', {
-          original_byte_length: event.data.byteLength,
-          decoded_length: messageText.length,
-          decoded_preview: messageText.substring(0, 100)
-        });
       } else {
         throw new Error(`Unsupported message type: ${typeof event.data}`);
       }
 
       const message = JSON.parse(messageText);
 
-      this.logger.info('Parsed WebSocket message', {
-        type: message.type,
-        has_chunk: !!message.chunk,
-        has_data: !!message.data,
-        sequence: message.sequence,
-        timestamp: message.timestamp
-      });
-
       switch (message.type) {
         case 'audio_chunk':
-          await this.handleAudioChunk(message);
+          this.handleAudioChunk(message);
           break;
 
         case 'stop_recording':
-          await this.handleStopRecording();
+          await this.processVoiceQuery();
           break;
 
         case 'cancel_query':
-          await this.handleCancelQuery();
+          this.handleCancelQuery();
           break;
 
         case 'playback_control':
-          await this.handlePlaybackControl(message);
+          this.handlePlaybackControl(message);
           break;
 
         default:
           this.logger.warn(`Unknown message type: ${message.type}`);
       }
     } catch (error) {
-      this.logger.error('Error handling message', {
-        error_message: error.message,
-        error_stack: error.stack,
-        raw_data_type: typeof event.data,
-        raw_data_preview: typeof event.data === 'string'
-          ? event.data.substring(0, 200)
-          : '[binary data]'
-      });
+      this.logger.error('Error handling message', error);
       this.sendError('MESSAGE_PARSE_ERROR', 'Invalid message format', false);
     }
   }
 
   /**
-   * Handle audio chunk from client
+   * Handle audio chunk - delegate to AudioStreamHandler
    * @param {Object} message - Audio chunk message
    */
-  async handleAudioChunk(message) {
-    const { chunk, sequence, timestamp } = message;
-
-    // Log extracted chunk details for debugging
-    this.logger.info('Audio chunk extracted from message', {
-      has_chunk: !!chunk,
-      chunk_type: typeof chunk,
-      chunk_length: chunk?.length || 0,
-      chunk_preview: typeof chunk === 'string' ? chunk.substring(0, 50) + '...' : '[not a string]',
-      sequence,
-      timestamp
-    });
-
-    // Validate audio chunk
-    const validation = validateAudioChunk(message);
-    if (!validation.valid) {
-      // Log validation failure details
-      this.logger.error('Audio chunk validation failed', {
-        errors: validation.errors,
-        message_keys: Object.keys(message),
-        has_chunk: !!message.chunk,
-        chunk_type: typeof message.chunk
-      });
-
-      const errorMessage = getValidationErrorMessage(validation);
-      const recoverable = isRecoverableValidationError(validation);
-
-      this.sendError('AUDIO_VALIDATION_ERROR', errorMessage, recoverable);
-
-      if (!recoverable) {
-        this.cleanup();
-      }
-      return;
-    }
-
-    this.logger.info('Audio chunk validation passed');
-
-    // Update session metadata
-    this.sessionMetadata.chunk_count++;
-    this.sessionMetadata.last_chunk_time = Date.now();
-
-    // Buffer audio chunk
-    this.audioBuffer.push({ chunk, sequence, timestamp });
-
-    if (!this.performanceMetrics.transcription_start) {
-      this.performanceMetrics.transcription_start = Date.now();
-    }
-  }
-
-  /**
-   * Reassemble buffered base64 chunks and transcribe once with Whisper
-   * This ensures Workers AI receives a complete WebM/Opus payload with headers.
-   * @returns {Promise<Object>} Transcription result
-   */
-  async transcribeBufferedAudio() {
-    if (!this.audioBuffer.length) {
-      throw new Error('No audio chunks available for transcription');
-    }
-
-    // Sort chunks to guarantee ordering before reassembly
-    const sortedChunks = [...this.audioBuffer].sort((a, b) => a.sequence - b.sequence);
-
-    this.logger.info('Preparing audio for transcription', {
-      buffer_chunks: this.audioBuffer.length,
-      sorted_chunks: sortedChunks.length,
-      first_chunk_preview: sortedChunks[0]?.chunk?.substring(0, 50) + '...'
-    });
-
-    try {
-      const uint8Chunks = sortedChunks.map(entry => base64ToChunk(entry.chunk));
-
-      const reassembled = reassembleChunks(uint8Chunks);
-
-      this.logger.info('Audio reassembled for transcription', {
-        chunk_count: uint8Chunks.length,
-        byte_length: reassembled.byteLength,
-        byte_length_kb: (reassembled.byteLength / 1024).toFixed(2),
-        is_single_chunk: uint8Chunks.length === 1
-      });
-
-      return await transcribeAudioChunk(reassembled, this.env, { language: 'en' });
-    } catch (error) {
-      this.logger.error('Failed to reassemble audio for transcription', {
-        error: error.message,
-        stack: error.stack
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Handle stop recording - finalize transcript and process query
-   */
-  async handleStopRecording() {
+  handleAudioChunk(message) {
     if (!this.performanceMetrics.transcription_start) {
       this.performanceMetrics.transcription_start = Date.now();
     }
 
-    let transcription;
+    const result = this.audioHandler.handleAudioChunk(message);
 
-    try {
-      transcription = await this.transcribeBufferedAudio();
-      this.performanceMetrics.transcription_end = Date.now();
-    } catch (error) {
-      this.performanceMetrics.transcription_end = Date.now();
-
-      // Log detailed error information for debugging
-      this.logger.error('Transcription failed with detailed error', {
-        error_name: error.name,
-        error_message: error.message,
-        error_code: error.code,
-        error_stack: error.stack?.substring(0, 500), // Limit stack trace length
-        buffer_length: this.audioBuffer.length,
-        session_id: this.sessionId
-      });
-
-      // Send detailed error to client (in dev mode) or generic error (in prod)
-      const errorMessage = this.env.ENVIRONMENT === 'development'
-        ? `Failed to transcribe audio: ${error.message}`
-        : 'Failed to transcribe audio. Please try again.';
-
-      this.sendError('TRANSCRIPTION_ERROR', errorMessage, true, error);
-      this.cleanup();
-      return;
+    if (!result.success) {
+      this.sendError(result.error.code, result.error.message, result.error.recoverable);
+      if (!result.error.recoverable) {
+        this.cleanup();
+      }
     }
-
-    this.transcript = (transcription.text || '').trim();
-    this.transcriptConfidence = transcription.confidence || 1;
-    this.partialTranscript = '';
-    this.audioBuffer = [];
-
-    // Check transcript confidence
-    if (this.transcriptConfidence < MIN_CONFIDENCE_THRESHOLD) {
-      this.sendError(
-        'LOW_CONFIDENCE_TRANSCRIPT',
-        'I couldn\'t hear you clearly. Please try again in a quieter location.',
-        true
-      );
-      this.cleanup();
-      return;
-    }
-
-    // Check transcript is not empty
-    if (!this.transcript || this.transcript.trim().length === 0) {
-      this.sendError(
-        'EMPTY_TRANSCRIPT',
-        'I didn\'t hear anything. Please try again.',
-        true
-      );
-      this.cleanup();
-      return;
-    }
-
-    this.question = this.transcript.trim();
-
-    // Send final transcript
-    this.sendToClient({
-      type: 'transcript_final',
-      question: this.question,
-      is_final: true,
-      confidence: this.transcriptConfidence
-    });
-
-    this.logger.info('Question transcribed', {
-      question: this.question,
-      confidence: this.transcriptConfidence
-    });
-
-    // Generate and execute Cypher query
-    await this.generateAndExecuteQuery();
   }
 
   /**
-   * Generate Cypher query from question and execute it
+   * Process voice query - main orchestration flow
    */
-  async generateAndExecuteQuery() {
+  async processVoiceQuery() {
     try {
-      // Send cypher_generating status
-      this.sendToClient({
-        type: 'cypher_generating',
-        message: 'Understanding your question...'
-      });
-
-      this.performanceMetrics.cypher_generation_start = Date.now();
-
-      // 1. Check query cache first
-      const cachedResult = await getCachedQuery(
-        this.env.KV,
-        this.sessionMetadata.user_id,
-        this.question,
-        {}
-      );
-
-      if (cachedResult) {
-        this.logger.info('Query cache hit', { question: this.question });
-
-        // Send cached results immediately
-        const formattedResults = autoFormatResults(cachedResult.results, {
-          execution_time_ms: 0,
-          cached: true,
-          template_used: cachedResult.template_used,
-          query_id: this.sessionMetadata.query_id
-        });
-
-        this.queryResults = formattedResults;
-
-        this.sendToClient({
-          type: 'query_results',
-          query_id: this.sessionMetadata.query_id,
-          results: formattedResults
-        });
-
-        // Still save to D1 for history
-        await this.saveQueryToDatabase(cachedResult.cypher_query, formattedResults, 0);
-
+      // 1. Get buffered audio
+      if (!this.audioHandler.hasAudio()) {
+        this.sendError('NO_AUDIO', 'No audio recorded. Please try again.', true);
         this.cleanup();
         return;
       }
 
-      // 2. Route query based on classification (GraphRAG-first architecture)
-      const router = new QueryRouter();
-      const { type: queryType, path: executionPath } = router.route(this.question);
+      const audioData = this.audioHandler.getBufferedAudio();
+      this.audioHandler.clearBuffer();
 
-      this.logger.info('Query routing decision', {
-        question: this.question,
-        query_type: queryType,
-        execution_path: executionPath,
-        user_id: this.sessionMetadata.user_id
-      });
+      // 2. Transcribe audio
+      this.performanceMetrics.transcription_end = Date.now();
+      const transcription = await this.transcriptionService.transcribeAudio(audioData);
 
-      // GraphRAG path: relationship, temporal, complex queries
-      // Uses vector search + graph traversal - handles case/spelling variations
-      if (executionPath === 'graphrag') {
-        this.logger.info('Routing to GraphRAG pipeline', {
-          query_type: queryType,
-          question: this.question
-        });
-        await this.executeGraphRAG();
-        return;
-      }
-
-      // Template path: simple lookups, counts, lists (deterministic, fast)
-      this.logger.info('Routing to template pipeline', {
-        query_type: queryType,
-        question: this.question,
-        user_namespace: this.sessionMetadata.user_namespace
-      });
-
-      const { cypher, parameters, templateUsed, entities } = await generateCypherQuery(
-        this.question,
-        this.sessionMetadata.user_namespace,
-        this.sessionMetadata.user_id,
-        this.env
-      );
-
-      // If template generator falls back to LLM, switch to GraphRAG
-      if (templateUsed === 'llm_generate') {
-        this.logger.info('Template fallback to GraphRAG', { question: this.question });
-        await this.executeGraphRAG();
-        return;
-      }
-
-      this.cypherQuery = cypher;
-      this.performanceMetrics.cypher_generation_end = Date.now();
-
-      this.logger.info('Cypher query generated', {
-        template: templateUsed,
-        cypher,
-        parameters,
-        entities_count: entities.length,
-        entities: entities,
-        user_namespace: this.sessionMetadata.user_namespace
-      });
-
-      this.sendToClient({
-        type: 'cypher_generated',
-        cypher_query: cypher,
-        template_used: templateUsed
-      });
-
-      // 3. Execute query against FalkorDB
-      await this.executeQuery(cypher, parameters, templateUsed);
-
-    } catch (error) {
-      this.logger.error('Query generation error', {
-        error_message: error.message,
-        error_stack: error.stack,
-        error_name: error.name,
-        transcript: this.transcript
-      });
-
-      // Fallback to GraphRAG on template failure
-      this.logger.info('Template failed, falling back to GraphRAG', {
-        error: error.message
-      });
-
-      try {
-        await this.executeGraphRAG();
-        return;
-      } catch (graphragError) {
-        this.logger.error('GraphRAG fallback also failed', {
-          error: graphragError.message
-        });
-      }
-
-      let errorMessage = 'I couldn\'t understand that question. Try asking about specific people, projects, or topics.';
-      if (error.message && error.message.includes('No entities found')) {
-        errorMessage = 'I couldn\'t identify what you\'re asking about. Try mentioning specific names or topics.';
-      }
-
-      if (this.env.ENVIRONMENT === 'development') {
-        errorMessage = `Query failed: ${error.message}`;
-      }
-
-      this.sendError(
-        'QUERY_FAILED',
-        errorMessage,
-        true,
-        error
-      );
-      this.cleanup();
-    }
-  }
-
-  /**
-   * Execute GraphRAG pipeline (Vector Search + Traversal)
-   * Replaces LLM-based Cypher generation for complex queries
-   *
-   * Pipeline:
-   * 1. Generate embedding from user question
-   * 2. Vector search across Person, Project, Note, Topic
-   * 3. Extract top semantic matches
-   * 4. Graph traversal to expand context
-   * 5. Format results and generate answer
-   */
-  async executeGraphRAG() {
-    const startTime = Date.now();
-
-    try {
-      this.logger.info('graphrag.started', {
-        question: this.question?.substring(0, 100),
-        user_id: this.sessionMetadata.user_id
-      });
-
-      this.sendToClient({
-        type: 'query_executing',
-        message: 'Searching knowledge graph (Vector Scan)...'
-      });
-
-      this.performanceMetrics.query_execution_start = Date.now();
-
-      // 1. Generate Embedding
-      const embeddingStart = Date.now();
-      const embeddingService = new EmbeddingService(this.env.AI);
-      const vector = await embeddingService.generateEmbedding(this.question);
-
-      this.logger.info('graphrag.embedding.completed', {
-        latency_ms: Date.now() - embeddingStart,
-        vector_dimension: vector?.length
-      });
-
-      // 2. Vector Search (Parallel across types)
-      const types = ['Person', 'Project', 'Note', 'Topic'];
-      const poolId = this.env.FALKORDB_POOL.idFromName('pool');
-      const poolStub = this.env.FALKORDB_POOL.get(poolId);
-      const config = this.buildFalkorConfig();
-
-      const searchStart = Date.now();
-      const searchPromises = types.map(async (type) => {
-        // Fixed: Use vecf32() wrapper for vector and return ID(node)
-        const cypher = `
-          CALL db.idx.vector.queryNodes('${type}', 'embedding', 5, vecf32($vector))
-          YIELD node, score
-          WHERE score >= 0.65
-          RETURN ID(node) as nodeId, node, score
-        `;
-
-        try {
-          const response = await poolStub.fetch('http://internal/execute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              config,
-              userId: this.sessionMetadata.user_id,
-              cypher,
-              params: { vector }
-            })
-          });
-
-          if (!response.ok) {
-            this.logger.warn(`graphrag.vector_search.type_failed`, { type, status: response.status });
-            return [];
-          }
-
-          const result = await response.json();
-          const rows = result.data || [];
-
-          this.logger.info('graphrag.vector_search.type_completed', {
-            type,
-            results_count: rows.length,
-            top_score: rows[0]?.score || rows[0]?.[2]
-          });
-
-          // Handle both array format [nodeId, node, score] and object format
-          return rows.map(row => {
-            if (Array.isArray(row)) {
-              return { nodeId: row[0], node: row[1], score: row[2], type };
-            }
-            return { nodeId: row.nodeId, node: row.node, score: row.score, type };
-          });
-        } catch (err) {
-          this.logger.warn(`graphrag.vector_search.type_error`, { type, error: err.message });
-          return [];
-        }
-      });
-
-      const searchResults = (await Promise.all(searchPromises)).flat();
-
-      this.logger.info('graphrag.vector_search.completed', {
-        latency_ms: Date.now() - searchStart,
-        total_results: searchResults.length
-      });
-
-      // Sort by score descending
-      searchResults.sort((a, b) => (b.score || 0) - (a.score || 0));
-
-      // Take top 10 entry points
-      const topNodes = searchResults.slice(0, 10);
-
-      if (topNodes.length === 0) {
-        this.logger.info('graphrag.no_results', { reason: 'vector_search_empty' });
-        // Fall back to keyword search instead of failing
-        this.sendToClient({
-          type: 'query_executing',
-          message: 'Trying keyword search...'
-        });
-
-        const { cypher, parameters, templateUsed } = await generateCypherQuery(
-          this.question,
-          this.sessionMetadata.user_namespace,
-          this.sessionMetadata.user_id,
-          this.env
+      if (!transcription.valid) {
+        this.sendError(
+          transcription.error_code,
+          transcription.error_code === 'EMPTY_TRANSCRIPT'
+            ? "I didn't hear anything. Please try again."
+            : "I couldn't hear you clearly. Please try again in a quieter location.",
+          true
         );
-
-        return await this.executeQuery(cypher, parameters, templateUsed);
+        this.cleanup();
+        return;
       }
 
-      // 3. Graph Traversal (Context Expansion)
-      // Extract node IDs - handle multiple response formats
-      const nodeIds = topNodes.map(row => {
-        // Support multiple formats: direct nodeId, node.id, node.identity, node.entity_id
-        return row.nodeId || row.node?.id || row.node?.identity || row.node?.entity_id;
-      }).filter(id => id !== undefined && id !== null);
+      this.question = transcription.text;
 
-      if (nodeIds.length === 0) {
-        this.logger.warn('graphrag.node_id_extraction_failed', {
-          topNodes_sample: JSON.stringify(topNodes.slice(0, 2))
-        });
-        throw new Error('Failed to extract node IDs from vector search results');
-      }
-
-      this.logger.info('graphrag.traversal.starting', {
-        entry_points: nodeIds.length,
-        node_ids: nodeIds.slice(0, 5)
-      });
-
-      const traversalCypher = traversalQueryTemplate(nodeIds);
-
+      // Send final transcript
       this.sendToClient({
-        type: 'query_executing',
-        message: 'Expanding context (Graph Traversal)...'
+        type: 'transcript_final',
+        question: this.question,
+        is_final: true,
+        confidence: transcription.confidence
       });
 
-      const traversalStart = Date.now();
-      const traversalResponse = await poolStub.fetch('http://internal/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          config,
-          userId: this.sessionMetadata.user_id,
-          cypher: traversalCypher,
-          params: { node_ids: nodeIds }
-        })
+      this.logger.info('Question transcribed', {
+        question: this.question,
+        confidence: transcription.confidence
       });
 
-      if (!traversalResponse.ok) {
-        const errorText = await traversalResponse.text();
-        this.logger.error('graphrag.traversal.failed', { status: traversalResponse.status, error: errorText });
-        throw new Error(`Traversal query failed: ${traversalResponse.status}`);
-      }
+      // 3. Process query
+      this.performanceMetrics.query_start = Date.now();
 
-      const traversalResult = await traversalResponse.json();
-      const traversalData = traversalResult.data || [];
+      const queryResult = await this.queryOrchestrator.processQuery(
+        this.question,
+        this.sessionMetadata.user_id,
+        this.sessionMetadata.user_namespace,
+        {
+          queryId: this.sessionMetadata.query_id,
+          onProgress: (progress) => {
+            if (progress.message) {
+              this.sendToClient({ type: 'query_executing', message: progress.message });
+            }
+          }
+        }
+      );
 
-      this.logger.info('graphrag.traversal.completed', {
-        latency_ms: Date.now() - traversalStart,
-        results_count: traversalData.length
-      });
+      this.performanceMetrics.query_end = Date.now();
+      this.queryResults = queryResult.results;
 
-      this.performanceMetrics.query_execution_end = Date.now();
-      const executionTime = this.performanceMetrics.query_execution_end - this.performanceMetrics.query_execution_start;
-
-      // Combine Vector Results (Entry Points) + Traversal Results (Context)
-      const combinedResults = [...traversalData];
-
-      // Format results
-      const formattedResults = autoFormatResults(combinedResults, {
-        execution_time_ms: executionTime,
-        cached: false,
-        template_used: 'vector_graph_rag',
-        query_id: this.sessionMetadata.query_id,
-        cypher_query: 'VECTOR_SEARCH + TRAVERSAL',
-        user_namespace: this.sessionMetadata.user_namespace,
-        user_id: this.sessionMetadata.user_id,
-        vector_search_results: topNodes.length,
-        traversal_results: traversalData.length
-      });
-
-      this.queryResults = formattedResults;
-
+      // Send query results
       this.sendToClient({
         type: 'query_results',
         query_id: this.sessionMetadata.query_id,
-        results: formattedResults
+        results: queryResult.results
       });
 
       // Save to D1
-      await this.saveQueryToDatabase('GRAPH_RAG_PIPELINE', formattedResults, executionTime);
+      await this.saveQueryToDatabase(queryResult.cypherQuery, queryResult.results, queryResult.executionTimeMs);
 
-      this.logger.info('graphrag.completed', {
-        total_latency_ms: Date.now() - startTime,
-        vector_results: topNodes.length,
-        traversal_results: traversalData.length
-      });
-
-      // Generate answer
-      await this.generateAnswer(formattedResults);
+      // 4. Generate answer
+      await this.generateAndStreamAnswer(queryResult.results);
 
       this.cleanup();
 
     } catch (error) {
-      this.logger.error('graphrag.failed', {
-        error: error.message,
-        latency_ms: Date.now() - startTime
-      });
-
-      // Provide more helpful error message based on error type
-      let userMessage = "I couldn't find relevant information.";
-      if (error.message.includes('node IDs')) {
-        userMessage = "I found some results but couldn't process them. Please try again.";
-      } else if (error.message.includes('Traversal')) {
-        userMessage = "I found relevant nodes but couldn't expand the context. Please try again.";
-      }
-
-      this.sendError('QUERY_FAILED', userMessage, true);
+      this.logger.error('Voice query processing failed', error);
+      this.sendError('QUERY_FAILED', this.getUserFriendlyError(error), true);
       this.cleanup();
     }
   }
 
   /**
-   * Execute Cypher query against FalkorDB
-
-   *
-   * @param {string} cypher - Cypher query
-   * @param {Object} parameters - Query parameters
-   * @param {string} templateUsed - Template identifier
+   * Generate answer and stream TTS audio
+   * @param {Object} queryResults - Formatted query results
    */
-  async executeQuery(cypher, parameters, templateUsed) {
+  async generateAndStreamAnswer(queryResults) {
     try {
+      this.performanceMetrics.answer_start = Date.now();
+
+      this.sendToClient({ type: 'answer_generating', message: 'Generating answer...' });
+
+      // Generate answer
+      const generatedAnswer = await this.answerGenerator.generate({
+        question: this.question,
+        queryResults,
+        userId: this.sessionMetadata.user_id,
+        sessionId: this.sessionMetadata.session_id
+      });
+
+      this.performanceMetrics.answer_end = Date.now();
+
+      this.logger.info('Answer generated', {
+        latency_ms: generatedAnswer.latency_ms,
+        cached: generatedAnswer.cached
+      });
+
+      // Send answer to client
       this.sendToClient({
-        type: 'query_executing',
-        message: 'Searching your knowledge graph...'
+        type: 'answer_generated',
+        query_id: this.sessionMetadata.query_id,
+        answer: generatedAnswer.answer,
+        sources: generatedAnswer.sources || [],
+        latency_ms: generatedAnswer.latency_ms,
+        cached: generatedAnswer.cached || false,
+        confidence: generatedAnswer.confidence,
+        empty_results: generatedAnswer.empty_results || false
       });
 
-      this.performanceMetrics.query_execution_start = Date.now();
-
-      // Build FalkorDB connection config
-      const config = this.buildFalkorConfig();
-
-      // DEBUG: Log execution request details
-      this.logger.info('Executing query against FalkorDB', {
-        user_id: this.sessionMetadata.user_id,
-        user_namespace: this.sessionMetadata.user_namespace,
-        cypher,
-        parameters,
-        template_used: templateUsed,
-        config_host: config.host,
-        config_port: config.port
-      });
-
-      // Get FalkorDBConnectionPool Durable Object
-      const poolId = this.env.FALKORDB_POOL.idFromName('pool');
-      const poolStub = this.env.FALKORDB_POOL.get(poolId);
-
-      // Execute query via connection pool (using correct endpoint /execute)
-      const response = await poolStub.fetch('http://internal/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          config,
-          userId: this.sessionMetadata.user_id,
-          cypher,
-          params: parameters
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error('Query execution failed', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        });
-        throw new Error(`Query execution failed: ${response.statusText} - ${errorText}`);
+      // Update D1 with answer (async, non-blocking)
+      if (this.sessionMetadata.query_id && this.sessionMetadata.user_id) {
+        updateQueryAnswer(
+          this.env,
+          this.sessionMetadata.query_id,
+          this.sessionMetadata.user_id,
+          generatedAnswer.answer,
+          generatedAnswer.sources || [],
+          generatedAnswer.latency_ms
+        ).catch(err => this.logger.error('Failed to save answer to D1', err));
       }
 
-      const result = await response.json();
-      this.performanceMetrics.query_execution_end = Date.now();
+      // Stream TTS audio
+      const ttsResult = await this.ttsHandler.synthesizeAndStream(
+        generatedAnswer.answer,
+        (chunk) => this.sendToClient(chunk)
+      );
 
-      const executionTime = this.performanceMetrics.query_execution_end - this.performanceMetrics.query_execution_start;
-
-      // /execute endpoint returns {data, metadata, statistics} not {results}
-      const queryResults = result.data || [];
-
-      // DEBUG: Log detailed query results
-      this.logger.info('Query executed', {
-        execution_time_ms: executionTime,
-        results_count: queryResults.length,
-        statistics: result.statistics,
-        metadata: result.metadata,
-        cypher: cypher,
-        parameters: parameters,
-        user_namespace: this.sessionMetadata.user_namespace,
-        user_id: this.sessionMetadata.user_id,
-        raw_results_preview: queryResults.slice(0, 3) // First 3 results for debugging
-      });
-
-      // Format results
-      const formattedResults = autoFormatResults(queryResults, {
-        execution_time_ms: executionTime,
-        cached: false,
-        template_used: templateUsed,
-        query_id: this.sessionMetadata.query_id,
-        cypher_query: cypher,
-        user_namespace: this.sessionMetadata.user_namespace,
-        user_id: this.sessionMetadata.user_id
-      });
-
-      this.queryResults = formattedResults;
-
-      // Send results to client
-      this.sendToClient({
-        type: 'query_results',
-        query_id: this.sessionMetadata.query_id,
-        results: formattedResults
-      });
-
-      // Save to D1 and cache in KV
-      await Promise.all([
-        this.saveQueryToDatabase(cypher, formattedResults, executionTime),
-        this.cacheQueryResults(cypher, parameters, queryResults, templateUsed)
-      ]);
-
-      // Generate answer (Feature 009)
-      await this.generateAnswer(formattedResults);
-
-      this.cleanup();
+      if (!ttsResult.success) {
+        this.sendToClient({
+          type: 'audio_error',
+          error: ttsResult.error.code,
+          message: 'Voice response unavailable. Answer text is displayed.',
+          fallback: 'text_only'
+        });
+      }
 
     } catch (error) {
-      this.logger.error('Query execution error', {
-        error_message: error.message,
-        error_stack: error.stack,
-        error_name: error.name,
-        cypher_query: cypher
-      });
+      this.logger.error('Answer generation error', error);
 
-      // Send detailed error in development, generic in production
-      const errorMessage = this.env.ENVIRONMENT === 'development'
-        ? `Graph query failed: ${error.message}`
-        : 'Unable to search your knowledge graph right now. Please try again.';
-
-      this.sendError(
-        'QUERY_EXECUTION_FAILED',
-        errorMessage,
-        true,
-        error  // Pass error object for debug details in dev mode
-      );
-      this.cleanup();
+      if (error.name === 'LLMTimeoutError') {
+        this.sendToClient({
+          type: 'answer_error',
+          query_id: this.sessionMetadata.query_id,
+          error: 'Answer generation timed out. Please try again.',
+          error_code: 'llm_timeout',
+          can_retry: true
+        });
+      } else {
+        // Fallback to formatted results
+        const fallbackAnswer = formatResultsAsBulletList(queryResults);
+        this.sendToClient({
+          type: 'answer_fallback',
+          query_id: this.sessionMetadata.query_id,
+          fallback_answer: fallbackAnswer,
+          sources: queryResults.metadata?.sources || [],
+          reason: 'LLM service temporarily unavailable'
+        });
+      }
     }
+  }
+
+  /**
+   * Handle playback control - delegate to TTSStreamHandler
+   * @param {Object} message - Playback control message
+   */
+  handlePlaybackControl(message) {
+    const result = this.ttsHandler.handlePlaybackControl(message);
+
+    this.sendToClient({
+      type: 'playback_control_response',
+      action: message.action,
+      status: result.status,
+      response_time_ms: result.responseTimeMs
+    });
+
+    if (!result.success) {
+      this.sendError(result.error.code, result.error.message, false);
+    }
+  }
+
+  /**
+   * Handle cancel query
+   */
+  handleCancelQuery() {
+    this.logger.info('Query cancelled by user');
+    this.sendToClient({ type: 'query_cancelled', message: 'Query cancelled' });
+    this.cleanup();
   }
 
   /**
    * Save query to D1 database
-   *
-   * @param {string} cypherQuery - Cypher query
-   * @param {Object} results - Formatted results
-   * @param {number} latencyMs - Execution time in milliseconds
    */
   async saveQueryToDatabase(cypherQuery, results, latencyMs) {
     try {
@@ -1087,115 +518,6 @@ export class QuerySessionManager {
       this.logger.info('Query saved to D1', { query_id: this.sessionMetadata.query_id });
     } catch (error) {
       this.logger.error('Failed to save query to D1', error);
-      // Don't throw - this is non-critical
-    }
-  }
-
-  /**
-   * Cache query results in KV
-   *
-   * @param {string} cypher - Cypher query
-   * @param {Object} parameters - Query parameters
-   * @param {Array} results - Raw query results
-   * @param {string} templateUsed - Template identifier
-   */
-  async cacheQueryResults(cypher, parameters, results, templateUsed) {
-    try {
-      await setCachedQuery(
-        this.env.KV,
-        this.sessionMetadata.user_id,
-        this.question,
-        parameters,
-        {
-          cypher_query: cypher,
-          results,
-          template_used: templateUsed
-        }
-      );
-
-      this.logger.info('Query results cached', { question: this.question });
-    } catch (error) {
-      this.logger.error('Failed to cache query results', error);
-      // Don't throw - this is non-critical
-    }
-  }
-
-  /**
-   * Handle cancel query request
-   */
-  async handleCancelQuery() {
-    this.logger.info('Query cancelled by user');
-    this.sendToClient({
-      type: 'query_cancelled',
-      message: 'Query cancelled'
-    });
-    this.cleanup();
-  }
-
-  /**
-   * Handle playback control requests (Feature 010 - US2)
-   * @param {Object} message - Playback control message
-   */
-  async handlePlaybackControl(message) {
-    const { action } = message;
-    const startTime = Date.now();
-
-    this.logger.info(`Playback control: ${action}`, {
-      current_state: this.audioPlaybackState.status
-    });
-
-    switch (action) {
-      case 'pause':
-        if (this.audioPlaybackState.status === 'playing') {
-          this.audioPlaybackState.status = 'paused';
-          this.audioPlaybackState.isPaused = true;
-
-          this.sendToClient({
-            type: 'playback_control_response',
-            action: 'pause',
-            status: 'paused',
-            response_time_ms: Date.now() - startTime
-          });
-
-          this.logger.info('Playback paused');
-        }
-        break;
-
-      case 'resume':
-        if (this.audioPlaybackState.status === 'paused') {
-          this.audioPlaybackState.status = 'playing';
-          this.audioPlaybackState.isPaused = false;
-
-          this.sendToClient({
-            type: 'playback_control_response',
-            action: 'resume',
-            status: 'playing',
-            response_time_ms: Date.now() - startTime
-          });
-
-          this.logger.info('Playback resumed');
-        }
-        break;
-
-      case 'stop':
-        // Stop playback and reset to beginning
-        this.audioPlaybackState.status = 'stopped';
-        this.audioPlaybackState.currentChunk = 0;
-        this.audioPlaybackState.isPaused = false;
-
-        this.sendToClient({
-          type: 'playback_control_response',
-          action: 'stop',
-          status: 'stopped',
-          response_time_ms: Date.now() - startTime
-        });
-
-        this.logger.info('Playback stopped');
-        break;
-
-      default:
-        this.logger.warn(`Unknown playback action: ${action}`);
-        this.sendError('INVALID_PLAYBACK_ACTION', `Unknown action: ${action}`, false);
     }
   }
 
@@ -1209,16 +531,16 @@ export class QuerySessionManager {
 
   /**
    * Handle WebSocket error
-   * @param {Error} error - WebSocket error
+   * @param {Event|Error} error - WebSocket error event
    */
   handleError(error) {
-    this.logger.error('WebSocket error', error);
+    this.logger.error('WebSocket error', /** @type {any} */ (error));
     this.sendError('WEBSOCKET_ERROR', 'Connection error occurred', false);
     this.cleanup();
   }
 
   /**
-   * Send message to client via WebSocket
+   * Send message to client
    * @param {Object} message - Message object
    */
   sendToClient(message) {
@@ -1228,39 +550,32 @@ export class QuerySessionManager {
   }
 
   /**
-   * Send error message to client
+   * Send error to client
    * @param {string} errorCode - Error code
    * @param {string} message - User-friendly error message
    * @param {boolean} retryable - Whether error is retryable
-   * @param {Error} [error] - Original error object (for development details)
    */
-  sendError(errorCode, message, retryable, error = null) {
+  sendError(errorCode, message, retryable) {
     this.logger.warn(`Error sent to client: ${errorCode}`, { message, retryable });
+    this.sendToClient({ type: 'error', error_code: errorCode, message, retryable });
+  }
 
-    const errorPayload = {
-      type: 'error',
-      error_code: errorCode,
-      message,
-      retryable
-    };
-
-    // In development mode, include error details for debugging
-    if (this.env.ENVIRONMENT === 'development' && error) {
-      errorPayload.debug = {
-        error_message: error.message,
-        error_stack: error.stack,
-        error_name: error.name
-      };
+  /**
+   * Get user-friendly error message
+   * @param {Error} error - Original error
+   * @returns {string} User-friendly message
+   */
+  getUserFriendlyError(error) {
+    if (this.env.ENVIRONMENT === 'development') {
+      return `Query failed: ${error.message}`;
     }
-
-    this.sendToClient(errorPayload);
+    return "I couldn't understand that question. Try asking about specific people, projects, or topics.";
   }
 
   /**
    * Set session timeout
    */
   setSessionTimeout() {
-    // Warning timeout
     this.warningTimeoutHandle = setTimeout(() => {
       this.sendToClient({
         type: 'timeout_warning',
@@ -1269,7 +584,6 @@ export class QuerySessionManager {
       });
     }, TIMEOUT_WARNING_THRESHOLD);
 
-    // Hard timeout
     this.timeoutHandle = setTimeout(() => {
       this.logger.warn('Session timeout reached');
       this.sendError('SESSION_TIMEOUT', 'Session timed out. Please try again.', true);
@@ -1278,247 +592,9 @@ export class QuerySessionManager {
   }
 
   /**
-   * Generate natural language answer from query results (Feature 009)
-   * @param {Object} queryResults - Formatted query results
-   */
-  async generateAnswer(queryResults) {
-    try {
-      this.performanceMetrics.answer_generation_start = Date.now();
-
-      this.sendToClient({
-        type: 'answer_generating',
-        message: 'Generating answer...'
-      });
-
-      // Create answer generator
-      const answerGenerator = new AnswerGenerator(this.env, {
-        waitUntil: (promise) => {
-          // Durable Objects don't have waitUntil directly, so we handle async ops differently
-          // Just log if promise fails
-          promise.catch(err => this.logger.error('Background task failed', err));
-        }
-      });
-
-      // Generate answer
-      const generatedAnswer = await answerGenerator.generate({
-        question: this.question,
-        queryResults,
-        userId: this.sessionMetadata.user_id,
-        sessionId: this.sessionMetadata.session_id
-      });
-
-      this.performanceMetrics.answer_generation_end = Date.now();
-      this.lastGeneratedAnswer = generatedAnswer;
-
-      this.logger.info('Answer generated', {
-        latency_ms: generatedAnswer.latency_ms,
-        cached: generatedAnswer.cached,
-        validation_passed: generatedAnswer.validation_passed,
-        confidence: generatedAnswer.confidence
-      });
-
-      // Send answer to client
-      this.sendToClient({
-        type: 'answer_generated',
-        query_id: this.sessionMetadata.query_id,
-        answer: generatedAnswer.answer,
-        sources: generatedAnswer.sources || [],
-        latency_ms: generatedAnswer.latency_ms,
-        cached: generatedAnswer.cached || false,
-        confidence: generatedAnswer.confidence,
-        empty_results: generatedAnswer.empty_results || false
-      });
-
-      // Update D1 with answer (async, non-blocking)
-      updateQueryAnswer(
-        this.env,
-        this.sessionMetadata.query_id,
-        this.sessionMetadata.user_id,
-        generatedAnswer.answer,
-        generatedAnswer.sources || [],
-        generatedAnswer.latency_ms
-      ).catch(err => {
-        this.logger.error('Failed to save answer to D1', err);
-      });
-
-      // Synthesize and stream audio (Feature 010)
-      await this.synthesizeAndStreamAudio(generatedAnswer.answer);
-
-    } catch (error) {
-      this.logger.error('Answer generation error', error);
-
-      // Send fallback or error
-      if (error.name === 'LLMTimeoutError') {
-        this.sendToClient({
-          type: 'answer_error',
-          query_id: this.sessionMetadata.query_id,
-          error: 'Answer generation timed out. Please try again.',
-          error_code: 'llm_timeout',
-          can_retry: true
-        });
-      } else if (error.name === 'ValidationFailedError') {
-        // Return formatted results as fallback
-        const fallbackAnswer = formatResultsAsBulletList(queryResults);
-
-        this.sendToClient({
-          type: 'answer_fallback',
-          query_id: this.sessionMetadata.query_id,
-          fallback_answer: fallbackAnswer,
-          sources: queryResults.metadata?.sources || [],
-          reason: 'Answer validation failed'
-        });
-      } else {
-        // LLM service error - return formatted results
-        const fallbackAnswer = formatResultsAsBulletList(queryResults);
-
-        this.sendToClient({
-          type: 'answer_fallback',
-          query_id: this.sessionMetadata.query_id,
-          fallback_answer: fallbackAnswer,
-          sources: queryResults.metadata?.sources || [],
-          reason: 'LLM service temporarily unavailable'
-        });
-      }
-    }
-  }
-
-  /**
-   * Synthesize answer to speech and stream to client (Feature 010)
-   * @param {string} answerText - Generated answer text
-   */
-  async synthesizeAndStreamAudio(answerText) {
-    try {
-      this.logger.info('Starting TTS synthesis for answer');
-
-      // Create TTS synthesizer and audio cache
-      const ttsSynthesizer = createTTSSynthesizer(this.env.AI);
-      const audioCache = createAudioCache(this.env.KV);
-
-      const ttsStartTime = Date.now();
-
-      // 1. Check cache first
-      this.logger.info('Checking audio cache');
-      let audioData;
-      let audioMetadata;
-      let fromCache = false;
-
-      const cachedAudio = await audioCache.get(answerText);
-
-      if (cachedAudio) {
-        // Cache HIT
-        this.logger.info('Audio cache HIT');
-        audioData = cachedAudio.audio;
-        audioMetadata = {
-          format: cachedAudio.format,
-          duration_ms: cachedAudio.duration_ms,
-        };
-        fromCache = true;
-      } else {
-        // Cache MISS - synthesize audio
-        this.logger.info('Audio cache MISS - synthesizing audio');
-
-        try {
-          const synthesisResult = await ttsSynthesizer.synthesize(answerText);
-          audioData = synthesisResult.audio;
-          audioMetadata = {
-            format: synthesisResult.format,
-            duration_ms: synthesisResult.duration_ms,
-          };
-
-          // Cache audio asynchronously (non-blocking)
-          audioCache.set(answerText, audioData, audioMetadata).catch(err => {
-            this.logger.error('Failed to cache audio', err);
-          });
-
-        } catch (ttsError) {
-          // TTS synthesis failed - graceful fallback
-          this.logger.error('TTS synthesis failed', ttsError);
-
-          this.sendToClient({
-            type: 'audio_error',
-            error: ttsError.code || 'TTS_FAILED',
-            message: 'Voice response unavailable. Answer text is displayed.',
-            fallback: 'text_only'
-          });
-
-          return; // Exit gracefully, text answer already sent
-        }
-      }
-
-      const ttsLatency = Date.now() - ttsStartTime;
-      this.logger.info('TTS synthesis complete', {
-        latency_ms: ttsLatency,
-        audio_size_bytes: audioData.byteLength,
-        cached: fromCache
-      });
-
-      // 2. Chunk audio for streaming
-      const chunks = chunkAudio(audioData, 4096); // 4KB chunks
-      this.logger.info(`Audio chunked into ${chunks.length} chunks`);
-
-      // Set playback state
-      this.audioPlaybackState.status = 'playing';
-      this.audioPlaybackState.totalChunks = chunks.length;
-      this.audioPlaybackState.currentChunk = 0;
-      this.audioPlaybackState.audioBuffer = chunks;
-
-      // 3. Stream chunks to client
-      for (let i = 0; i < chunks.length; i++) {
-        // Check if playback was stopped
-        if (this.audioPlaybackState.status === 'stopped') {
-          this.logger.info('Playback stopped by user, halting stream');
-          break;
-        }
-
-        // Wait if paused
-        while (this.audioPlaybackState.isPaused) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        const chunkMessage = createChunkMessage(chunks[i], i, chunks.length);
-        this.audioPlaybackState.currentChunk = i;
-
-        this.sendToClient(chunkMessage);
-
-        // Small delay between chunks to prevent overwhelming the WebSocket
-        if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      }
-
-      // 4. Send completion message
-      this.sendToClient({
-        type: 'audio_complete',
-        duration_ms: audioMetadata.duration_ms,
-        total_bytes: audioData.byteLength,
-        total_chunks: chunks.length,
-        cached: fromCache,
-        latency_ms: ttsLatency
-      });
-
-      this.logger.info('Audio streaming complete', {
-        total_chunks: chunks.length,
-        total_bytes: audioData.byteLength
-      });
-
-    } catch (error) {
-      this.logger.error('Audio synthesis and streaming error', error);
-
-      // Send error message but don't fail the entire query
-      this.sendToClient({
-        type: 'audio_error',
-        error: 'AUDIO_STREAMING_FAILED',
-        message: 'Unable to play audio. Answer text is displayed.',
-        fallback: 'text_only'
-      });
-    }
-  }
-
-  /**
    * Cleanup session resources
    */
   cleanup() {
-    // Clear timeouts
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
@@ -1529,7 +605,6 @@ export class QuerySessionManager {
       this.warningTimeoutHandle = null;
     }
 
-    // Close WebSocket
     if (this.websocket) {
       try {
         this.websocket.close();
@@ -1539,9 +614,11 @@ export class QuerySessionManager {
       this.websocket = null;
     }
 
-    // Mark session inactive
-    this.sessionActive = false;
+    // Reset services
+    if (this.audioHandler) this.audioHandler.reset();
+    if (this.ttsHandler) this.ttsHandler.reset();
 
+    this.sessionActive = false;
     this.logger.info('Session cleaned up');
   }
 }

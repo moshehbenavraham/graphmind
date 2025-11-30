@@ -103,8 +103,8 @@
    - Accessibility features
 
 3. **VoiceRecorderExample.jsx** (216 lines)
-   - Location: `/home/aiwithapex/projects/graphmind/src/frontend/components/VoiceRecorderExample.jsx`
-   - Demo component showing usage
+   - Location: `/home/aiwithapex/projects/graphmind/src/frontend/examples/VoiceRecorderExample.jsx`
+   - Demo component showing usage (moved from components/ per Phase 3 audit)
    - Live audio chunk logging
    - Completed recordings display
    - Error tracking
@@ -363,7 +363,7 @@ All Phase 4 User Story 2 tasks have been completed:
 - Tasks List: `/specs/004-voice-note-capture/tasks.md`
 
 ### Example Code
-- Demo: `/src/frontend/components/VoiceRecorderExample.jsx`
+- Demo: `/src/frontend/examples/VoiceRecorderExample.jsx`
 - Usage examples in README
 
 ### External References

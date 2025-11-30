@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Centralized Logging Utility
  *
@@ -5,6 +6,17 @@
  * Logs include context, timing, and metadata for production debugging.
  *
  * @module lib/utils/logger
+ */
+
+/**
+ * @typedef {Object} LogEntry
+ * @property {string} timestamp - ISO timestamp
+ * @property {string} level - Log level
+ * @property {string} component - Component name
+ * @property {string} message - Log message
+ * @property {number} duration_ms - Duration since logger creation
+ * @property {Object} context - Logger context
+ * @property {Object} data - Additional data
  */
 
 /**
@@ -89,15 +101,24 @@ export class Logger {
 
   /**
    * Error log (critical failures)
+   *
+   * @param {string} message - Log message
+   * @param {Error|null} [error] - Error object
+   * @param {Object} [data] - Additional data
+   * @returns {LogEntry} Log entry
    */
   error(message, error = null, data = {}) {
+    /** @type {Object|null} */
+    const errorDetails = error ? {
+      message: error.message,
+      stack: error.stack,
+      // @ts-ignore - code is optional extended property on Error
+      code: error.code,
+    } : null;
+
     const entry = this._createLogEntry(LogLevel.ERROR, message, {
       ...data,
-      error: error ? {
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-      } : null,
+      error: errorDetails,
     });
     const formatted = this._formatLog(entry);
     console.error(formatted.prefix, formatted.message, formatted.data);
@@ -197,6 +218,8 @@ export class CacheMetrics {
 
   /**
    * Record cache hit
+   * @param {string} key - Cache key
+   * @param {Logger|null} [logger] - Optional logger
    */
   recordHit(key, logger = null) {
     this.hits++;
@@ -210,6 +233,8 @@ export class CacheMetrics {
 
   /**
    * Record cache miss
+   * @param {string} key - Cache key
+   * @param {Logger|null} [logger] - Optional logger
    */
   recordMiss(key, logger = null) {
     this.misses++;
@@ -223,6 +248,9 @@ export class CacheMetrics {
 
   /**
    * Record cache error
+   * @param {string} key - Cache key
+   * @param {Error} error - Error object
+   * @param {Logger|null} [logger] - Optional logger
    */
   recordError(key, error, logger = null) {
     this.errors++;
@@ -265,9 +293,18 @@ export class CacheMetrics {
 }
 
 /**
+ * @typedef {Object} UserContext
+ * @property {string} [userId] - User ID
+ */
+
+/**
  * API request logger with timing
  */
 export class APIRequestLogger {
+  /**
+   * @param {Request} request - Request object
+   * @param {UserContext|null} [user] - User context
+   */
   constructor(request, user = null) {
     this.startTime = Date.now();
     this.request = request;

@@ -640,11 +640,18 @@ function levenshteinDistance(a, b) {
 }
 
 /**
+ * @typedef {Object} ResolvedEntity
+ * @property {string} name - Canonical or original entity name
+ * @property {string|null} type - Entity type (e.g., 'Person', 'Project')
+ * @property {string|null} id - Entity ID if found
+ */
+
+/**
  * Resolve entity name to canonical name using fuzzy matching against cache
  * @param {string} entityName - Extracted entity name
  * @param {string} userId - User ID
  * @param {Object} env - Environment bindings
- * @returns {Promise<string>} Canonical name or original name
+ * @returns {Promise<ResolvedEntity>} Resolved entity with name, type, and id
  */
 export async function resolveEntity(entityName, userId, env) {
   try {

@@ -72,28 +72,82 @@ echo -e "${GREEN}✔ Services stopped${NC}"
 echo ""
 
 echo -e "${YELLOW}[2/8] Cleaning all build artifacts and caches...${NC}"
-# Clean build artifacts but preserve .wrangler/state/ for D1 database persistence
+# Clean build artifacts
 rm -rf dist/ .wrangler/tmp/ node_modules/.cache/ src/frontend/dist/ src/frontend/node_modules/.cache/ src/frontend/.vite/
-# Preserve .wrangler/state/ which contains D1 local database
+
+# HARD CLEAR: KV cache (answer cache, rate limit cache) - prevents stale cached answers
+echo "  - Clearing KV answer cache..."
+rm -rf .wrangler/state/kv/ 2>/dev/null || true
+
+# HARD CLEAR: R2 local cache
+echo "  - Clearing R2 local cache..."
+rm -rf .wrangler/state/r2/ 2>/dev/null || true
+
+# Preserve .wrangler/state/d1/ for D1 database persistence (development data)
 if [ -d ".wrangler" ]; then
     find .wrangler -mindepth 1 -maxdepth 1 ! -name 'state' -exec rm -rf {} + 2>/dev/null || true
 fi
+
+# Clean npm caches
+echo "  - Clearing npm caches..."
 npm cache clean --force >/dev/null 2>&1 || true
 (cd src/frontend && npm cache clean --force >/dev/null 2>&1 || true)
-echo -e "${GREEN}✔ Build artifacts cleaned (D1 database preserved)${NC}"
+
+# Clean any TypeScript/esbuild caches
+rm -rf .tsbuildinfo tsconfig.tsbuildinfo 2>/dev/null || true
+
+echo -e "${GREEN}✔ Build artifacts and caches cleaned (D1 database preserved)${NC}"
 echo ""
 
-echo -e "${YELLOW}[3/8] Installing fresh dependencies...${NC}"
+echo -e "${YELLOW}[3/8] Installing fresh dependencies and upgrading tools...${NC}"
+
+# Upgrade npm itself first
+echo "  - Checking npm version..."
+NPM_CURRENT=$(npm --version)
+echo "    Current npm: $NPM_CURRENT"
+npm install -g npm@latest 2>/dev/null || echo "    (npm global upgrade skipped - may need sudo)"
+
+# Install dependencies
 rm -rf node_modules/
 npm install
+
+# Upgrade Wrangler to latest
+echo "  - Upgrading Wrangler to latest..."
+WRANGLER_OLD=$(npx wrangler --version 2>/dev/null | head -1 || echo "unknown")
+npm install -D wrangler@latest
+WRANGLER_NEW=$(npx wrangler --version 2>/dev/null | head -1 || echo "unknown")
+echo "    Wrangler: $WRANGLER_OLD -> $WRANGLER_NEW"
+
+# Security: Fix known vulnerabilities
+echo "  - Running npm audit fix..."
+npm audit fix --force 2>/dev/null || npm audit fix 2>/dev/null || echo "    No critical fixes needed"
+
+# Check for outdated dependencies (informational)
+echo "  - Checking for outdated packages..."
+npm outdated 2>/dev/null | head -10 || echo "    All packages up to date"
+
 cd src/frontend
 rm -rf node_modules/
 npm install
+
+# Security: Fix frontend vulnerabilities
+echo "  - Running npm audit fix for frontend..."
+npm audit fix --force 2>/dev/null || npm audit fix 2>/dev/null || echo "    No critical fixes needed"
+
+# Check frontend outdated packages
+echo "  - Checking frontend outdated packages..."
+npm outdated 2>/dev/null | head -10 || echo "    All packages up to date"
+
 cd "$PROJECT_ROOT"
-echo -e "${GREEN}✔ Dependencies installed${NC}"
+echo -e "${GREEN}✔ Dependencies installed, tools upgraded, and security audited${NC}"
 echo ""
 
 echo -e "${YELLOW}[4/8] Starting FalkorDB Docker container...${NC}"
+
+# Pull latest FalkorDB image
+echo "  - Pulling latest FalkorDB image..."
+docker pull falkordb/falkordb:latest 2>/dev/null || echo "    (Image pull skipped - using cached)"
+
 if docker ps -a | grep -q falkordb-local; then
     echo "  - Existing container found, restarting..."
     docker stop falkordb-local >/dev/null 2>&1 || true
