@@ -39,7 +39,6 @@
 ---
 
 **Timeline:** Weeks 4-6
-**Status:** Not Started
 **Goal:** Build knowledge graph from voice notes
 
 ---

@@ -1,232 +1,132 @@
-# Next Spec: Entity Role Assignment Bug Fix (Query Template Fix)
+# Next Spec: Audio Pipeline Debug & Fix (Feature 016)
 
-**Phase**: Phase 4 - Polish & Features (Critical Bugfix)
-**Priority**: P0 (Blocker)
-**Estimated Context**: ~12,000 tokens
-**Dependencies**:
-- Feature 011 frontend deployed (blocked by this bug)
-- Feature 014 GraphRAG validation complete
-- All backend infrastructure operational
-**Status**: Ready to Implement
+**Generated**: 2025-12-02
+**Phase**: Phase 4 - Polish (Critical Bugfix)
+**Type**: Debug/Fix
+**Priority**: P0 (Blocker - Voice queries non-functional)
 
 ---
 
-## What We're Building
+## Problem Statement
 
-This spec fixes the **Entity Role Assignment Bug** that is blocking the entire GraphMind frontend from functioning. Voice queries like "Who works on GraphMind?" return empty results because the Cypher query generator incorrectly treats the extracted entity ("GraphMind") as the SOURCE of the relationship when it should be the TARGET.
+**Current Symptom**: Voice queries fail with "No audio recorded. Please try again." despite successful WebSocket connections.
+
+**Evidence from logs** (docs/ongoing_projects/problem-areas.md):
+```
+WebSocket connection established session_id: sess_d250cd8d-4ac5-4d4b-91a9-98097ee23bd4
+[WARN] "No audio recorded. Please try again."
+Session cleaned up
+WebSocket connection closed
+[Reconnects and repeats]
+```
+
+**Root Cause**: Unknown - requires investigation. The WebSocket connects (101 Switching Protocols) and receives stop_recording after 2-3 seconds, but ZERO `audio_chunk` messages arrive at the server.
+
+---
 
 ## Why This Next
 
-This is the **#1 blocker** preventing GraphMind from being usable:
+**Blocks Everything**:
+- Voice queries are 100% broken - users cannot ask questions
+- Feature 015 (Entity Role Bugfix) is complete but untestable via voice
+- Frontend deployment (Feature 011) cannot be validated end-to-end
+- The entire voice-first value proposition is non-functional
 
-- **Blocking**: Feature 011 (Frontend) cannot function - users see "I don't have any notes about X" for all relationship queries
-- **Impact**: 100% failure rate for "Who VERBS X?" question patterns
-- **Root Cause Identified**: After 7+ fix attempts, root cause is documented in `specs/011-frontend-deployment/research_current_issue.md`
-- **Phase Context**: Must be fixed before Phase 4 Polish features can be validated
+**Dependencies Satisfied**:
+- Feature 015: Entity role detection fixed (98% complete)
+- WebSocket race condition fixed (Problem 1 from previous session)
+- Backend API endpoints operational
+- FalkorDB integration working
 
-**Current State**:
-- Backend: Fully operational, security validated (Feature 012-014 complete)
-- Frontend: Deployed but non-functional due to this bug
-- Knowledge Graph: Contains data but queries return empty results
-
----
-
-## Scope (Single Context Window)
-
-**Included**:
-- Fix entity role assignment in `src/services/cypher-generator.js`
-- Add bidirectional query templates to `src/lib/graph/cypher-templates.js`
-- Implement question pattern detection for source/target determination
-- Add test coverage for relationship query patterns
-- Validate fix with production-like queries
-
-**Explicitly Excluded** (for later specs):
-- LLM-based semantic role labeling (Option B from research)
-- New Phase 4 features (multi-source ingestion, search, etc.)
-- Frontend UI changes
-- Performance optimization
-
-**Estimated Tokens**: ~12,000 tokens
+**Phase Context**:
+- This is a critical bugfix blocking Phase 4 completion
+- All other Phase 4 work depends on voice queries working
 
 ---
 
-## User Stories (for this spec)
+## Scope Definition
 
-### Story 1: Fix "Who VERBS X?" Query Pattern (P0)
+### Included (This Session)
 
-**As a** user
-**I want** to ask "Who works on GraphMind?" and get correct results
-**So that** I can discover relationships in my knowledge graph
+1. **Diagnose audio capture pipeline** - Add strategic logging to trace audio flow
+2. **Fix useAudioRecorder.js** - Ensure MediaRecorder captures and emits audio chunks
+3. **Fix audio chunk transmission** - Ensure chunks flow from recorder to WebSocket
+4. **Validate isConnected timing** - Ensure WebSocket is connected when audio starts
+5. **End-to-end test** - Voice query works from microphone to answer
 
-**Acceptance Criteria**:
-- [ ] Query "Who works on GraphMind?" returns Person nodes connected to GraphMind Project
-- [ ] Query "What does John work on?" returns Project nodes connected to John Person
-- [ ] Entity role (source vs target) correctly determined from question pattern
-- [ ] All existing test scenarios continue to pass
+### Excluded (Later)
 
-### Story 2: Support Bidirectional Relationship Queries (P1)
+- TTS synthesis issues (Problem 3) - separate issue, lower priority
+- Performance optimization - get it working first
+- UI polish - functionality over aesthetics
+- New features - bugfix only
 
-**As a** developer
-**I want** the query system to support both source-based and target-based relationship queries
-**So that** all natural language question patterns work correctly
+### Size Check
 
-**Acceptance Criteria**:
-- [ ] New `relationshipByTargetTemplate()` function added to cypher-templates.js
-- [ ] Question pattern regex identifies "Who/What VERBS X?" as target-based query
-- [ ] Question pattern regex identifies "What does X VERB?" as source-based query
-- [ ] `buildRelationshipParams()` populates correct parameters based on pattern
+**Estimated Complexity**: Medium
+**Fits Single Context Window**: Yes (~15,000 tokens)
+**Session Goal**: Voice queries receive audio and return answers
 
 ---
 
-## Technical Approach
+## Investigation Plan
 
-### Root Cause (from research_current_issue.md)
+### Step 1: Trace the Audio Flow
 
-The bug is in `src/services/cypher-generator.js` function `buildRelationshipParams()`:
-
-```javascript
-// CURRENT BUG (Line 113):
-const sourceEntity = await resolveEntity(entities[0].text, userId, env);
-// ^ Always treats first extracted entity as SOURCE
-
-// For "Who works on GraphMind?":
-// - Extracted entity: "GraphMind" (Project)
-// - Treated as: SOURCE (Person named "GraphMind") <- WRONG
-// - Should be: TARGET (Project named "GraphMind")
+**Expected flow**:
+```
+User clicks Record
+  -> useAudioRecorder.startRecording()
+    -> MediaRecorder.start()
+      -> ondataavailable fires with audio blob
+        -> onChunk callback in QueryPage.jsx
+          -> useQuerySession.sendAudioChunk()
+            -> WebSocket.send({type: 'audio_chunk', data: base64})
+              -> Server receives and buffers
 ```
 
-### Recommended Fix: Option A + Option C Combined
+**Suspected break points** (in priority order):
+1. MediaRecorder not starting (permissions?)
+2. `ondataavailable` not firing (timeslice config?)
+3. `onChunk` callback not wired correctly
+4. `sendAudioChunk` not being called
+5. WebSocket `isConnected` false when send attempted
+6. WebSocket `send()` silently failing
 
-**Option A**: Pattern-based question detection (deterministic, fast)
-**Option C**: Bidirectional templates with explicit source/target params
+### Step 2: Files to Instrument
 
-### Implementation Steps
+1. **`src/frontend/hooks/useAudioRecorder.js`**
+   - Add logging: MediaRecorder creation, start, ondataavailable
+   - Log chunk sizes when data available
+   - Log any errors in try/catch
 
-#### 1. Add Question Pattern Detection
+2. **`src/frontend/pages/QueryPage.jsx`**
+   - Add logging: onChunk callback invocation
+   - Log chunk data size before passing to sendAudioChunk
 
-Add to `src/lib/graph/cypher-templates.js`:
+3. **`src/frontend/hooks/useQuerySession.js`**
+   - Add logging: sendAudioChunk entry
+   - Log isConnected state at send time
+   - Log WebSocket.send() call and result
 
-```javascript
-const QUESTION_PATTERNS = {
-  // "Who/What VERBS on/for X?" -> X is TARGET, query for SOURCE
-  WHO_VERBS_X: /^(who|what)\s+(\w+s?)\s+(on|for|with|to)\s+(.+)\??$/i,
+### Step 3: Common Issues to Check
 
-  // "What does X VERB?" -> X is SOURCE, query for TARGET
-  WHAT_DOES_X_VERB: /^what\s+does\s+(.+)\s+(\w+)\s*(on|for|with)?\??$/i,
+**MediaRecorder Issues**:
+- [ ] `navigator.mediaDevices.getUserMedia` called?
+- [ ] Permission granted (not denied/dismissed)?
+- [ ] MediaRecorder created with correct mimeType?
+- [ ] `timeslice` parameter set in `recorder.start(timeslice)`?
+- [ ] If no timeslice, ondataavailable only fires on stop
 
-  // "Who/what is/are X?" -> X is entity lookup
-  WHO_IS_X: /^(who|what)\s+(is|are)\s+(.+)\??$/i,
-};
+**WebSocket Timing Issues**:
+- [ ] Is WebSocket connected BEFORE recording starts?
+- [ ] Is `isConnected` state updated synchronously with `wsRef.current.readyState`?
+- [ ] Race condition between connect and start recording?
 
-export function identifyEntityRole(question, entities) {
-  const q = question.trim();
-
-  // "Who works on X?" -> entity X is TARGET
-  if (QUESTION_PATTERNS.WHO_VERBS_X.test(q)) {
-    return { role: 'target', pattern: 'WHO_VERBS_X' };
-  }
-
-  // "What does X work on?" -> entity X is SOURCE
-  if (QUESTION_PATTERNS.WHAT_DOES_X_VERB.test(q)) {
-    return { role: 'source', pattern: 'WHAT_DOES_X_VERB' };
-  }
-
-  // Default: entity is SOURCE (backward compatible)
-  return { role: 'source', pattern: 'default' };
-}
-```
-
-#### 2. Add Bidirectional Template
-
-Add to `src/lib/graph/cypher-templates.js`:
-
-```javascript
-export function relationshipByTargetTemplate(userNamespace, sourceType, relType, targetType, targetName) {
-  return `
-    MATCH (source:${sourceType})-[r:${relType}]->(target:${targetType})
-    WHERE target.name = $target_name
-    AND target.user_id_normalized = $user_namespace
-    RETURN source, r, target
-    LIMIT 100
-  `;
-}
-```
-
-#### 3. Fix buildRelationshipParams()
-
-Update `src/services/cypher-generator.js`:
-
-```javascript
-async function buildRelationshipParams(question, entities, env, userNamespace, userId) {
-  const { role, pattern } = identifyEntityRole(question, entities);
-  const resolvedEntity = await resolveEntity(entities[0].text, userId, env);
-
-  if (role === 'target') {
-    // Entity is the TARGET of the relationship
-    return {
-      target_name: resolvedEntity.name,
-      user_namespace: userNamespace,
-      query_direction: 'by_target',
-      // Source will be wildcard (the "who")
-    };
-  } else {
-    // Entity is the SOURCE of the relationship (default)
-    return {
-      source_name: resolvedEntity.name,
-      user_namespace: userNamespace,
-      query_direction: 'by_source',
-    };
-  }
-}
-```
-
-#### 4. Update generateCypherQuery() to Use Direction
-
-```javascript
-if (template === 'relationship_query') {
-  const params = await buildRelationshipParams(question, entities, env, userNamespace, userId);
-
-  if (params.query_direction === 'by_target') {
-    cypher = relationshipByTargetTemplate(
-      userNamespace,
-      mapping.source,  // e.g., 'Person'
-      mapping.type,    // e.g., 'WORKS_ON'
-      mapping.target,  // e.g., 'Project'
-      params.target_name
-    );
-  } else {
-    cypher = relationshipQueryTemplate(
-      userNamespace,
-      mapping.source,
-      params.source_name,
-      mapping.type,
-      mapping.target,
-      'outgoing'
-    );
-  }
-}
-```
-
-### Cloudflare Components
-- **Workers**: `src/services/cypher-generator.js` (main fix)
-- **No D1/KV/R2 changes** - this is logic-only fix
-
-### FalkorDB
-- **No schema changes** - only query generation logic
-- **Query templates**: Add `relationshipByTargetTemplate()`
-
----
-
-## Implementation Steps
-
-1. **Read existing code** - Understand current implementation in cypher-generator.js and cypher-templates.js
-2. **Add pattern detection** - Implement `identifyEntityRole()` function with regex patterns
-3. **Add target template** - Create `relationshipByTargetTemplate()` function
-4. **Fix buildRelationshipParams()** - Use pattern detection to set correct role
-5. **Update generateCypherQuery()** - Select template based on query direction
-6. **Add unit tests** - Test pattern detection and template selection
-7. **Integration test** - Test full pipeline with "Who works on X?" queries
-8. **Validate in frontend** - Confirm fix works end-to-end
+**Callback Wiring Issues**:
+- [ ] Is `onChunk` prop passed to useAudioRecorder?
+- [ ] Is it the correct function (not stale closure)?
+- [ ] Is the callback being invoked with correct arguments?
 
 ---
 
@@ -234,79 +134,113 @@ if (template === 'relationship_query') {
 
 This spec is complete when:
 
-- [ ] "Who works on GraphMind?" returns Person nodes (not empty)
-- [ ] "What does John work on?" returns Project nodes
-- [ ] "Tell me about GraphMind" continues to work (regression test)
-- [ ] All 5+ question patterns from research doc work correctly
-- [ ] Unit tests cover pattern detection logic (>90% coverage)
-- [ ] Integration tests validate full query pipeline
-- [ ] Frontend voice queries return correct results
-- [ ] Feature 011 validation.md status changes from BLOCKED to PASSING
+1. [ ] Console logs show MediaRecorder starting successfully
+2. [ ] Console logs show `ondataavailable` firing with chunk sizes
+3. [ ] Console logs show `onChunk` callback receiving data
+4. [ ] Console logs show `sendAudioChunk` being called
+5. [ ] Console logs show WebSocket `send()` being executed
+6. [ ] Server logs show `audio_chunk` messages being received
+7. [ ] Voice query returns a spoken answer (end-to-end test)
 
 ---
 
-## Test Cases (from research_current_issue.md)
+## Technical Context
 
-| Question | Expected Source | Expected Target | Expected Result |
-|----------|-----------------|-----------------|-----------------|
-| "Who works on GraphMind?" | Person (wildcard) | Project "GraphMind" | List of people |
-| "What does John work on?" | Person "John" | Project (wildcard) | List of projects |
-| "What projects involve AI?" | Project (wildcard) | Topic "AI" | List of projects |
-| "Who knows about machine learning?" | Person (wildcard) | Topic "machine learning" | List of people |
-| "Tell me about GraphMind" | N/A (entity lookup) | N/A | GraphMind details |
+### useAudioRecorder Hook API
+
+```javascript
+const {
+  isRecording,
+  startRecording,  // Async - requests mic permission, starts MediaRecorder
+  stopRecording,   // Returns audio blob
+  error,
+} = useAudioRecorder({
+  onChunk: (chunk) => { /* Called when audio data available */ },
+  mimeType: 'audio/webm',
+  timeslice: 500,  // ms between ondataavailable events
+});
+```
+
+### useQuerySession Hook API
+
+```javascript
+const {
+  isConnected,
+  sendAudioChunk,  // (chunk: Blob) -> void
+  startSession,    // Creates WebSocket URL
+  ...
+} = useQuerySession({
+  onTranscript: ...,
+  onAnswer: ...,
+  onError: ...,
+});
+```
+
+### WebSocket Message Protocol
+
+```javascript
+// Client -> Server
+{ type: 'audio_chunk', data: '<base64 encoded audio>' }
+{ type: 'stop_recording' }
+
+// Server -> Client
+{ type: 'transcript_chunk', text: '...' }
+{ type: 'answer', text: '...' }
+{ type: 'audio_response', url: '...' }
+```
 
 ---
 
-## Next After This
+## Implementation Steps
 
-Once this spec is complete, the next logical steps will be:
-1. **Feature 011 Validation**: Mark frontend deployment as complete (unblocked)
-2. **Phase 4 Features**: Multi-source ingestion, search, entity management
-3. **User Acceptance Testing**: End-to-end testing with real users
+### Phase 1: Diagnosis (Priority)
+
+1. Read and understand current useAudioRecorder.js implementation
+2. Read and understand QueryPage.jsx audio integration
+3. Read and understand useQuerySession.js sendAudioChunk
+4. Add strategic console.log statements at each step
+5. Test in browser and capture console output
+6. Identify exact failure point
+
+### Phase 2: Fix
+
+7. Fix the identified issue (depends on diagnosis)
+8. Remove debug logging (or make configurable)
+9. Test end-to-end voice query
+
+### Phase 3: Validation
+
+10. Verify server receives audio chunks
+11. Verify transcript is generated
+12. Verify answer is returned
+13. Document fix in problem-areas.md
 
 ---
 
 ## References
 
-- **Research Doc**: [specs/011-frontend-deployment/research_current_issue.md](/home/aiwithapex/projects/graphmind/specs/011-frontend-deployment/research_current_issue.md)
-- **Bug Location**: `src/services/cypher-generator.js:107-149`
-- **Template Location**: `src/lib/graph/cypher-templates.js`
-- **Feature 011 Spec**: [specs/011-frontend-deployment/spec.md](/home/aiwithapex/projects/graphmind/specs/011-frontend-deployment/spec.md)
-- **PRD Phase 4**: [docs/PRD/phases/phase-4-polish.md](/home/aiwithapex/projects/graphmind/docs/PRD/phases/phase-4-polish.md)
+- **Problem Documentation**: [docs/ongoing_projects/problem-areas.md](../ongoing_projects/problem-areas.md)
+- **WebSocket Hook (fixed)**: `src/frontend/hooks/useWebSocket.js`
+- **Audio Recorder Hook**: `src/frontend/hooks/useAudioRecorder.js`
+- **Query Session Hook**: `src/frontend/hooks/useQuerySession.js`
+- **Query Page**: `src/frontend/pages/QueryPage.jsx`
+- **Server Handler**: `src/durable-objects/query-session-manager.js`
 
 ---
 
-## Technical Notes
+## Notes
 
-### Key Files to Modify
+**Previous Session Work**:
+- Problem 1 (WebSocket race condition) was fixed - verified single connection per session
+- Problem 2 (this spec) emerged after fixing Problem 1
+- Problem 3 (TTS synthesis) is separate and lower priority
 
-1. **`src/services/cypher-generator.js`** (primary fix)
-   - `buildRelationshipParams()` - Fix entity role assignment
-   - `generateCypherQuery()` - Use direction-aware template selection
+**Debug Approach**:
+- Start with minimal logging, expand if needed
+- Use browser DevTools Network tab to inspect WebSocket frames
+- Check browser console for MediaRecorder errors
+- Verify microphone permissions in browser settings
 
-2. **`src/lib/graph/cypher-templates.js`** (template additions)
-   - Add `identifyEntityRole()` function
-   - Add `relationshipByTargetTemplate()` function
-   - Export new functions
-
-3. **`tests/unit/cypher-generator.test.js`** (new tests)
-   - Pattern detection tests
-   - Template selection tests
-   - Parameter building tests
-
-### Risk Assessment
-
-- **Low Risk**: Pattern-based detection is deterministic and testable
-- **Backward Compatible**: Default behavior remains "entity as source"
-- **Scoped Change**: Only affects relationship query generation, not entity lookups
-
-### Known Edge Cases
-
-1. Questions with multiple entities: "Does John work on GraphMind?" (both known)
-   - Solution: Match both source AND target in query
-
-2. Ambiguous questions: "Tell me about the relationship between John and GraphMind"
-   - Solution: Fall back to bidirectional query returning all relationships
-
-3. Entity not found: "Who works on NonExistent?"
-   - Solution: Return empty result with helpful message (existing behavior)
+**Key Question**:
+Is the issue in the frontend (audio not being captured/sent) or backend (audio received but not processed)?
+Server logs say "No audio recorded" = ZERO audio_chunk messages received = frontend issue.

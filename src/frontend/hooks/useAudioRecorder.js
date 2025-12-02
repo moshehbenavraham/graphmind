@@ -409,7 +409,9 @@ export const useAudioRecorder = (options = {}) => {
         await setupPcmCapture(stream);
       } else {
         const mediaRecorder = await setupWebmCapture(stream);
-        mediaRecorder.start();
+        // CRITICAL: Pass timeslice (500ms) to emit chunks during recording
+        // Without timeslice, ondataavailable only fires on stop()
+        mediaRecorder.start(500);
       }
 
       // Start timer
