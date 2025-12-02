@@ -181,7 +181,9 @@ export function parseFalkorDBResult(result) {
             const [, key, value] = match;
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
             const numericValue = parseFloat(value);
-            parsed.statistics[normalizedKey] = isNaN(numericValue) ? value : numericValue;
+            // Only convert to number if the entire value is numeric (no units like 'milliseconds')
+            const isFullyNumeric = /^[\d.]+$/.test(value.trim());
+            parsed.statistics[normalizedKey] = isFullyNumeric && !isNaN(numericValue) ? numericValue : value;
           }
         }
       });

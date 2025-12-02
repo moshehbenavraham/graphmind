@@ -56,7 +56,7 @@ describe('System-Wide Relationship Mapping Audit', () => {
                 ]
             });
 
-            const result = await generateCypherQuery(question, 'user_test', mockEnv);
+            const result = await generateCypherQuery(question, 'user_test', 'user_123', mockEnv);
 
             // Verification
             if (config.direction === 'incoming' || (config.target && config.target === expectedEntityType)) {
