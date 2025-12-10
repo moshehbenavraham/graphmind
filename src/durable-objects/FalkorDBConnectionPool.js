@@ -128,8 +128,9 @@ export class FalkorDBConnectionPool {
     // Load config from storage if not in memory (handles DO wake from hibernation)
     await this.loadConnectionConfig();
 
-    // Ensure alarm scheduled for warmup
-    await this.ensureAlarmScheduled();
+    // LAZY INITIALIZATION: No continuous alarm - connections created on-demand
+    // This allows the DO to hibernate when not in use, reducing costs
+    // Alarm is only used for brief connection maintenance after activity
 
     const url = new URL(request.url);
     const path = url.pathname;
@@ -495,15 +496,19 @@ export class FalkorDBConnectionPool {
       this.pool.push(conn);
       this.logConnectionState(conn, 'created', { source: 'on_demand' });
 
-      // Schedule alarm to maintain minimum pool size in background
-      await this.state.storage.setAlarm(Date.now() + 100);
+      // Schedule ONE maintenance alarm in 5 minutes (non-recurring)
+      // This validates connections and cleans up stale ones, then hibernates
+      const existingAlarm = await this.state.storage.getAlarm();
+      if (!existingAlarm) {
+        await this.state.storage.setAlarm(Date.now() + 5 * 60 * 1000); // 5 minutes
+        console.log('[ConnectionPool] Maintenance alarm scheduled for 5 minutes');
+      }
 
       return client;
     }
 
-    // No config available - fail and schedule alarm
-    console.error('[ConnectionPool] No connections and no config - triggering alarm');
-    await this.state.storage.setAlarm(Date.now() + 100);
+    // No config available - fail (no alarm, let DO hibernate)
+    console.error('[ConnectionPool] No connections and no config - request failed');
     throw new Error('Connection pool not ready - no configuration available.');
   }
 
@@ -725,18 +730,15 @@ export class FalkorDBConnectionPool {
 
   /**
    * Ensure alarm is scheduled for warmup
-   * Call this on first fetch request to trigger immediate warmup
+   *
+   * LAZY INITIALIZATION MODE: This is now a no-op.
+   * Connections are created on-demand in getConnection().
+   * Maintenance alarms are scheduled only after activity.
    */
   async ensureAlarmScheduled() {
-    const currentAlarm = await this.state.storage.getAlarm();
-
-    if (currentAlarm == null) {
-      console.log('[ConnectionPool] No alarm scheduled - scheduling immediate warmup');
-      this.warmupState = 'warming';
-
-      // Schedule alarm for immediate execution (100ms from now)
-      await this.state.storage.setAlarm(Date.now() + 100);
-    }
+    // NO-OP in lazy initialization mode
+    // Connections created on-demand, no continuous warmup
+    console.log('[ConnectionPool] Lazy init mode - no proactive alarm scheduling');
   }
 
   /**
@@ -826,10 +828,15 @@ export class FalkorDBConnectionPool {
 
   /**
    * Alarm handler - invoked automatically by Cloudflare when alarm fires
-   * Proactively warms connection pool
+   *
+   * LAZY INITIALIZATION MODE:
+   * - Only runs when explicitly triggered by activity (see getConnection)
+   * - Does NOT continuously reschedule itself
+   * - Allows DO to hibernate when not in use (saves $$)
+   * - Connections are primarily created on-demand in getConnection()
    */
   async alarm() {
-    console.log('[ConnectionPool] Alarm fired - starting warmup');
+    console.log('[ConnectionPool] Alarm fired - maintenance cycle (non-recurring)');
     const startTime = Date.now();
     this.warmupInProgress = true;
 
@@ -838,81 +845,49 @@ export class FalkorDBConnectionPool {
       await this.loadConnectionConfig();
 
       if (!this.connectionConfig) {
-        console.warn('[ConnectionPool] No connection config available - skipping warmup');
+        console.warn('[ConnectionPool] No connection config available - skipping maintenance');
         this.warmupInProgress = false;
-
-        // Reschedule alarm aggressively (10 seconds)
-        const nextAlarmTime = Date.now() + 10000;
-        await this.state.storage.setAlarm(nextAlarmTime);
-        console.log('[ConnectionPool] Alarm rescheduled for 10s (waiting for config)');
+        // NO RESCHEDULE - let DO hibernate until next request brings config
         return;
       }
 
-      // 1. Validate existing connections
+      // 1. Validate existing connections (send keep-alive PINGs)
       await this.validateExistingConnections();
 
-      // 2. Create new connections up to minimum pool size
+      // 2. Optionally create 1-2 warm connections if pool is empty
+      // (minimal warmup, not aggressive pool filling)
       const availableConnections = this.pool.filter(c => !c.inUse && !c.stale).length;
-      const neededConnections = this.minPoolSize - availableConnections;
 
-      if (neededConnections > 0) {
-        console.log(`[ConnectionPool] Creating ${neededConnections} connections IN PARALLEL to reach minimum pool size`);
-
-        // Create connections in PARALLEL (don't await each one)
-        const createPromises = [];
-        for (let i = 0; i < neededConnections; i++) {
-          // Check time budget (max 25s out of 30s alarm timeout)
-          if (Date.now() - startTime > 25000) {
-            console.warn('[ConnectionPool] Alarm time budget exceeded, stopping warmup early');
-            break;
-          }
-
-          createPromises.push(
-            this.createConnectionDirect()
-              .then(() => console.log(`[ConnectionPool] Created connection ${i + 1}/${neededConnections}`))
-              .catch(error => console.error(`[ConnectionPool] Failed to create connection ${i + 1}:`, error))
-          );
+      if (availableConnections === 0 && this.pool.length < 2) {
+        console.log('[ConnectionPool] Creating 1 warm connection for responsiveness');
+        try {
+          await this.createConnectionDirect();
+        } catch (error) {
+          console.error('[ConnectionPool] Failed to create warm connection:', error);
         }
-
-        // Wait for all parallel connections with timeout
-        await Promise.race([
-          Promise.all(createPromises),
-          new Promise(resolve => setTimeout(resolve, 25000 - (Date.now() - startTime)))
-        ]);
-
-        console.log(`[ConnectionPool] Parallel connection creation complete, created ${this.pool.length} connections`);
       }
 
-      // 3. Update warmup state and reschedule next alarm
+      // 3. Update state
       const finalAvailable = this.pool.filter(c => !c.inUse && !c.stale).length;
-      const isHealthy = finalAvailable >= this.minPoolSize;
-
-      this.warmupState = isHealthy ? 'warm' : 'cold';
+      this.warmupState = finalAvailable > 0 ? 'warm' : 'cold';
       this.lastWarmupTime = Date.now();
       this.warmupInProgress = false;
 
       const duration = Date.now() - startTime;
-      console.log(`[ConnectionPool] Warmup complete in ${duration}ms`, {
+      console.log(`[ConnectionPool] Maintenance complete in ${duration}ms`, {
         poolSize: this.pool.length,
         availableConnections: finalAvailable,
-        healthy: isHealthy,
-        lastKeepAliveTime: this.lastKeepAliveTime ? new Date(this.lastKeepAliveTime).toISOString() : 'never',
-        keepAliveInterval: `${this.keepAliveInterval / 1000}s`,
       });
 
-      // 4. Schedule next alarm - ADAPTIVE INTERVAL
-      const nextInterval = isHealthy ? this.alarmIntervalWarm : this.alarmIntervalCold;
-      const nextAlarmTime = Date.now() + nextInterval;
-      await this.state.storage.setAlarm(nextAlarmTime);
-      console.log(`[ConnectionPool] Next alarm scheduled for ${new Date(nextAlarmTime).toISOString()} (${nextInterval / 1000}s interval, pool ${isHealthy ? 'HEALTHY' : 'UNHEALTHY'})`);
+      // 4. NO CONTINUOUS RESCHEDULE - let DO hibernate
+      // Next alarm will be scheduled by getConnection() when there's actual activity
+      console.log('[ConnectionPool] Maintenance done - DO will hibernate until next request');
 
     } catch (error) {
-      console.error('[ConnectionPool] Alarm warmup failed:', error);
+      console.error('[ConnectionPool] Alarm maintenance failed:', error);
       this.warmupInProgress = false;
-
-      // Don't reschedule alarm on failure - Cloudflare will retry automatically
-      // (exponential backoff: 2s, 4s, 8s, 16s, 32s, 64s - up to 6 retries)
-      throw error;
+      // NO RESCHEDULE on failure - let DO hibernate
+      // Next request will trigger fresh connection creation
     }
   }
 
