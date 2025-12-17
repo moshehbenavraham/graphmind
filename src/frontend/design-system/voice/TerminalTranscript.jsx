@@ -102,8 +102,8 @@ function TerminalTranscript({
     isTyping,
     isComplete,
     cursorClassName,
-    skip,
-    reset,
+    skip: _skip,
+    reset: _reset,
     isActive,
   } = useTypewriter({
     text,

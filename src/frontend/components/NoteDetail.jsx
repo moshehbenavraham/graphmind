@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Card, Button, Badge, cn } from '../design-system';
+import { Card, Button, Badge } from '../design-system';
 import { motion, AnimatePresence } from 'framer-motion';
 import { brutalEnter, brutalExit } from '../design-system';
 import { useFetch } from '../hooks/useFetch';

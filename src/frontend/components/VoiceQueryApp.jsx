@@ -9,60 +9,20 @@ import React, { useState } from 'react';
 import VoiceQueryRecorder from './VoiceQueryRecorder.jsx';
 import QueryResults from './QueryResults.jsx';
 import QueryHistory from './QueryHistory.jsx';
-import AudioPlayer from './AudioPlayer.jsx';
 
 const VoiceQueryApp = ({ jwtToken }) => {
   const [currentResults, setCurrentResults] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState('');
-  const [currentAnswer, setCurrentAnswer] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState(null);
 
-  // Audio playback state (Feature 010)
-  const [audioPlaybackStatus, setAudioPlaybackStatus] = useState('idle');
-  const [audioDuration, setAudioDuration] = useState(0);
-  const [websocketRef, setWebsocketRef] = useState(null);
-
   /**
-   * Handle query completion from recorder (Feature 008 & 010)
+   * Handle query completion from recorder (Feature 008)
    */
   const handleQueryComplete = (data) => {
     setCurrentQuestion(data.question);
     setCurrentResults(data.results);
-    setCurrentAnswer(data.answer || '');
     setError(null);
-
-    // Reset audio state
-    setAudioPlaybackStatus('idle');
-    setAudioDuration(0);
-  };
-
-  /**
-   * Handle audio metadata (Feature 010)
-   */
-  const handleAudioMetadata = (metadata) => {
-    if (metadata.duration_ms) {
-      setAudioDuration(metadata.duration_ms);
-    }
-  };
-
-  /**
-   * Handle playback control (Feature 010)
-   */
-  const handlePlaybackControl = (action) => {
-    if (websocketRef && websocketRef.readyState === WebSocket.OPEN) {
-      websocketRef.send(JSON.stringify({
-        type: 'playback_control',
-        action: action
-      }));
-    }
-  };
-
-  /**
-   * Handle playback status updates (Feature 010)
-   */
-  const handlePlaybackStatusUpdate = (status) => {
-    setAudioPlaybackStatus(status);
   };
 
   /**

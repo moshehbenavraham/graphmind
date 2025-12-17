@@ -90,12 +90,13 @@ export const useQuerySession = (options = {}) => {
           onTranscriptUpdate?.(data.partial_text || '', false);
           break;
 
-        case 'transcript_final':
+        case 'transcript_final': {
           const finalText = data.question || data.text || '';
           setTranscript(finalText);
           setIsTranscriptFinal(true);
           onTranscriptUpdate?.(finalText, true);
           break;
+        }
 
         case 'cypher_generating':
         case 'query_executing':
@@ -133,7 +134,7 @@ export const useQuerySession = (options = {}) => {
           onAnswerReceived?.(data.fallback_answer, null);
           break;
 
-        case 'answer_error':
+        case 'answer_error': {
           const answerError = data.error || 'Failed to generate answer';
           setError(answerError);
           updateStatus(QueryStatus.ERROR);
@@ -142,6 +143,7 @@ export const useQuerySession = (options = {}) => {
           });
           onError?.(new Error(answerError));
           break;
+        }
 
         case 'audio_chunk':
           logger.debug('ws.audio_chunk', 'Audio chunk received', {
@@ -180,6 +182,7 @@ export const useQuerySession = (options = {}) => {
           logger.warn('ws.unknown', 'Unknown message type', { type: data.type });
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [updateStatus, onTranscriptUpdate, onAnswerReceived, onGraphResults, onError]
   );
 
@@ -189,7 +192,7 @@ export const useQuerySession = (options = {}) => {
   const {
     isConnected,
     isConnecting,
-    connect,
+    connect: _connect,
     disconnect,
     send,
   } = useWebSocket(websocketUrl, {
@@ -298,6 +301,7 @@ export const useQuerySession = (options = {}) => {
 
       throw err;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, websocketUrl, updateStatus, onError]);
 
   /**
@@ -324,6 +328,7 @@ export const useQuerySession = (options = {}) => {
 
       return send(message);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isConnected, send]
   );
 
@@ -338,6 +343,7 @@ export const useQuerySession = (options = {}) => {
     }
 
     updateStatus(QueryStatus.PROCESSING);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, send, updateStatus]);
 
   /**
@@ -359,6 +365,7 @@ export const useQuerySession = (options = {}) => {
     logger.setContext({});
 
     logger.debug('session.reset', 'Session state reset');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateStatus]);
 
   /**

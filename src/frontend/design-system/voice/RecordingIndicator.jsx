@@ -69,7 +69,7 @@ const SIZES = {
  * }}
  */
 export function useRecordingIndicator({
-  variant = 'hazard',
+  variant: _variant = 'hazard',
   active = false,
   disabled = false,
 } = {}) {

@@ -90,7 +90,7 @@ class PCMProcessor extends AudioWorkletProcessor {
    * @param {Object} parameters - Audio parameters
    * @returns {boolean} - True to keep processor alive
    */
-  process(inputs, outputs, parameters) {
+  process(inputs, _outputs, _parameters) {
     if (!this.isActive) {
       return true; // Keep alive but don't process
     }

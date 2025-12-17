@@ -77,14 +77,14 @@ function GlitchText({
   const textContent = typeof children === 'string' ? children : '';
 
   // Warn in development if children is not a string
-  if (process.env.NODE_ENV === 'development' && typeof children !== 'string') {
+  if (import.meta.env.DEV && typeof children !== 'string') {
     console.warn(
       'GlitchText: children should be a string for the glitch effect to work properly. ' +
       'Received type: ' + typeof children
     );
   }
 
-  const { className: glitchClassName, dataText, isActive } = useGlitchText({
+  const { className: glitchClassName, dataText, isActive: _isActive } = useGlitchText({
     text: textContent,
     disabled,
   });

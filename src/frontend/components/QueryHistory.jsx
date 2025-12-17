@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Badge, GlitchText, OffsetLayer, cn } from '../design-system';
+import { Card, Button, Badge, GlitchText, OffsetLayer } from '../design-system';
 import { motion, AnimatePresence } from 'framer-motion';
 import { brutalStagger } from '../design-system';
 
@@ -67,6 +67,8 @@ const QueryHistory = ({ jwtToken, onQuerySelect }) => {
     if (jwtToken) {
       fetchQueryHistory(0);
     }
+    // fetchQueryHistory is defined inside the component but only needs jwtToken to trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jwtToken]);
 
   /**

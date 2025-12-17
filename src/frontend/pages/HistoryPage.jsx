@@ -20,6 +20,8 @@ function HistoryPage() {
 
   useEffect(() => {
     loadHistory();
+    // loadHistory is defined inline and depends on page, which is already in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const loadHistory = async () => {

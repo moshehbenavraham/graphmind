@@ -23,8 +23,8 @@ import {
 } from '../design-system';
 
 const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
-  // Session state
-  const [sessionId, setSessionId] = useState(null);
+  // Session state (sessionId tracked for potential future use/debugging)
+  const [_sessionId, setSessionId] = useState(null);
   const [websocketUrl, setWebsocketUrl] = useState(null);
   const [status, setStatus] = useState('idle'); // 'idle', 'starting', 'listening', 'processing'
   const [transcript, setTranscript] = useState('');
@@ -136,7 +136,7 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
   /**
    * WebSocket connection management (T053)
    */
-  const { isConnected, isConnecting, connect, disconnect, send } = useWebSocket(websocketUrl, {
+  const { isConnected, isConnecting: _isConnecting, connect: _connect, disconnect, send } = useWebSocket(websocketUrl, {
     onMessage: handleWebSocketMessage,
     onOpen: () => {
       console.log('[VoiceQueryRecorder] WebSocket connected');

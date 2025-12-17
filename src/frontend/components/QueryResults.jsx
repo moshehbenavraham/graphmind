@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, Button, Badge, OffsetLayer, cn } from '../design-system';
+import { Card, Badge, OffsetLayer, cn } from '../design-system';
 import { motion, AnimatePresence } from 'framer-motion';
 import { brutalStagger } from '../design-system';
 

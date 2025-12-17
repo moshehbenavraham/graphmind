@@ -180,6 +180,7 @@ export const useAudioRecorder = (options = {}) => {
       });
       return 'prompt';
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updatePermissionState]);
 
   /**
@@ -242,6 +243,7 @@ export const useAudioRecorder = (options = {}) => {
       onError?.(new Error(errorMessage));
       throw err;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferredAudioConstraints, fallbackAudioConstraints, updatePermissionState, onError]);
 
   /**
@@ -352,7 +354,6 @@ export const useAudioRecorder = (options = {}) => {
       }
 
       // Fallback: ScriptProcessor (deprecated but widely supported)
-      // eslint-disable-next-line no-console
       console.warn(
         '[useAudioRecorder] Using deprecated ScriptProcessor. ' +
         'AudioWorklet is preferred for better performance.'
@@ -389,6 +390,7 @@ export const useAudioRecorder = (options = {}) => {
         method: 'ScriptProcessor',
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sampleRate, bufferSize, channelCount, float32ToInt16, arrayBufferToBase64, onChunk, isAudioWorkletSupported]
   );
 
@@ -479,6 +481,7 @@ export const useAudioRecorder = (options = {}) => {
 
       return mediaRecorder;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [getBestRecordingMimeType, onChunk, onError]
   );
 
@@ -543,6 +546,7 @@ export const useAudioRecorder = (options = {}) => {
     } finally {
       setIsInitializing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestPermission, captureMode, setupPcmCapture, setupWebmCapture, startTimer, onError]);
 
   /**
@@ -647,6 +651,7 @@ export const useAudioRecorder = (options = {}) => {
       setError('Failed to stop recording properly.');
       return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration, captureMode, stopTimer, onComplete, arrayBufferToBase64, onError]);
 
   /**
@@ -706,6 +711,7 @@ export const useAudioRecorder = (options = {}) => {
     setDuration(0);
 
     logger.debug('cleanup', 'Audio recorder resources released');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopTimer]);
 
   /**

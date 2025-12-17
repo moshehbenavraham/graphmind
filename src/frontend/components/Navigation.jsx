@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { Button, GlitchText, cn, brutalInteraction } from '../design-system';
+import { Button, GlitchText, cn } from '../design-system';
 
 /**
  * Navigation link with brutalist styling and active state

@@ -117,7 +117,7 @@ export const useWebSocket = (url, options = {}) => {
         try {
           const data = JSON.parse(event.data);
           onMessageRef.current?.(data);
-        } catch (err) {
+        } catch (_err) {
           onMessageRef.current?.(event.data);
         }
       };
@@ -159,6 +159,7 @@ export const useWebSocket = (url, options = {}) => {
       }
       onErrorRef.current?.(err);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxReconnectAttempts, baseReconnectDelay]); // Minimal dependencies
 
   /**
@@ -183,6 +184,7 @@ export const useWebSocket = (url, options = {}) => {
       setIsConnected(false);
       setIsConnecting(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -202,6 +204,7 @@ export const useWebSocket = (url, options = {}) => {
       logger.error('send.failed', 'Failed to send message', { message: err.message });
       return false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**

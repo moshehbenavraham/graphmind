@@ -249,8 +249,6 @@ function BrutalWaveform({
       return;
     }
 
-    let lastTime = performance.now();
-
     const animate = (currentTime) => {
       // Update time for demo mode
       timeRef.current = currentTime;

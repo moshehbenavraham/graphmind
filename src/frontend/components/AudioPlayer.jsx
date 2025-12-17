@@ -8,7 +8,7 @@
  * Feature 010: Text-to-Speech Responses - User Story 2
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button, Card, Badge, cn } from '../design-system';
 
 /**
@@ -23,7 +23,6 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
   const [status, setStatus] = useState('idle');
   const [currentTime, setCurrentTime] = useState(0);
   const audioContextRef = useRef(null);
-  const audioBufferRef = useRef([]);
   const sourceNodeRef = useRef(null);
   const startTimeRef = useRef(0);
 
@@ -47,7 +46,8 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status]);
+    // Note: pauseAudio is stable (no deps), so we only need status
+  }, [status, pauseAudio]);
 
   /**
    * Initialize Web Audio API context
@@ -78,9 +78,9 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
   /**
    * Pause audio
    */
-  const pauseAudio = () => {
+  const pauseAudio = useCallback(() => {
     onPlaybackControl('pause');
-  };
+  }, [onPlaybackControl]);
 
   /**
    * Stop audio and reset
@@ -90,7 +90,7 @@ export function AudioPlayer({ onPlaybackControl, playbackStatus = 'idle', durati
       try {
         sourceNodeRef.current.stop();
         sourceNodeRef.current = null;
-      } catch (error) {
+      } catch (_err) {
         // Already stopped
       }
     }

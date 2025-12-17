@@ -72,7 +72,7 @@ class ApiClient {
         let errorData;
         try {
           errorData = await response.json();
-        } catch (e) {
+        } catch (_e) {
           errorData = { error: 'Request failed' };
         }
 
@@ -100,7 +100,7 @@ class ApiClient {
                  const text = await response.text();
                  logger.error('request.failed.raw_text', 'Raw error body', { text });
                  throw new Error(`HTTP ${response.status} Raw: ${text.substring(0, 100)}`);
-             } catch (e) { /* ignore */ }
+             } catch (_e) { /* ignore */ }
         }
 
         throw new Error(finalMessage);

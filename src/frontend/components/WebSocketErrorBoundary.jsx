@@ -1,6 +1,6 @@
 import React from 'react';
 import { createLogger } from '../utils/logger';
-import { Button, Card, Badge, cn } from '../design-system';
+import { Button, Card, Badge } from '../design-system';
 
 const logger = createLogger('WebSocketErrorBoundary');
 
