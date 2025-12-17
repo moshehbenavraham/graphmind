@@ -3,7 +3,7 @@
  * Creates test users and populates FalkorDB with sample graph data
  */
 
-const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.TEST_API_URL || 'http://localhost:3013';
 const FALKORDB_GRAPH = process.env.TEST_GRAPH_NAME || 'test_e2e_graph';
 
 /**

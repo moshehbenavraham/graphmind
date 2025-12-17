@@ -56,7 +56,7 @@ export class QueryOrchestrator {
     const rawPort = this.env.FALKORDB_PORT;
     const portNumber = Number(rawPort);
 
-    const defaultPort = host && host.startsWith('http') ? 443 : 3001;
+    const defaultPort = host && host.startsWith('http') ? 443 : 3013;
     const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
 
     if (!host) {

@@ -18,10 +18,10 @@ async function testGraphSyncE2E() {
   console.log('🧪 Testing Graph Sync End-to-End Workflow\n');
   console.log('=' .repeat(60));
 
-  // Use REST API wrapper running on localhost:3001
+  // Use REST API wrapper running on localhost:3013
   const config = {
     host: 'localhost',
-    port: 3001,
+    port: 3013,
     username: 'default',
     password: '',
   };

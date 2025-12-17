@@ -15,7 +15,7 @@
  *   node scripts/create-falkordb-indexes.js
  *
  * Prerequisites:
- *   - FalkorDB REST API wrapper running on localhost:3001
+ *   - FalkorDB REST API wrapper running on localhost:3013
  *   - FALKORDB_* environment variables set in .env
  */
 
@@ -206,10 +206,10 @@ async function main() {
   const graphName = process.env.FALKORDB_GRAPH_NAME || 'graphmind';
   console.log(`Graph name: ${graphName}\n`);
 
-  // Create client (connect to REST API wrapper on port 3001)
+  // Create client (connect to REST API wrapper on port 3013)
   const client = createRestClient({
     host: 'localhost',
-    port: 3001, // REST API wrapper port
+    port: 3013, // REST API wrapper port
     username: process.env.FALKORDB_USER || 'default',
     password: process.env.FALKORDB_PASSWORD || '',
   });

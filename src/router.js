@@ -255,7 +255,7 @@ const handleFalkorDBTest = async (request, env) => {
       body: JSON.stringify({
         config: {
           host: env.FALKORDB_HOST || 'localhost',
-          port: '3001',
+          port: '3013',
           username: env.FALKORDB_USER || 'default',
           password: env.FALKORDB_PASSWORD,
           apiKey: env.FALKORDB_REST_API_KEY,

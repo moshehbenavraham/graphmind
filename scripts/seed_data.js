@@ -9,7 +9,7 @@ import { createClient } from 'redis';
 
 /** @type {ReturnType<typeof createClient>} */
 const client = createClient({
-    url: 'redis://localhost:6380'
+    url: 'redis://localhost:6383'
 });
 
 /**

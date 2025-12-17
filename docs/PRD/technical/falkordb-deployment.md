@@ -25,7 +25,7 @@ Cloudflare Workers (localhost:8787)
          | Redis Protocol (Direct TCP)
          |
          ↓
-FalkorDB Docker Container (localhost:6380)
+FalkorDB Docker Container (localhost:6383)
          |
          | Data persistence
          ↓
@@ -38,7 +38,7 @@ FalkorDB Docker Container (localhost:6380)
 ```bash
 docker run -d \
   --name falkordb-local \
-  -p 6380:6379 \
+  -p 6383:6379 \
   -v $(pwd)/falkordb-data:/data \
   falkordb/falkordb:latest
 ```
@@ -46,7 +46,7 @@ docker run -d \
 **Environment Variables (.env):**
 ```env
 FALKORDB_HOST=localhost
-FALKORDB_PORT=6380
+FALKORDB_PORT=6383
 FALKORDB_USER=default
 FALKORDB_PASSWORD=
 ```
@@ -101,13 +101,13 @@ Cloudflare Tunnel (free)
          |
          ↓
 REST API Wrapper (Node.js Express)
-  localhost:3001
+  localhost:3013
          |
          | Redis Protocol
          |
          ↓
 FalkorDB Docker Container
-  localhost:6380
+  localhost:6383
 ```
 
 ### Configuration
@@ -120,7 +120,7 @@ credentials-file: /home/aiwithapex/.cloudflared/[tunnel-id].json
 
 ingress:
   - hostname: falkordb-tunnel.aiwithapex.com
-    service: http://localhost:3001
+    service: http://localhost:3013
   - service: http_status:404
 ```
 
@@ -262,7 +262,7 @@ FalkorDB Cloud Instance
 ```env
 # Change from:
 FALKORDB_HOST=localhost
-FALKORDB_PORT=6380
+FALKORDB_PORT=6383
 
 # To:
 FALKORDB_HOST=falkordb-tunnel.aiwithapex.com
@@ -331,7 +331,7 @@ FALKORDB_PORT=443  # HTTPS
 - Result parsing
 
 **Ports:**
-- Development: 3001
+- Development: 3013
 - Production: 80/443 (behind Nginx)
 
 ### Cloudflare Tunnel

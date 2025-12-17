@@ -54,10 +54,10 @@ stop_services() {
     echo -e "${GREEN}Done${NC}"
     echo ""
 
-    echo -e "${BLUE}[2/4] Releasing ports (8787, 5173, 3001)...${NC}"
+    echo -e "${BLUE}[2/4] Releasing ports (8787, 5176, 3013)...${NC}"
     lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 8787" || true
-    lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 5173" || true
-    lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 3001" || true
+    lsof -ti :5176 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 5176" || true
+    lsof -ti :3013 2>/dev/null | xargs kill -9 2>/dev/null && echo "  - Released: port 3013" || true
     echo -e "${GREEN}Done${NC}"
     echo ""
 
@@ -98,7 +98,7 @@ stop_services() {
     echo "============================================"
     echo -e "${BLUE}Port Status:${NC}"
     echo "============================================"
-    for port in 3001 5173 8787; do
+    for port in 3013 5176 8787; do
         if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
             echo -e "  Port $port: ${RED}IN USE${NC}"
             lsof -Pi :$port -sTCP:LISTEN 2>/dev/null | tail -1 | awk '{print "            PID: "$2" ("$1")"}'
@@ -183,10 +183,10 @@ pkill -9 -f "workerd" >/dev/null 2>&1 || true
 pkill -9 -f "vite" >/dev/null 2>&1 || true
 sleep 3
 
-echo "  - Killing processes on required ports (8787, 5173, 3001)..."
+echo "  - Killing processes on required ports (8787, 5176, 3013)..."
 lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :5176 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :3013 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
 echo "  - Verifying all processes killed..."
@@ -307,7 +307,7 @@ EOF
 
     docker run -d \
       --name falkordb-local \
-      -p 6380:6379 \
+      -p 6383:6379 \
       -v "$PROJECT_ROOT/falkordb-data:/var/lib/falkordb/data" \
       falkordb/falkordb:latest \
       redis-server /var/lib/falkordb/data/redis.conf
@@ -317,7 +317,7 @@ EOF
 fi
 
 if docker ps | grep -q falkordb-local; then
-    echo -e "${GREEN}✔ FalkorDB running on port 6380 with persistence enabled${NC}"
+    echo -e "${GREEN}✔ FalkorDB running on port 6383 with persistence enabled${NC}"
 else
     echo -e "${RED}✖ FalkorDB failed to start${NC}"
     exit 1
@@ -325,24 +325,24 @@ fi
 echo ""
 
 echo -e "${YELLOW}[5/8] Starting FalkorDB REST API wrapper...${NC}"
-# Final check that port 3001 is available
-if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "${RED}✖ Port 3001 is already in use!${NC}"
-    echo "  Process using port 3001:"
-    lsof -Pi :3001 -sTCP:LISTEN
+# Final check that port 3013 is available
+if lsof -Pi :3013 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}✖ Port 3013 is already in use!${NC}"
+    echo "  Process using port 3013:"
+    lsof -Pi :3013 -sTCP:LISTEN
     exit 1
 fi
 
 # Force connection to local Docker container (ignoring .env tunnel config)
-FALKORDB_HOST="localhost" FALKORDB_PORT="6380" node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
+FALKORDB_HOST="localhost" FALKORDB_PORT="6383" node scripts/falkordb-rest-api.js > /tmp/falkordb-rest-api.log 2>&1 &
 REST_API_PID=$!
 echo "  - REST API started (PID: $REST_API_PID)"
 echo "  - Waiting for REST API to be ready..."
 sleep 5
 
 # Health check with authentication
-if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
-    echo -e "${GREEN}✔ REST API running on port 3001${NC}"
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3013/health | grep -q "healthy"; then
+    echo -e "${GREEN}✔ REST API running on port 3013${NC}"
 else
     echo -e "${RED}✖ REST API failed to start${NC}"
     cat /tmp/falkordb-rest-api.log
@@ -351,11 +351,11 @@ fi
 echo ""
 
 echo -e "${YELLOW}[6/8] Starting frontend dev server...${NC}"
-# Final check that port 5173 is available
-if lsof -Pi :5173 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "${RED}✖ Port 5173 is already in use!${NC}"
-    echo "  Process using port 5173:"
-    lsof -Pi :5173 -sTCP:LISTEN
+# Final check that port 5176 is available
+if lsof -Pi :5176 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}✖ Port 5176 is already in use!${NC}"
+    echo "  Process using port 5176:"
+    lsof -Pi :5176 -sTCP:LISTEN
     exit 1
 fi
 
@@ -369,7 +369,7 @@ echo "  - Waiting for Vite to be ready..."
 sleep 5
 
 if ps -p $FRONTEND_PID > /dev/null; then
-    echo -e "${GREEN}✔ Frontend dev server running on port 5173${NC}"
+    echo -e "${GREEN}✔ Frontend dev server running on port 5176${NC}"
 else
     echo -e "${RED}✖ Frontend dev server failed to start${NC}"
     tail -20 /tmp/vite-dev.log
@@ -393,7 +393,7 @@ if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then
 fi
 
 # Force Worker to talk to local REST API wrapper (ignoring .env tunnel config)
-FALKORDB_HOST="http://127.0.0.1" FALKORDB_PORT="3001" npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
+FALKORDB_HOST="http://127.0.0.1" FALKORDB_PORT="3013" npx wrangler dev --port 8787 > /tmp/wrangler-dev.log 2>&1 &
 WORKER_PID=$!
 echo "  - Workers dev server started (PID: $WORKER_PID)"
 echo "  - Waiting for Workers to be ready on port 8787..."
@@ -419,7 +419,7 @@ else
 fi
 
 echo "  - Testing REST API..."
-if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3013/health | grep -q "healthy"; then
     echo -e "    ${GREEN}✔ REST API healthy${NC}"
 else
     echo -e "    ${RED}✖ REST API unhealthy${NC}"
@@ -435,7 +435,7 @@ else
 fi
 
 echo "  - Testing Frontend dev server..."
-FRONTEND_HEALTH=$(curl -s -m 10 http://localhost:5173 2>&1 || echo "pending")
+FRONTEND_HEALTH=$(curl -s -m 10 http://localhost:5176 2>&1 || echo "pending")
 if echo "$FRONTEND_HEALTH" | grep -q "<!DOCTYPE html>"; then
     echo -e "    ${GREEN}✔ Frontend dev server healthy${NC}"
 else
@@ -448,14 +448,14 @@ echo -e "${GREEN}Local Development Environment Ready!${NC}"
 echo "============================================"
 echo ""
 echo "=> Local URLs:"
-echo "  Frontend:  http://localhost:5173"
+echo "  Frontend:  http://localhost:5176"
 echo "  API:       http://localhost:8787"
-echo "  REST API:  http://localhost:3001"
+echo "  REST API:  http://localhost:3013"
 echo ""
 echo "=> Running Services:"
-echo "  FalkorDB Docker:  localhost:6380 (container: falkordb-local)"
-echo "  REST API:         localhost:3001 (PID: $REST_API_PID)"
-echo "  Frontend:         localhost:5173 (PID: $FRONTEND_PID)"
+echo "  FalkorDB Docker:  localhost:6383 (container: falkordb-local)"
+echo "  REST API:         localhost:3013 (PID: $REST_API_PID)"
+echo "  Frontend:         localhost:5176 (PID: $FRONTEND_PID)"
 echo "  Workers:          localhost:8787 (PID: $WORKER_PID)"
 echo ""
 echo "=> Logs:"
@@ -468,4 +468,4 @@ echo "=> To stop services:"
 echo "  ./scripts/deploy-local.sh --stop      # Stop all (keep Docker)"
 echo "  ./scripts/deploy-local.sh --stop-all  # Stop everything"
 echo ""
-echo -e "${GREEN}✔ Local environment ready! Open http://localhost:5173 in your browser${NC}"
+echo -e "${GREEN}✔ Local environment ready! Open http://localhost:5176 in your browser${NC}"

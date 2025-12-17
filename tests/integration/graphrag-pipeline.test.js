@@ -11,7 +11,7 @@
  * Prerequisites:
  * - FalkorDB running with vector indexes created
  * - Workers AI available for embedding generation
- * - REST API wrapper running on port 3001
+ * - REST API wrapper running on port 3013
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -19,7 +19,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 // Test configuration
-const REST_API_URL = process.env.FALKORDB_REST_API_URL || 'http://localhost:3001';
+const REST_API_URL = process.env.FALKORDB_REST_API_URL || 'http://localhost:3013';
 const GRAPH_NAME = process.env.FALKORDB_GRAPH_NAME || 'graphmind';
 const TEST_USER_ID = 'test_graphrag_user';
 const MIN_RELEVANCE_SCORE = 0.65;

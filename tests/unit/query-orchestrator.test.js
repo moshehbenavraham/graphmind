@@ -69,7 +69,7 @@ describe('QueryOrchestrator', () => {
 
     mockEnv = {
       FALKORDB_HOST: 'localhost',
-      FALKORDB_PORT: '6380',
+      FALKORDB_PORT: '6383',
       FALKORDB_USER: 'default',
       FALKORDB_PASSWORD: '',
       FALKORDB_REST_API_KEY: 'test-key',
@@ -114,7 +114,7 @@ describe('QueryOrchestrator', () => {
       const config = orchestrator.buildFalkorConfig();
 
       expect(config.host).toBe('localhost');
-      expect(config.port).toBe(6380);
+      expect(config.port).toBe(6383);
       expect(config.username).toBe('default');
       expect(config.password).toBe('');
       expect(config.apiKey).toBe('test-key');
@@ -134,12 +134,12 @@ describe('QueryOrchestrator', () => {
       expect(config.port).toBe(443);
     });
 
-    it('should use default port 3001 for non-https host when port is undefined', () => {
+    it('should use default port 3013 for non-https host when port is undefined', () => {
       orchestrator.env.FALKORDB_HOST = 'localhost';
       orchestrator.env.FALKORDB_PORT = undefined;
 
       const config = orchestrator.buildFalkorConfig();
-      expect(config.port).toBe(3001);
+      expect(config.port).toBe(3013);
     });
 
     it('should use port 0 when explicitly set to empty string', () => {

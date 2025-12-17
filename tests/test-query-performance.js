@@ -342,7 +342,7 @@ async function main() {
   // Create REST client
   const client = createRestClient({
     host: 'localhost',
-    port: 3001,
+    port: 3013,
     username: 'default',
     password: ''
   });

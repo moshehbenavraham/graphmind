@@ -20,7 +20,7 @@ import path from 'path';
 
 // Test configuration
 const FALKORDB_HOST = process.env.FALKORDB_HOST || 'localhost';
-const FALKORDB_PORT = process.env.FALKORDB_PORT || '3001'; // REST API port
+const FALKORDB_PORT = process.env.FALKORDB_PORT || '3013'; // REST API port
 const TEST_USER_ID = 'test_user_001';
 const MIN_RELEVANCE_SCORE = 0.65;
 

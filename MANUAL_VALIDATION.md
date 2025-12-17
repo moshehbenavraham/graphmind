@@ -12,7 +12,7 @@
 
   1. Open fresh browser session (incognito recommended to avoid
   cache)
-  2. Navigate to Query page: http://localhost:5173/query (or
+  2. Navigate to Query page: http://localhost:5176/query (or
   deployed URL)
   3. Open DevTools (F12) → Console tab
   4. Click "Start Recording" button

@@ -36,7 +36,7 @@ if (!API_KEY) {
 app.use((req, res, next) => {
   // 1. CORS origin restriction
   const allowedOrigins = [
-    'http://localhost:5173',           // Vite dev server
+    'http://localhost:5176',           // Vite dev server
     'http://localhost:8787',           // Wrangler dev server
     'https://graphmind.pages.dev',     // Cloudflare Pages production
     /^https:\/\/.*\.graphmind\.pages\.dev$/  // Preview deployments
@@ -82,12 +82,12 @@ app.use((req, res, next) => {
 });
 
 // Redis/FalkorDB connection
-// Note: FALKORDB_REDIS_PORT is for direct Redis connection (default 6380)
-// FALKORDB_PORT is used by Workers to connect to this REST API (typically 3001)
+// Note: FALKORDB_REDIS_PORT is for direct Redis connection (default 6383)
+// FALKORDB_PORT is used by Workers to connect to this REST API (typically 3013)
 const redisClient = createClient({
   socket: {
     host: process.env.FALKORDB_HOST || 'localhost',
-    port: parseInt(process.env.FALKORDB_REDIS_PORT || '6380')
+    port: parseInt(process.env.FALKORDB_REDIS_PORT || '6383')
   },
   username: process.env.FALKORDB_USER || 'default',
   password: process.env.FALKORDB_PASSWORD || ''
@@ -100,7 +100,7 @@ redisClient.on('error', err => console.error('[Redis] Error:', err));
   await redisClient.connect();
   console.log('[FalkorDB REST API] Connected to FalkorDB:', {
     host: process.env.FALKORDB_HOST || 'localhost',
-    port: process.env.FALKORDB_PORT || '6380',
+    port: process.env.FALKORDB_PORT || '6383',
     username: process.env.FALKORDB_USER || 'default'
   });
 })();
@@ -405,7 +405,7 @@ function parseFalkorDBResult(result) {
 }
 
 // Start server
-const PORT = process.env.REST_API_PORT || 3001;
+const PORT = process.env.REST_API_PORT || 3013;
 app.listen(PORT, () => {
   console.log(`[FalkorDB REST API] Server listening on http://localhost:${PORT}`);
   console.log(`[FalkorDB REST API] Health check: http://localhost:${PORT}/health`);

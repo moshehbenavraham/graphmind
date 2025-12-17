@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 // Test configuration
 const TEST_CONFIG = {
   falkordbHost: process.env.FALKORDB_HOST || 'localhost',
-  falkordbPort: process.env.FALKORDB_PORT || '6380',
+  falkordbPort: process.env.FALKORDB_PORT || '6383',
   falkordbUser: process.env.FALKORDB_USER || 'default',
   falkordbPassword: process.env.FALKORDB_PASSWORD || '',
   graphName: 'graphmind_test'

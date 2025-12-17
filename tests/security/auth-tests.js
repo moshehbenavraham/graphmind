@@ -6,7 +6,7 @@
  */
 
 const API_KEY = process.env.FALKORDB_REST_API_KEY;
-const REST_API_URL = process.env.REST_API_URL || 'http://localhost:3001';
+const REST_API_URL = process.env.REST_API_URL || 'http://localhost:3013';
 const TEST_GRAPH = 'test_auth_security';
 
 if (!API_KEY) {
@@ -71,8 +71,8 @@ const CORS_TESTS = [
     expectedBehavior: 'Returns Access-Control-Allow-Origin header'
   },
   {
-    name: 'Request from allowed origin (localhost:5173)',
-    origin: 'http://localhost:5173',
+    name: 'Request from allowed origin (localhost:5176)',
+    origin: 'http://localhost:5176',
     expectedAllowed: true,
     expectedBehavior: 'Returns Access-Control-Allow-Origin header'
   },

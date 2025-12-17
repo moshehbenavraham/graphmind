@@ -10,7 +10,7 @@
 require('dotenv').config(); // Load environment variables from .env
 
 const API_KEY = process.env.FALKORDB_REST_API_KEY;
-const REST_API_URL = process.env.FALKORDB_REST_HOST || 'http://localhost:3001';
+const REST_API_URL = process.env.FALKORDB_REST_HOST || 'http://localhost:3013';
 const TEST_GRAPH = 'test_security';
 
 // ANSI color codes

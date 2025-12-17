@@ -32,7 +32,7 @@ Before deploying to production, ensure:
 # Check Person vector index
 node -e "
 const fetch = require('node-fetch');
-fetch('http://localhost:3001/query', {
+fetch('http://localhost:3013/query', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'X-API-Key': process.env.FALKORDB_REST_API_KEY },
   body: JSON.stringify({

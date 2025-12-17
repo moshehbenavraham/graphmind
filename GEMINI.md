@@ -138,7 +138,7 @@ npm run dev
 # 1. Run FalkorDB Docker container locally (recommended)
 docker run -d \
   --name falkordb-local \
-  -p 6380:6379 \
+  -p 6383:6379 \
   -v $(pwd)/falkordb-data:/data \
   falkordb/falkordb:latest
 
@@ -150,7 +150,7 @@ bash scripts/start-tunnel-services.sh
 
 # Default .env configuration (already set):
 # FALKORDB_HOST=localhost
-# FALKORDB_PORT=6380
+# FALKORDB_PORT=6383
 # FALKORDB_USER=default
 # FALKORDB_PASSWORD=
 

@@ -7,7 +7,7 @@
  */
 
 const API_KEY = process.env.FALKORDB_REST_API_KEY;
-const REST_API_URL = process.env.REST_API_URL || 'http://localhost:3001';
+const REST_API_URL = process.env.REST_API_URL || 'http://localhost:3013';
 const TEST_GRAPH = 'test_injection_security';
 
 if (!API_KEY) {

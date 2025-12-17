@@ -51,10 +51,10 @@ pkill -9 -f "workerd" >/dev/null 2>&1 || true
 pkill -9 -f "vite" >/dev/null 2>&1 || true
 sleep 3
 
-echo "  - Killing processes on required ports (8787, 5173, 3001)..."
+echo "  - Killing processes on required ports (8787, 5176, 3013)..."
 lsof -ti :8787 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti :3001 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :5176 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti :3013 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
 echo "  - Verifying all processes killed..."
@@ -149,7 +149,7 @@ fi
 
 docker run -d \
   --name falkordb-local \
-  -p 6380:6379 \
+  -p 6383:6379 \
   -v "$PROJECT_ROOT/falkordb-data:/var/lib/falkordb/data" \
   falkordb/falkordb:latest
 
@@ -162,7 +162,7 @@ docker exec falkordb-local redis-cli CONFIG SET save "60 1" >/dev/null
 docker exec falkordb-local redis-cli CONFIG SET appendonly yes >/dev/null
 
 if docker ps | grep -q falkordb-local; then
-    echo -e "${GREEN}✔ FalkorDB running on port 6380 with persistence enabled${NC}"
+    echo -e "${GREEN}✔ FalkorDB running on port 6383 with persistence enabled${NC}"
 else
     echo -e "${RED}✖ FalkorDB failed to start${NC}"
     exit 1
@@ -177,8 +177,8 @@ echo "  - Waiting for REST API to be ready..."
 sleep 5
 
 # Health check with authentication
-if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
-    echo -e "${GREEN}✔ REST API running on port 3001${NC}"
+if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3013/health | grep -q "healthy"; then
+    echo -e "${GREEN}✔ REST API running on port 3013${NC}"
 else
     echo -e "${RED}✖ REST API failed to start${NC}"
     cat /tmp/falkordb-rest-api.log
@@ -272,7 +272,7 @@ else
 fi
 
 echo "  - Testing REST API..."
-if curl -s -m 10 -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy"; then
+if curl -s -m 10 -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3013/health | grep -q "healthy"; then
     echo -e "    ${GREEN}✔ REST API healthy${NC}"
 else
     echo -e "    ${RED}✖ REST API unhealthy${NC}"
@@ -307,8 +307,8 @@ echo "  API:       $WORKER_URL"
 echo "  Tunnel:    https://falkordb-tunnel.aiwithapex.com"
 echo ""
 echo "=> Running Services:"
-echo "  FalkorDB Docker:  localhost:6380 (container: falkordb-local)"
-echo "  REST API:         localhost:3001 (PID: $REST_API_PID)"
+echo "  FalkorDB Docker:  localhost:6383 (container: falkordb-local)"
+echo "  REST API:         localhost:3013 (PID: $REST_API_PID)"
 echo "  Cloudflare Tunnel:              (PID: $TUNNEL_PID)"
 echo ""
 echo "=> Logs:"

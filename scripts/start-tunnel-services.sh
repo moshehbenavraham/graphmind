@@ -32,7 +32,7 @@ else
     echo -e "${YELLOW}Creating new FalkorDB container...${NC}"
     docker run -d \
         --name falkordb-local \
-        -p 6380:6379 \
+        -p 6383:6379 \
         -v "$(pwd)/falkordb-data:/var/lib/falkordb/data" \
         falkordb/falkordb:latest
     echo -e "${GREEN}✅ FalkorDB container created and started${NC}"
@@ -65,7 +65,7 @@ else
     sleep 5
 
     # Verify REST API is responding (with authentication)
-    if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3001/health | grep -q "healthy" 2>&1; then
+    if curl -s -H "Authorization: Bearer ${FALKORDB_REST_API_KEY}" http://localhost:3013/health | grep -q "healthy" 2>&1; then
         echo -e "${GREEN}✅ REST API health check passed${NC}"
     else
         echo -e "${RED}⚠️  REST API health check failed (may need more time)${NC}"
@@ -110,7 +110,7 @@ echo "  - Cloudflare Tunnel: tail -f logs/cloudflare-tunnel.log"
 echo "  - FalkorDB Docker:   docker logs falkordb-local -f"
 echo ""
 echo "🔗 Endpoints:"
-echo "  - Local REST API:    http://localhost:3001/health"
+echo "  - Local REST API:    http://localhost:3013/health"
 echo "  - Tunnel (public):   https://falkordb-tunnel.aiwithapex.workers.dev.aiwithapex.com/health"
 echo "  - Production Worker: https://graphmind-api.apex-web-services-llc-0d4.workers.dev/api/health"
 echo ""

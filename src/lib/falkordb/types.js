@@ -15,7 +15,7 @@
  * FalkorDB connection configuration
  * @typedef {Object} FalkorDBConfig
  * @property {string} host - FalkorDB host (e.g., 'localhost' or 'https://tunnel.example.com')
- * @property {string|number} port - FalkorDB port (e.g., 3001 for REST API)
+ * @property {string|number} port - FalkorDB port (e.g., 3013 for REST API)
  * @property {string} username - FalkorDB username
  * @property {string} [user] - FalkorDB username (alias for username, used by some scripts)
  * @property {string} password - FalkorDB password

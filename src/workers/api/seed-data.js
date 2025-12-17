@@ -20,7 +20,7 @@ function getTraceId(request) {
 
 /**
  * Normalize FalkorDB connection config and provide sensible defaults.
- * Falls back to 443 when using https hosts and 6380 for local dev.
+ * Falls back to 443 when using https hosts and 6383 for local dev.
  * @param {Object} env
  * @returns {{host: string, port: number, username: string, password: string, apiKey: string}}
  */
@@ -32,7 +32,7 @@ function buildFalkorConfig(env) {
   const rawPort = env.FALKORDB_PORT;
   const portNumber = Number(rawPort);
 
-  const defaultPort = host && host.startsWith('http') ? 443 : 6380;
+  const defaultPort = host && host.startsWith('http') ? 443 : 6383;
   const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
 
   if (!host) {

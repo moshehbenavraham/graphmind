@@ -24,7 +24,7 @@ async function testGraphSyncPerformance() {
 
   const config = {
     host: 'localhost',
-    port: 3001,
+    port: 3013,
     username: 'default',
     password: '',
   };

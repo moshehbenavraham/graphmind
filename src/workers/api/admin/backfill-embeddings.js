@@ -102,7 +102,7 @@ export async function handleBackfillEmbeddings(request, env) {
             body: JSON.stringify({
                 config: {
                     host: env.FALKORDB_HOST || 'localhost',
-                    port: '3001', // REST API wrapper port
+                    port: '3013', // REST API wrapper port
                     username: env.FALKORDB_USER || env.FALKORDB_USERNAME || 'default',
                     password: env.FALKORDB_PASSWORD,
                     apiKey: env.FALKORDB_REST_API_KEY,
@@ -164,7 +164,7 @@ export async function handleBackfillEmbeddings(request, env) {
                     body: JSON.stringify({
                         config: {
                             host: env.FALKORDB_HOST || 'localhost',
-                            port: '3001', // REST API wrapper port
+                            port: '3013', // REST API wrapper port
                             username: env.FALKORDB_USER || env.FALKORDB_USERNAME || 'default',
                             password: env.FALKORDB_PASSWORD,
                             apiKey: env.FALKORDB_REST_API_KEY,

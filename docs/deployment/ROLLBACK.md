@@ -155,7 +155,7 @@ Consider fixing forward instead of rollback if:
 
 4. **Verify REST API**
    ```bash
-   curl http://localhost:3001/health
+   curl http://localhost:3013/health
    ```
    - Expected: 200 OK
 

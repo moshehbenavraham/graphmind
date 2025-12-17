@@ -450,7 +450,7 @@ import { createClient } from 'redis';
 
 /** @type {RedisClient} */
 const client = createClient({
-    url: 'redis://localhost:6380'
+    url: 'redis://localhost:6383'
 });
 
 /**

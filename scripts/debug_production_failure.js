@@ -65,7 +65,7 @@ async function runDebug() {
         // 3. Test Execution against Local FalkorDB
         console.log('\n3. Testing Execution against Local FalkorDB...');
         const client = createClient({
-            url: 'redis://localhost:6380'
+            url: 'redis://localhost:6383'
         });
         await client.connect();
 
