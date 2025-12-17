@@ -55,12 +55,18 @@ export class AudioStreamHandler {
    *
    * @param {Object} message - Audio chunk message
    * @param {string} message.chunk - Base64 encoded audio data
+   * @param {string} [message.data] - Legacy alias for `chunk` (base64 encoded audio)
    * @param {number} message.sequence - Sequence number
    * @param {number} message.timestamp - Unix timestamp
    * @returns {{ success: boolean, error?: { code: string, message: string, recoverable: boolean } }}
    */
   handleAudioChunk(message) {
-    const { chunk, sequence, timestamp } = message;
+    // Backward compatibility: some clients used `data` instead of `chunk`
+    // Normalize before validation/buffering so we don't drop audio silently.
+    const normalizedChunk = message?.chunk ?? message?.data;
+    const normalizedMessage = normalizedChunk ? { ...message, chunk: normalizedChunk } : message;
+
+    const { chunk, sequence, timestamp } = normalizedMessage;
 
     this.logger.info('Audio chunk received', {
       has_chunk: !!chunk,
@@ -71,15 +77,16 @@ export class AudioStreamHandler {
     });
 
     // Validate audio chunk
-    const validation = validateAudioChunk(message);
+    const validation = validateAudioChunk(normalizedMessage);
     if (!validation.valid) {
       this.stats.validationFailures++;
 
       this.logger.error('Audio chunk validation failed', {
         errors: validation.errors,
         message_keys: Object.keys(message),
-        has_chunk: !!message.chunk,
-        chunk_type: typeof message.chunk
+        has_chunk: !!normalizedMessage.chunk,
+        chunk_type: typeof normalizedMessage.chunk,
+        used_legacy_data_field: !!message?.data && !message?.chunk
       });
 
       const errorMessage = getValidationErrorMessage(validation);

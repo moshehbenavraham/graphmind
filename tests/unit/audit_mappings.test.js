@@ -1,7 +1,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { generateCypherQuery } from '../../src/services/cypher-generator.js';
-import { RELATIONSHIP_MAPPINGS } from '../../src/lib/graph/cypher-templates.js';
+import {
+    RELATIONSHIP_MAPPINGS,
+    extractEntityReferences,
+    identifyEntityRole
+} from '../../src/lib/graph/cypher-templates.js';
 
 // Mock environment
 const mockEnv = {
@@ -43,12 +47,20 @@ describe('System-Wide Relationship Mapping Audit', () => {
             // Setup: We need a question containing the phrase
             const question = `Who ${phrase} TestEntity?`;
 
-            // Setup: Mock DB to return an entity that matches the EXPECTED target of the mapping
-            // If the mapping expects (Person)->(Project), and we ask "Who works on TestEntity?",
-            // "TestEntity" is the Project. So we return type=Project.
-            // This should trigger 'incoming' direction if the config implies it.
+            // Determine whether the extracted entity is treated as SOURCE or TARGET (Feature 015).
+            // This controls whether we query by target_name or source_name and which label
+            // resolveEntity should return for the known entity.
+            const entities = extractEntityReferences(question);
+            const { queryDirection } = identifyEntityRole(question, entities);
 
-            const expectedEntityType = config.target === '*' ? 'Thing' : config.target;
+            const expectedEntityType = (() => {
+                // If we're querying by target, the known entity is the target type.
+                // Otherwise the known entity is the source type.
+                if (queryDirection === 'by_target') {
+                    return (config.target === '*' ? 'Thing' : config.target) || 'Thing';
+                }
+                return (config.source === '*' ? 'Thing' : config.source) || 'Thing';
+            })();
 
             dbMock.mockResolvedValue({
                 results: [
@@ -58,16 +70,16 @@ describe('System-Wide Relationship Mapping Audit', () => {
 
             const result = await generateCypherQuery(question, 'user_test', 'user_123', mockEnv);
 
-            // Verification
-            if (config.direction === 'incoming' || (config.target && config.target === expectedEntityType)) {
-                // Expect (target)-[:REL]->(source)
-                // In our query "Who works on TestEntity?", TestEntity is the 'source' param (the known entity).
-                // So we expect (target)-[:REL]->(source:Type {name: 'TestEntity'})
-                expect(result.cypher).toContain(`->(source:${expectedEntityType}`);
+            // Verification: relationship type always present
+            expect(result.cypher).toContain(`-[r:${config.type}]->`);
+
+            // Verification: correct parameterization based on query direction
+            if (queryDirection === 'by_target') {
+                expect(result.cypher).toContain(`(target:${expectedEntityType})`);
+                expect(result.cypher).toContain('WHERE toLower(target.name) = toLower($target_name)');
             } else {
-                // Expect (source)-[:REL]->(target)
-                expect(result.cypher).toContain(`(source:${expectedEntityType}`);
-                expect(result.cypher).toContain(`-[r:${config.type}]->`);
+                expect(result.cypher).toContain(`(source:${expectedEntityType})`);
+                expect(result.cypher).toContain('WHERE toLower(source.name) = toLower($source_name)');
             }
 
             expect(result.cypher).not.toContain('undefined');

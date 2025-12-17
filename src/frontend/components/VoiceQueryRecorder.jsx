@@ -54,7 +54,7 @@ const VoiceQueryRecorder = ({ jwtToken, onQueryComplete, onError }) => {
       if (shouldSendAudioRef.current && isConnected) {
         send({
           type: 'audio_chunk',
-          data: chunk.data,
+          chunk: chunk.data,
           sequence: chunk.sequence,
           timestamp: chunk.timestamp,
         });

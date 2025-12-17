@@ -29,6 +29,9 @@ function QueryPage() {
   // Refs for audio metrics
   const audioMetricsRef = useRef(null);
   const chunkSequenceRef = useRef(0);
+  const pendingChunksRef = useRef([]); // buffer chunks until WS connects
+  const pendingStopRef = useRef(false); // defer stop_recording until WS connects
+  const isConnectedRef = useRef(false);
 
   /**
    * Query session hook - manages WebSocket and query state
@@ -48,11 +51,44 @@ function QueryPage() {
     stopRecording: signalStopRecording,
     sendAudioChunk,
     reset,
+    endSession,
   } = useQuerySession({
     onError: (err) => {
       logger.error('session.error', 'Session error', { message: err.message });
     },
   });
+
+  // Keep connection state in a ref so audio callbacks don't capture stale values
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  // Flush any buffered chunks once the WebSocket is connected
+  useEffect(() => {
+    if (!isConnected) return;
+    if (!pendingChunksRef.current.length) return;
+
+    const buffered = pendingChunksRef.current;
+    pendingChunksRef.current = [];
+
+    logger.info('media.chunk.flush', 'Flushing buffered audio chunks', { count: buffered.length });
+
+    for (const entry of buffered) {
+      const sequence = chunkSequenceRef.current++;
+      sendAudioChunk(entry.data, sequence, entry.timestamp);
+
+      if (audioMetricsRef.current) {
+        audioMetricsRef.current.chunkCount += 1;
+        audioMetricsRef.current.totalBytes += entry.size || entry.data.length;
+      }
+    }
+
+    // If user already stopped while connecting, send stop now after flushing
+    if (pendingStopRef.current) {
+      pendingStopRef.current = false;
+      signalStopRecording();
+    }
+  }, [isConnected, sendAudioChunk, signalStopRecording]);
 
   /**
    * Audio recorder hook - handles MediaRecorder with WebM/Opus
@@ -63,6 +99,7 @@ function QueryPage() {
     start: startAudioCapture,
     stop: stopAudioCapture,
     cleanup: cleanupAudio,
+    error: recorderError,
   } = useAudioRecorder({
     sampleRate: 16000,
     channelCount: 1,
@@ -80,7 +117,7 @@ function QueryPage() {
       }
 
       // Send audio chunk via WebSocket
-      if (isConnected) {
+      if (isConnectedRef.current) {
         const sequence = chunkSequenceRef.current++;
         sendAudioChunk(chunk.data, sequence, chunk.timestamp);
 
@@ -88,12 +125,25 @@ function QueryPage() {
           audioMetricsRef.current.chunkCount += 1;
           audioMetricsRef.current.totalBytes += chunk.size || chunk.data.length;
         }
-      } else {
-        if (audioMetricsRef.current) {
-          audioMetricsRef.current.droppedChunks += 1;
-        }
-        logger.warn('media.chunk.dropped', 'Skipping chunk - WebSocket not connected');
+        return;
       }
+
+      // Buffer chunks while connecting to avoid losing early audio
+      pendingChunksRef.current.push({
+        data: chunk.data,
+        timestamp: chunk.timestamp,
+        size: chunk.size,
+      });
+
+      // Bound memory usage (keep last ~30 chunks = ~15s @ 500ms)
+      if (pendingChunksRef.current.length > 30) {
+        pendingChunksRef.current.shift();
+      }
+
+      if (audioMetricsRef.current) {
+        audioMetricsRef.current.droppedChunks += 1; // preserved metric name; this is now "buffered while disconnected"
+      }
+      logger.warn('media.chunk.buffered', 'Buffered chunk - WebSocket not connected yet');
     },
     onComplete: (recordingData) => {
       if (audioMetricsRef.current) {
@@ -130,27 +180,48 @@ function QueryPage() {
       await startSession();
 
       // Start audio capture
-      await startAudioCapture();
+      const started = await startAudioCapture();
+      if (!started) {
+        // Audio capture failed (e.g. unsupported MIME type / permission / constraints)
+        logger.error('recording.audio_failed', 'Audio capture failed to start');
+        cleanupAudio();
+        pendingChunksRef.current = [];
+        pendingStopRef.current = false;
+        chunkSequenceRef.current = 0;
+        endSession();
+        return;
+      }
 
       logger.info('recording.started', 'Recording started');
     } catch (err) {
       logger.error('recording.start_failed', 'Failed to start recording', {
         message: err.message,
       });
+      cleanupAudio();
+      pendingChunksRef.current = [];
+      pendingStopRef.current = false;
+      chunkSequenceRef.current = 0;
+      endSession();
     }
-  }, [startSession, startAudioCapture]);
+  }, [startSession, startAudioCapture, cleanupAudio, endSession]);
 
   /**
    * Stop recording flow
    */
-  const handleStopRecording = useCallback(() => {
+  const handleStopRecording = useCallback(async () => {
     logger.info('recording.stop', 'Stopping recording');
 
     // Stop audio capture
-    stopAudioCapture();
+    await stopAudioCapture();
 
     // Signal stop to backend
-    signalStopRecording();
+    if (isConnectedRef.current) {
+      signalStopRecording();
+    } else {
+      // Connection isn't ready yet; send stop as soon as it connects (after flushing buffered chunks)
+      pendingStopRef.current = true;
+      logger.warn('recording.stop_deferred', 'Deferring stop_recording until WebSocket connects');
+    }
   }, [stopAudioCapture, signalStopRecording]);
 
   /**
@@ -161,6 +232,8 @@ function QueryPage() {
     reset();
     audioMetricsRef.current = null;
     chunkSequenceRef.current = 0;
+    pendingChunksRef.current = [];
+    pendingStopRef.current = false;
   }, [cleanupAudio, reset]);
 
   /**
@@ -261,13 +334,18 @@ function QueryPage() {
         </Card>
 
         {/* Error Display */}
-        {error && (
+        {(error || recorderError) && (
           <Card className="mb-8 border-status-error">
             <Card.Body className="bg-status-error/10">
               <Badge variant="error" className="mb-2">
                 Error
               </Badge>
-              <p className="text-brutal-charcoal font-mono text-sm">{error}</p>
+              {recorderError && (
+                <p className="text-brutal-charcoal font-mono text-sm">{recorderError}</p>
+              )}
+              {error && error !== recorderError && (
+                <p className="text-brutal-charcoal font-mono text-sm">{error}</p>
+              )}
             </Card.Body>
           </Card>
         )}

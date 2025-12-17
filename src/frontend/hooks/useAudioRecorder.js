@@ -56,17 +56,63 @@ export const useAudioRecorder = (options = {}) => {
   const audioChunksRef = useRef([]);
   const isRecordingRef = useRef(false);
   const useWorkletRef = useRef(false); // Track if AudioWorklet is being used
+  const pendingChunkPromisesRef = useRef(new Set()); // Track async chunk conversions (WebM)
 
   const logger = createLogger('useAudioRecorder');
 
   // Audio configuration
-  const audioConstraints = {
-    sampleRate,
-    channelCount,
+  // NOTE: Use "ideal" constraints instead of exact numbers to avoid OverconstrainedError
+  // on browsers/devices that can't satisfy the requested sample rate/channel count.
+  const preferredAudioConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    sampleRate: { ideal: sampleRate },
+    channelCount: { ideal: channelCount },
+  };
+
+  // Fallback constraints if the browser rejects the preferred constraints
+  const fallbackAudioConstraints = {
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
   };
+
+  /**
+   * Pick the best supported MediaRecorder MIME type.
+   * Some browsers (notably Safari) do not support WebM/Opus and require MP4.
+   *
+   * @returns {string|null}
+   */
+  const getBestRecordingMimeType = useCallback(() => {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',
+    ];
+
+    if (typeof window === 'undefined' || !window.MediaRecorder) {
+      return null;
+    }
+
+    if (typeof MediaRecorder.isTypeSupported !== 'function') {
+      // Older implementations may not expose isTypeSupported; let the constructor decide.
+      return null;
+    }
+
+    for (const type of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type;
+        }
+      } catch {
+        // Ignore and continue trying other candidates
+      }
+    }
+
+    return null;
+  }, []);
 
   /**
    * Convert Float32Array to Int16Array (PCM conversion)
@@ -147,9 +193,27 @@ export const useAudioRecorder = (options = {}) => {
         );
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: preferredAudioConstraints,
+        });
+      } catch (err) {
+        // Retry with relaxed constraints for browsers that reject sampleRate/channelCount
+        if (err?.name === 'OverconstrainedError' || err?.name === 'ConstraintNotSatisfiedError') {
+          logger.warn('permission.constraints_fallback', 'Preferred audio constraints rejected, retrying with fallback', {
+            name: err?.name,
+            message: err?.message,
+            constraint: err?.constraint,
+          });
+
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: fallbackAudioConstraints,
+          });
+        } else {
+          throw err;
+        }
+      }
 
       mediaStreamRef.current = stream;
       updatePermissionState('granted');
@@ -178,7 +242,7 @@ export const useAudioRecorder = (options = {}) => {
       onError?.(new Error(errorMessage));
       throw err;
     }
-  }, [audioConstraints, updatePermissionState, onError]);
+  }, [preferredAudioConstraints, fallbackAudioConstraints, updatePermissionState, onError]);
 
   /**
    * Start timer
@@ -333,14 +397,34 @@ export const useAudioRecorder = (options = {}) => {
    */
   const setupWebmCapture = useCallback(
     async (stream) => {
-      const mimeType = 'audio/webm;codecs=opus';
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: sampleRate,
-      });
+      if (typeof window === 'undefined' || !window.MediaRecorder) {
+        throw new Error(
+          'Your browser does not support MediaRecorder audio capture. Please use a modern browser.'
+        );
+      }
+
+      const mimeType = getBestRecordingMimeType();
+
+      /** @type {MediaRecorderOptions} */
+      const recorderOptions = {};
+      if (mimeType) {
+        recorderOptions.mimeType = mimeType;
+      }
+
+      let mediaRecorder;
+      try {
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch (creationError) {
+        // Some browsers throw for unsupported mimeType; retry with default options.
+        logger.warn('capture.webm_create_failed', 'Failed to create MediaRecorder with options, retrying with defaults', {
+          mimeType,
+          message: creationError?.message,
+        });
+        mediaRecorder = new MediaRecorder(stream);
+      }
       mediaRecorderRef.current = mediaRecorder;
 
-      mediaRecorder.ondataavailable = async (event) => {
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size < 200) {
           logger.debug('capture.webm_chunk_skipped', 'Skipping tiny chunk', {
             size: event.data.size,
@@ -349,9 +433,10 @@ export const useAudioRecorder = (options = {}) => {
         }
 
         if (event.data.size > 0) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result.split(',')[1];
+          // Convert Blob -> ArrayBuffer -> base64 without FileReader so we can await flush on stop()
+          const processPromise = (async () => {
+            const buffer = await event.data.arrayBuffer();
+            const base64Audio = arrayBufferToBase64(buffer);
 
             audioChunksRef.current.push(event.data);
 
@@ -362,8 +447,18 @@ export const useAudioRecorder = (options = {}) => {
               timestamp: Date.now(),
               size: event.data.size,
             });
-          };
-          reader.readAsDataURL(event.data);
+          })().catch((err) => {
+            const errorMessage = err?.message || 'Failed to process audio chunk';
+            logger.error('capture.webm_chunk_failed', 'Failed to convert WebM chunk', { message: errorMessage });
+            setError(errorMessage);
+            onError?.(err instanceof Error ? err : new Error(errorMessage));
+          });
+
+          // Track pending conversion so stop() can await all chunks before returning
+          pendingChunkPromisesRef.current.add(processPromise);
+          processPromise.finally(() => {
+            pendingChunkPromisesRef.current.delete(processPromise);
+          });
         }
       };
 
@@ -379,13 +474,12 @@ export const useAudioRecorder = (options = {}) => {
       };
 
       logger.debug('capture.webm_setup', 'WebM capture initialized', {
-        mimeType,
-        audioBitsPerSecond: sampleRate,
+        mimeType: mediaRecorder.mimeType || mimeType || 'browser_default',
       });
 
       return mediaRecorder;
     },
-    [sampleRate, onChunk, onError]
+    [getBestRecordingMimeType, onChunk, onError]
   );
 
   /**
@@ -438,20 +532,23 @@ export const useAudioRecorder = (options = {}) => {
 
       return true;
     } catch (err) {
+      const errorMessage = err?.message || 'Failed to start recording.';
       logger.error('recording.start_failed', 'Failed to start recording', {
-        message: err.message,
+        message: errorMessage,
       });
+      setError(errorMessage);
+      onError?.(err instanceof Error ? err : new Error(errorMessage));
       setIsInitializing(false);
       return false;
     } finally {
       setIsInitializing(false);
     }
-  }, [requestPermission, captureMode, setupPcmCapture, setupWebmCapture, startTimer]);
+  }, [requestPermission, captureMode, setupPcmCapture, setupWebmCapture, startTimer, onError]);
 
   /**
    * Stop recording
    */
-  const stop = useCallback(() => {
+  const stop = useCallback(async () => {
     try {
       isRecordingRef.current = false;
       stopTimer();
@@ -481,7 +578,41 @@ export const useAudioRecorder = (options = {}) => {
 
       // Stop WebM capture
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
+        const recorder = mediaRecorderRef.current;
+
+        // Wait for MediaRecorder to fully stop (ensures final dataavailable has fired)
+        const stopped = new Promise((resolve) => {
+          const handleStop = () => resolve(true);
+          try {
+            recorder.addEventListener('stop', handleStop, { once: true });
+          } catch {
+            // Older implementations might not support addEventListener on MediaRecorder; fall back.
+            recorder.onstop = () => resolve(true);
+          }
+        });
+
+        try {
+          recorder.stop();
+        } catch (err) {
+          logger.warn('capture.webm_stop_failed', 'MediaRecorder.stop() failed', { message: err?.message });
+        }
+
+        // Wait for stop event (best-effort)
+        try {
+          await stopped;
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Ensure any pending WebM chunk conversions have completed before returning
+      if (pendingChunkPromisesRef.current.size > 0) {
+        const pending = Array.from(pendingChunkPromisesRef.current);
+        await Promise.allSettled(pending);
+      }
+
+      // Clear MediaRecorder ref after flush
+      if (mediaRecorderRef.current) {
         mediaRecorderRef.current = null;
       }
 
@@ -516,7 +647,7 @@ export const useAudioRecorder = (options = {}) => {
       setError('Failed to stop recording properly.');
       return null;
     }
-  }, [duration, captureMode, stopTimer, onComplete]);
+  }, [duration, captureMode, stopTimer, onComplete, arrayBufferToBase64, onError]);
 
   /**
    * Toggle recording state
@@ -570,6 +701,7 @@ export const useAudioRecorder = (options = {}) => {
 
     isRecordingRef.current = false;
     useWorkletRef.current = false;
+    pendingChunkPromisesRef.current.clear();
     setIsRecording(false);
     setDuration(0);
 
