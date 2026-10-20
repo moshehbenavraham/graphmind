@@ -5,7 +5,7 @@ async function test() {
   const client = createClient({
     socket: {
       host: 'localhost',
-      port: 6380
+      port: 6383
     }
   });
 

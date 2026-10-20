@@ -1,0 +1,134 @@
+{
+  "testQueries": [
+    {
+      "id": "Q001",
+      "query": "Who works on AI?",
+      "expectedTypes": ["Person"],
+      "expectedKeywords": ["AI", "artificial intelligence", "machine learning"],
+      "minRelevanceScore": 0.65,
+      "description": "Person node semantic search - should match people working on AI projects"
+    },
+    {
+      "id": "Q002",
+      "query": "What projects use GraphRAG?",
+      "expectedTypes": ["Project"],
+      "expectedKeywords": ["GraphRAG", "graph", "knowledge graph"],
+      "minRelevanceScore": 0.65,
+      "description": "Project node semantic search - should match projects using GraphRAG technology"
+    },
+    {
+      "id": "Q003",
+      "query": "Notes about database performance",
+      "expectedTypes": ["Note"],
+      "expectedKeywords": ["database", "performance", "optimization", "query"],
+      "minRelevanceScore": 0.65,
+      "description": "Note node semantic search - should match notes discussing database performance"
+    },
+    {
+      "id": "Q004",
+      "query": "Topics related to cloud infrastructure",
+      "expectedTypes": ["Topic"],
+      "expectedKeywords": ["cloud", "infrastructure", "Cloudflare", "Workers"],
+      "minRelevanceScore": 0.65,
+      "description": "Topic node semantic search - should match cloud infrastructure topics"
+    },
+    {
+      "id": "Q005",
+      "query": "Tell me about the GraphMind project",
+      "expectedTypes": ["Project", "Note"],
+      "expectedKeywords": ["GraphMind", "voice", "knowledge assistant"],
+      "minRelevanceScore": 0.70,
+      "description": "Cross-type search - should match both project and related notes"
+    },
+    {
+      "id": "Q006",
+      "query": "Who collaborates on voice AI features?",
+      "expectedTypes": ["Person"],
+      "expectedKeywords": ["voice", "AI", "speech", "audio"],
+      "minRelevanceScore": 0.65,
+      "description": "Person collaboration search - should find people working on voice features"
+    },
+    {
+      "id": "Q007",
+      "query": "What technologies are used in the backend?",
+      "expectedTypes": ["Technology", "Topic"],
+      "expectedKeywords": ["backend", "technology", "stack", "infrastructure"],
+      "minRelevanceScore": 0.65,
+      "description": "Technology stack search - should identify backend technologies"
+    },
+    {
+      "id": "Q008",
+      "query": "Recent discussions about vector embeddings",
+      "expectedTypes": ["Note", "Topic"],
+      "expectedKeywords": ["vector", "embedding", "semantic", "search"],
+      "minRelevanceScore": 0.70,
+      "description": "Temporal + semantic search - should find recent notes about embeddings"
+    },
+    {
+      "id": "Q009",
+      "query": "FalkorDB integration details",
+      "expectedTypes": ["Project", "Note"],
+      "expectedKeywords": ["FalkorDB", "database", "graph", "integration"],
+      "minRelevanceScore": 0.75,
+      "description": "Specific technology search - high precision for FalkorDB mentions"
+    },
+    {
+      "id": "Q010",
+      "query": "Security and authentication improvements",
+      "expectedTypes": ["Note", "Topic"],
+      "expectedKeywords": ["security", "authentication", "auth", "JWT"],
+      "minRelevanceScore": 0.65,
+      "description": "Feature category search - should match security-related content"
+    },
+    {
+      "id": "Q011",
+      "query": "Performance benchmarks and optimization",
+      "expectedTypes": ["Note"],
+      "expectedKeywords": ["performance", "benchmark", "optimization", "latency"],
+      "minRelevanceScore": 0.65,
+      "description": "Performance analysis search - should find benchmark and optimization notes"
+    },
+    {
+      "id": "Q012",
+      "query": "Edge computing and serverless architecture",
+      "expectedTypes": ["Topic", "Note"],
+      "expectedKeywords": ["edge", "serverless", "Cloudflare", "Workers"],
+      "minRelevanceScore": 0.65,
+      "description": "Architecture pattern search - should match edge computing concepts"
+    }
+  ],
+  "edgeCases": [
+    {
+      "id": "E001",
+      "query": "quantum cryptography blockchain",
+      "expectedTypes": [],
+      "expectedResults": 0,
+      "minRelevanceScore": 0.65,
+      "description": "Empty result test - query about topics not in knowledge graph"
+    },
+    {
+      "id": "E002",
+      "query": "xyzabc123",
+      "expectedTypes": [],
+      "expectedResults": 0,
+      "minRelevanceScore": 0.65,
+      "description": "Gibberish query test - should return no results"
+    },
+    {
+      "id": "E003",
+      "query": "database",
+      "expectedTypes": ["Note", "Topic", "Project"],
+      "minRelevanceScore": 0.60,
+      "description": "Low-confidence test - single word may match many things with varying relevance"
+    }
+  ],
+  "metadata": {
+    "totalQueries": 12,
+    "totalEdgeCases": 3,
+    "minRelevanceThreshold": 0.65,
+    "vectorDimension": 768,
+    "embeddingModel": "BAAI/bge-base-en-v1.5",
+    "created": "2025-11-24",
+    "purpose": "Semantic search accuracy validation for GraphRAG 2.0"
+  }
+}

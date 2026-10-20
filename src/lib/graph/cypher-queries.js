@@ -204,10 +204,10 @@ export function createRelationshipQuery(relationshipType) {
 /**
  * Delete relationship between entities
  *
- * @param {string} relationshipType - Optional relationship type filter
+ * @param {string} [relationshipType] - Optional relationship type filter
  * @returns {string} Cypher query
  */
-export function deleteRelationshipQuery(relationshipType = null) {
+export function deleteRelationshipQuery(relationshipType = undefined) {
   const relationshipPattern = relationshipType ? `[r:${relationshipType}]` : '[r]';
 
   return `
@@ -259,10 +259,10 @@ export function updateEntityPropertiesQuery(properties) {
  *
  * Check if relationship exists and return details.
  *
- * @param {string} relationshipType - Optional relationship type filter
+ * @param {string} [relationshipType] - Optional relationship type filter
  * @returns {string} Cypher query
  */
-export function getRelationshipQuery(relationshipType = null) {
+export function getRelationshipQuery(relationshipType = undefined) {
   const relationshipPattern = relationshipType ? `[r:${relationshipType}]` : '[r]';
 
   return `

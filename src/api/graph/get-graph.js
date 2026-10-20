@@ -96,6 +96,7 @@ export async function handleGetGraph(request, env, user) {
                 port: parseInt(env.FALKORDB_PORT),
                 username: env.FALKORDB_USER,
                 password: env.FALKORDB_PASSWORD,
+                apiKey: env.FALKORDB_REST_API_KEY,
               },
             }),
           });
@@ -116,7 +117,10 @@ export async function handleGetGraph(request, env, user) {
       const nodeIds = new Set();
 
       for (const row of queryResult.data || []) {
-        const [node, rels, connectedNodes] = row;
+        // Handle both array format [node, rels, connectedNodes] and object format {n: node, relationships: [...], connected_nodes: [...]}
+        const node = Array.isArray(row) ? row[0] : (row.n || row);
+        const rels = Array.isArray(row) ? row[1] : (row.relationships || []);
+        const connectedNodes = Array.isArray(row) ? row[2] : (row.connected_nodes || []);
 
         // Add center node
         if (node && !nodeIds.has(node.entity_id)) {
@@ -124,16 +128,18 @@ export async function handleGetGraph(request, env, user) {
           nodeIds.add(node.entity_id);
         }
 
-        // Add connected nodes
-        for (const connectedNode of connectedNodes || []) {
+        // Add connected nodes - handle both array and non-array cases
+        const connectedArray = Array.isArray(connectedNodes) ? connectedNodes : [];
+        for (const connectedNode of connectedArray) {
           if (connectedNode && !nodeIds.has(connectedNode.entity_id)) {
             nodes.push(formatNode(connectedNode));
             nodeIds.add(connectedNode.entity_id);
           }
         }
 
-        // Add relationships
-        for (const rel of rels || []) {
+        // Add relationships - handle both array and non-array cases
+        const relsArray = Array.isArray(rels) ? rels : [];
+        for (const rel of relsArray) {
           if (rel) {
             relationships.push(formatRelationship(rel));
           }
@@ -158,12 +164,15 @@ export async function handleGetGraph(request, env, user) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       });
 
       const countResult = await countResponse.json();
-      const totalNodes = countResult.data?.[0]?.[0] || 0;
+      // Handle both array format [[total]] and object format [{total: N}]
+      const firstRow = countResult.data?.[0];
+      const totalNodes = Array.isArray(firstRow) ? firstRow[0] : (firstRow?.total || 0);
 
       return {
         nodes,

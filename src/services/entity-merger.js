@@ -94,6 +94,7 @@ export async function mergeEntities(env, userId, sourceEntityId, targetEntityId,
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY, // Feature 012 - Security Hardening
         },
       }),
     }),
@@ -109,6 +110,7 @@ export async function mergeEntities(env, userId, sourceEntityId, targetEntityId,
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY, // Feature 012 - Security Hardening
         },
       }),
     }),
@@ -172,6 +174,7 @@ export async function mergeEntities(env, userId, sourceEntityId, targetEntityId,
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY, // Feature 012 - Security Hardening
       },
     }),
   });
@@ -251,6 +254,7 @@ export async function mergeEntities(env, userId, sourceEntityId, targetEntityId,
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY, // Feature 012 - Security Hardening
       },
     }),
   });

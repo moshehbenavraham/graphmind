@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Comprehensive error handling for graph operations
  *
@@ -8,7 +10,23 @@
  */
 
 /**
+ * @typedef {Object} ErrorInfo
+ * @property {number} status - HTTP status code
+ * @property {string} message - Error message
+ */
+
+/**
+ * @typedef {Object} ErrorDetails
+ * @property {string} [field] - Field name that caused the error
+ * @property {string} [message] - Detailed error message
+ * @property {string} [operation] - Operation being performed
+ * @property {string} [originalError] - Original error message
+ * @property {any} [provided] - Provided value that was invalid
+ */
+
+/**
  * Error codes and their HTTP status codes
+ * @type {Object<string, ErrorInfo>}
  */
 export const ERROR_CODES = {
   // Client errors (4xx)
@@ -45,8 +63,14 @@ export const ERROR_CODES = {
 
 /**
  * GraphError class for structured error handling
+ * @extends Error
  */
 export class GraphError extends Error {
+  /**
+   * @param {string} code - Error code from ERROR_CODES
+   * @param {ErrorDetails|Object|null} [details] - Additional error details
+   * @param {Error|null} [cause] - Original error that caused this error
+   */
   constructor(code, details = null, cause = null) {
     const errorInfo = ERROR_CODES[code] || ERROR_CODES.INTERNAL_ERROR;
 

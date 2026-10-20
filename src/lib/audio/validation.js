@@ -213,7 +213,7 @@ export function validateAudioSize(audioChunk) {
  * Validate sequence number
  *
  * @param {number} sequence - Sequence number to validate
- * @param {number} [expectedSequence] - Optional expected sequence number
+ * @param {number|null} [expectedSequence=null] - Optional expected sequence number
  * @returns {ValidationResult} Validation result
  *
  * @example
@@ -324,7 +324,7 @@ export function validateTimestamp(timestamp) {
  * including type, chunk data, sequence, and timestamp.
  *
  * @param {AudioChunkMessage|Object} message - Message to validate
- * @param {number} [expectedSequence] - Optional expected sequence number
+ * @param {number|null} [expectedSequence=null] - Optional expected sequence number
  * @returns {ValidationResult} Validation result with all errors
  * @throws {ValidationError} If validation fails
  *
@@ -403,7 +403,7 @@ export function validateAudioChunk(message, expectedSequence = null) {
  * Use this when you want validation to throw exceptions instead of returning results.
  *
  * @param {AudioChunkMessage|Object} message - Message to validate
- * @param {number} [expectedSequence] - Optional expected sequence number
+ * @param {number|null} [expectedSequence=null] - Optional expected sequence number
  * @throws {ValidationError} If validation fails
  *
  * @example

@@ -14,10 +14,10 @@ const { createRestClient } = require('../src/lib/falkordb/rest-client');
 async function verifyNodesCreated() {
   console.log('🔍 TEST: Verify nodes created in FalkorDB\n');
 
-  // Use REST API wrapper on port 3001, not direct Redis on 6380
+  // Use REST API wrapper on port 3013, not direct Redis on 6383
   const client = createRestClient({
     host: process.env.FALKORDB_REST_HOST || 'localhost',
-    port: process.env.FALKORDB_REST_PORT || 3001,
+    port: process.env.FALKORDB_REST_PORT || 3013,
     username: process.env.FALKORDB_USER || 'default',
     password: process.env.FALKORDB_PASSWORD || ''
   });

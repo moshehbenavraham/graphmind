@@ -11,6 +11,7 @@ import {
   selectCypherTemplate,
   extractEntityReferences,
   buildCypherQuery,
+  identifyEntityRole,  // NEW: Feature 015 - Entity role detection
   RELATIONSHIP_MAPPINGS,
   TIME_PERIOD_MAPPINGS
 } from '../lib/graph/cypher-templates.js';
@@ -119,49 +120,109 @@ async function buildEntityLookupParams(question, entities, env, userNamespace, u
 /**
  * Build parameters for relationship query
  * Pattern: "What projects did Sarah work on?"
+ *
+ * FIXED (Feature 015): Now uses identifyEntityRole() to correctly determine
+ * whether the extracted entity is the SOURCE or TARGET of the relationship.
+ *
+ * This fixes the critical bug where "Who works on GraphMind?" incorrectly
+ * treated GraphMind as the source instead of the target.
  */
 async function buildRelationshipParams(question, entities, env, userNamespace, userId) {
   if (entities.length === 0) {
     throw new Error('No entities found in question');
   }
 
-  // Resolve source entity
-  const sourceEntity = await resolveEntity(entities[0].text, userId, env);
+  // NEW: Identify entity role based on question pattern (Feature 015)
+  const { role, pattern, queryDirection } = identifyEntityRole(question, entities);
+
+  console.log('[CypherGenerator] Entity role identified (Feature 015)', {
+    question: question.substring(0, 50),
+    role,
+    pattern,
+    queryDirection,
+    entity: entities[0].text
+  });
+
+  // Resolve entity (get canonical name and type)
+  const resolvedEntity = await resolveEntity(entities[0].text, userId, env);
 
   // Detect relationship type from question
   const lowerQuestion = question.toLowerCase();
   let relType = 'RELATED_TO';
-  let targetType = '*';
-  let direction = 'outgoing';
+  let sourceType = 'Person';  // Default source type
+  let targetType = '*';       // Default target type
 
   for (const [phrase, mapping] of Object.entries(RELATIONSHIP_MAPPINGS)) {
     if (lowerQuestion.includes(phrase)) {
       relType = mapping.type;
-
-      // Determine direction based on entity type match
-      // If the resolved entity matches the mapping's TARGET, we are looking for the SOURCE (Incoming)
-      if (sourceEntity.type && mapping.target && sourceEntity.type.toLowerCase() === mapping.target.toLowerCase()) {
-        direction = 'incoming';
-        targetType = mapping.source || '*'; // We are looking for the source
-      } else {
-        // Default or if matches Source
-        direction = 'outgoing';
-        targetType = mapping.target || '*';
-      }
-
+      sourceType = mapping.source || 'Person';
+      targetType = mapping.target || '*';
       break;
     }
   }
 
-  return {
-    userNamespace,
-    sourceType: sourceEntity.type || 'Person',
-    sourceName: sourceEntity.name,
-    source_name: sourceEntity.name,
-    relType,
-    targetType,
-    direction
-  };
+  // Build parameters based on entity role (Feature 015 fix)
+  if (queryDirection === 'by_target') {
+    // Entity is the TARGET - we're finding sources
+    // "Who works on GraphMind?" -> GraphMind is target, find Person sources
+    return {
+      userNamespace,
+      sourceType: sourceType,  // The type we're looking for (Person)
+      targetType: resolvedEntity.type || targetType,  // The known entity type (Project)
+      targetName: resolvedEntity.name,
+      target_name: resolvedEntity.name,  // Query parameter
+      relType,
+      direction: 'incoming',  // Semantic: incoming relationships TO target
+      queryDirection
+    };
+  } else {
+    // Entity is the SOURCE - we're finding targets (original behavior)
+    // "What does John work on?" -> John is source, find Project targets
+    return {
+      userNamespace,
+      sourceType: resolvedEntity.type || sourceType,
+      sourceName: resolvedEntity.name,
+      source_name: resolvedEntity.name,  // Query parameter
+      targetType,
+      relType,
+      direction: 'outgoing',
+      queryDirection
+    };
+  }
+}
+
+/**
+ * Infer entity type from question semantics when cache resolution fails
+ *
+ * @param {string} question - Lowercase question
+ * @param {string} matchedPhrase - The relationship phrase that matched
+ * @param {Object} mapping - The RELATIONSHIP_MAPPINGS entry
+ * @param {string} entityName - The extracted entity name
+ * @returns {Object|null} {sourceType, targetType, direction} or null
+ */
+function inferEntityTypeFromQuestion(question, matchedPhrase, mapping, entityName) {
+  // "who works on X" -> X is Project, we want incoming Persons
+  // "who leads X" -> X is Project, we want incoming Persons
+  // "who attended X" -> X is Meeting, we want incoming Persons
+  if (question.startsWith('who ') && mapping.source === 'Person') {
+    return {
+      sourceType: mapping.target,  // The named entity is the target type (Project)
+      targetType: mapping.source,  // We're looking for Persons
+      direction: 'incoming'
+    };
+  }
+
+  // "what does X work on" -> X is Person, we want outgoing Projects
+  // "what projects does X lead" -> X is Person, we want outgoing Projects
+  if (question.startsWith('what ') && mapping.target) {
+    return {
+      sourceType: mapping.source || 'Person',
+      targetType: mapping.target,
+      direction: 'outgoing'
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -410,13 +471,76 @@ async function callLLMModel(env, modelName, prompt, timeoutMs, userNamespace, en
   // Validate the generated Cypher
   const validatedCypher = validateAndSanitize(generatedCypher, userNamespace);
 
+  // Extract parameters from the query and match with entities
+  const parameters = extractParametersFromQuery(validatedCypher, entities);
+
   console.log(`[CypherGenerator] Generated Cypher via ${modelName}:`, validatedCypher);
+  console.log(`[CypherGenerator] Extracted parameters:`, parameters);
 
   return {
     cypher: validatedCypher,
-    parameters: {},
+    parameters,
     entities
   };
+}
+
+/**
+ * Extract parameter values from a parameterized Cypher query
+ *
+ * Finds all $param placeholders and attempts to match them with detected entities.
+ *
+ * @param {string} cypher - Cypher query with $param placeholders
+ * @param {Array} entities - Detected entities from the question
+ * @returns {Object} Parameter name -> value mapping
+ */
+function extractParametersFromQuery(cypher, entities) {
+  const parameters = {};
+
+  // Find all $param placeholders in the query
+  const paramRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  const matches = [...cypher.matchAll(paramRegex)];
+
+  if (matches.length === 0) {
+    return parameters;
+  }
+
+  // Extract parameter names
+  const paramNames = matches.map(m => m[1]);
+
+  // Try to match parameters with entities
+  for (const paramName of paramNames) {
+    // Skip if already set
+    if (parameters[paramName]) continue;
+
+    // Determine entity type from parameter name
+    // Common patterns: project_name, person_name, topic_name, technology_name, etc.
+    const typeMatch = paramName.match(/^([a-z]+)_/);
+    const expectedType = typeMatch ? typeMatch[1].charAt(0).toUpperCase() + typeMatch[1].slice(1) : null;
+
+    // Try to find matching entity
+    let matchedEntity = null;
+
+    if (expectedType) {
+      // Look for entity of matching type
+      matchedEntity = entities.find(e => e.type === expectedType);
+    }
+
+    // If no type-specific match, use the first entity
+    if (!matchedEntity && entities.length > 0) {
+      matchedEntity = entities[0];
+    }
+
+    // Set parameter value
+    if (matchedEntity) {
+      parameters[paramName] = matchedEntity.text;
+      console.log(`[CypherGenerator] Matched $${paramName} -> "${matchedEntity.text}" (${matchedEntity.type})`);
+    } else {
+      // No entity found - this will likely cause query failure
+      console.warn(`[CypherGenerator] No entity found for parameter $${paramName}`);
+    }
+  }
+
+  return parameters;
 }
 
 /**
@@ -447,30 +571,29 @@ Important Rules:
 2. Use MATCH for queries, never CREATE, DELETE, DROP, or MERGE
 3. Include LIMIT clause (max 100 results)
 4. Return node properties with properties(n) as props
-5. Use LITERAL values in queries (NOT $param placeholders)
+5. Use $param placeholders for all entity names and values (REQUIRED for parameterization)
 6. Entity names must match canonical names exactly (case-sensitive)
-7. Use single quotes for string literals
+7. Use $param placeholders instead of literal strings for all entity references
 
-Example Queries:
+Example Queries (using $param syntax):
 
 Q: "What projects did Sarah work on?"
-A: MATCH (p:Person {name: 'Sarah Johnson'})-[:WORKS_ON]->(proj:Project)
+A: MATCH (p:Person {name: $person_name})-[:WORKS_ON]->(proj:Project)
 RETURN p, proj, properties(proj) as props
 LIMIT 100
 
 Q: "Who leads GraphMind?"
-A: MATCH (p:Person)-[:LEADS]->(proj:Project {name: 'GraphMind'})
+A: MATCH (p:Person)-[:LEADS]->(proj:Project {name: $project_name})
 RETURN p, proj, properties(p) as props
 LIMIT 100
 
-Q: "Who attended meetings last week?"
-A: MATCH (p:Person)-[:ATTENDED]->(m:Meeting)
-WHERE m.date >= date() - duration('P7D')
-RETURN DISTINCT p, properties(p) as props
+Q: "Who attended meetings about AI?"
+A: MATCH (p:Person)-[:ATTENDED]->(m:Meeting)-[:DISCUSSED]->(t:Topic {name: $topic_name})
+RETURN DISTINCT p, m, properties(m) as mprops
 LIMIT 100
 
 Q: "What technologies does the FastAPI project use?"
-A: MATCH (proj:Project {name: 'FastAPI'})-[:USES_TECHNOLOGY]->(tech:Technology)
+A: MATCH (proj:Project {name: $project_name})-[:USES_TECHNOLOGY]->(tech:Technology)
 RETURN proj, tech, properties(tech) as props
 LIMIT 100
 
@@ -517,11 +640,18 @@ function levenshteinDistance(a, b) {
 }
 
 /**
+ * @typedef {Object} ResolvedEntity
+ * @property {string} name - Canonical or original entity name
+ * @property {string|null} type - Entity type (e.g., 'Person', 'Project')
+ * @property {string|null} id - Entity ID if found
+ */
+
+/**
  * Resolve entity name to canonical name using fuzzy matching against cache
  * @param {string} entityName - Extracted entity name
  * @param {string} userId - User ID
  * @param {Object} env - Environment bindings
- * @returns {Promise<string>} Canonical name or original name
+ * @returns {Promise<ResolvedEntity>} Resolved entity with name, type, and id
  */
 export async function resolveEntity(entityName, userId, env) {
   try {

@@ -9,11 +9,11 @@ async function testRestAPI() {
   console.log('🚀 Testing FalkorDB REST API Implementation\n');
   console.log('=' .repeat(60));
 
-  // Use REST API wrapper running on localhost:3001
+  // Use REST API wrapper running on localhost:3013
   // (Start with: node scripts/falkordb-rest-api.js)
   const config = {
     host: 'localhost',
-    port: 3001,
+    port: 3013,
     username: 'default',  // Not used for REST API
     password: '',         // Not used for REST API
   };

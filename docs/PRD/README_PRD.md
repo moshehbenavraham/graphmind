@@ -21,10 +21,13 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 
 ## 🎯 Current Status
 
-**Last Updated**: 2025-11-14 13:45 UTC
-**Current Phase**: Phase 3 - Voice Query System
-**Phase Progress**: 100% complete (Features 008-010 deployed and verified) ✅
-**Next Spec**: [Frontend Deployment to Cloudflare Pages](NEXT_SPEC.md)
+**Last Updated**: 2025-11-29 (Auto-updated by /updateprd)
+**Current Phase**: Phase 4 - Polish & Features (Critical Bugfix In Progress)
+**Phase Progress**: Phases 1-3 Complete + Security Hardening + GraphRAG 2.0 Validation + Neo-Brutalist UI
+**Overall Project**: ~70% complete (15 features implemented, 13 validated ready)
+**Next Priority**: 🔄 **Feature 015** - Entity Role Assignment Bug Fix (93% complete)
+**Security Status**: ✅ All P0 vulnerabilities resolved (Features 012-014)
+**UI Status**: ✅ Neo-Brutalist Design System complete (0.3.13)
 
 ### Implementation Progress
 
@@ -33,200 +36,60 @@ Welcome to the GraphMind documentation! This guide will help you navigate throug
 | Phase 1: Foundation | ✅ Complete | 100% | 2025-11-11 |
 | Phase 2: Knowledge Graph | ✅ Complete | 100% | 2025-11-12 |
 | Phase 3: Voice Query | ✅ Complete | 100% | 2025-11-14 |
-| Phase 4: Polish & Features | 🔲 Not Started | 0% | - |
-| Phase 5: Advanced Features | 🔲 Not Started | 0% | - |
-
-**Phase 3 Status - COMPLETE** ✅ (100%):
-- ✅ Feature 008: Voice Query Input & Graph Querying - **DEPLOYED AND VERIFIED** ✅ (282/282 tasks, 100%)
-  - Backend 100% complete (voice recording, Cypher generation, query execution, history management)
-  - Frontend 100% complete (VoiceQueryRecorder, QueryResults, QueryHistory, VoiceQueryApp components)
-  - LLM fallback 100% complete (two-tier: Llama 8b → DeepSeek Qwen 32b, 99% success rate)
-  - Security 100% complete (8/8 checks passed)
-  - Production verified (smoke tests 5/5 passed, infrastructure configured)
-  - **Status**: ✅ Deployed 2025-11-13, Verified 2025-11-14
-  - **Deployment Score**: 95/100 ✅
-  - **Validation Report**: [validation.md](../../specs/008-voice-query-input/validation.md)
-
-- ✅ Feature 009: Answer Generation with LLM - **READY FOR DEPLOYMENT** ✅ (223/223 tasks, 100%)
-  - AnswerGenerator service with Llama 3.1-8b integration (267 lines)
-  - Hallucination detection & validation system (392 lines)
-  - All 5 answer types supported (entity, relationship, temporal, count, list)
-  - KV caching with 1-hour TTL (user-isolated keys)
-  - Test suite: 50+ queries, load test framework, smoke test script
-  - **Status**: ✅ All blockers resolved (D1 migration applied)
-  - **Deployment Score**: 98/100 ✅
-  - **Validation Report**: [validation.md](../../specs/009-answer-generation/validation.md)
-
-- ✅ Feature 010: Text-to-Speech Responses - **DEPLOYED TO PRODUCTION** ✅ (157/157 tasks, 98%)
-  - TTSSynthesizer service with Deepgram Aura-2 integration
-  - Audio streaming with chunked encoding
-  - KV caching for TTS responses (1-hour TTL)
-  - QuerySessionManager TTS integration
-  - AudioPlayer React component with playback controls
-  - **Status**: ✅ LIVE in production since 2025-11-14
-  - **Monitoring**: 24-hour production monitoring in progress (3 tasks remaining)
-  - **Validation Report**: [validation.md](../../specs/010-tts-responses/validation.md)
-
-- 🔲 Feature 011: Conversation Context Management - **Not Started** (planned)
-
-**Phase 2 Complete**:
-- ✅ Feature 004: Voice Note Capture & Transcription - Completed 2025-11-11
-- ✅ Feature 005: Entity Extraction Pipeline - Completed 2025-11-11
-- ✅ Feature 006: Knowledge Graph Building - Completed 2025-11-12
-
-### Next Up
-
-**Frontend Deployment to Cloudflare Pages** - [See NEXT_SPEC.md](NEXT_SPEC.md)
-- **What**: Deploy React frontend with authentication, voice query UI, and graph visualization
-- **Why**: Backend is fully deployed and verified - ready for frontend integration
-- **Scope**: ~20,000 tokens, single context window
-- **Timeline**: 2-3 days (18-24 hours implementation)
-- **Priority**: P1 (High - enables user testing)
-
-**Key Deliverables**:
-- Vite + React Router build system setup
-- Authentication UI (login, register, JWT management)
-- Voice query interface (integrate existing components)
-- Graph visualization (D3.js or Vis.js)
-- Deployment to Cloudflare Pages
-- CORS configuration and testing
-
-**Alternative Options**:
-1. **Feature 011**: Conversation Context Management (complete Phase 3 backend)
-2. **Phase 4 Features**: Graph Visualization, Search, Entity Management
-
-**Backend Status**: ✅ All deployed and working
-- Features 008-010: Deployed and verified
-- No blockers for frontend development
+| **Phase 3.5: Security (P0)** | **✅ Complete** | **100%** | **2025-11-24** |
+| **Phase 3.6: GraphRAG 2.0** | **✅ Complete** | **100%** | **2025-11-24** |
+| **Phase 3.7: Neo-Brutalist UI** | **✅ Complete** | **100%** | **2025-11-25** |
+| Phase 4: Polish & Features | 🔄 In Progress | 15% | Entity Bug Fix Active |
+| Phase 5: Advanced Features | 🔲 Planned | 0% | - |
 
 ### Recent Completions
 
-- ✅ **Answer Generation with LLM** ([009-answer-generation](../../specs/009-answer-generation)) - Validated 2025-11-14 ⚠️ Needs D1 migration + deployment
-  - AnswerGenerator service class with Llama 3.1-8b natural language synthesis
-  - Hallucination detection & validation (fuzzy matching, count validation, confidence scoring 0.0-1.0)
-  - Source citation extraction with temporal formatting ("from your notes on November 3rd")
-  - All 5 answer types: entity description, relationship, temporal, count, list queries
-  - KV answer caching (1-hour TTL, user-isolated, SHA-256 query hashing)
-  - Prompt optimization (~35% token reduction, temperature 0.7 normal / 0.4 strict)
-  - Context formatting with O(1) entity lookups (Map optimization)
-  - Empty result handling with "I don't know" templates
-  - Error fallback to formatted bullet lists when LLM unavailable
-  - QuerySessionManager integration (generateAnswer, WebSocket events)
-  - Test suite: 50+ queries, 100-request load test, smoke test script
-  - **Metrics**: 223/223 tasks (100%), 811 lines across 5 core files
-  - **Status**: ✅ Ready for Production (deployment score: 92/100, 1 P1 blocker: D1 migration)
-  - **Validation**: [validation.md](../../specs/009-answer-generation/validation.md)
+- ✅ **Neo-Brutalist UI Design System** (v0.3.5-0.3.13) - Completed 2025-11-25
+  - 19 design system files created, 14 components transformed
+  - 6 legacy CSS files deleted (~1,400 lines)
+  - Complete visual language across application
 
-- ⚠️ **Voice Query Input & Graph Querying** ([008-voice-query-input](../../specs/008-voice-query-input)) - Validated 2025-11-13 ⚠️ Needs E2E testing + deployment
-  - 4 P1 user stories: Voice recording, query execution, results display, query history (100% backend + frontend)
-  - QuerySessionManager Durable Object with WebSocket protocol (8 events: recording, transcription, Cypher generation, results)
-  - 5 Cypher query templates (entity lookup, relationship, temporal, list, count) with 80% coverage
-  - Two-tier LLM fallback (Llama 3.1-8b → DeepSeek R1 Qwen 32B) achieving 99% query success rate (exceeds 95% target)
-  - Natural language to Cypher conversion with template matching + LLM generation (3s timeout tier 1, 5s tier 2)
-  - Query execution via FalkorDB with two-tier caching (query cache + Cypher cache, <100ms cached, <500ms uncached)
-  - 3 REST API endpoints (POST /api/query/start, GET /api/query/history, GET /api/query/:query_id)
-  - WebSocket endpoint (/ws/query/:session_id) for real-time audio streaming and results delivery
-  - Result formatting with entities, relationships, metadata (execution time, entity count, cached flag)
-  - D1 persistence (voice_queries table) with query history, pagination, ownership validation
-  - Rate limiting (30 queries/hour start, 60/hour history, 120/hour details) with sliding window
-  - Security: User namespace isolation (user_{user_id}_graph), parameterized queries, destructive op blocking
-  - Frontend: 4 React components (VoiceQueryRecorder, QueryResults, QueryHistory, VoiceQueryApp)
-  - Test suites: 31 integration tests, 14 E2E tests (structure complete), 10 performance tests (created)
-  - **Metrics**: 282/282 tasks (100%), 11 implementation files, 14 E2E test files, 4 integration test suites
-  - **Performance**: Two-tier LLM fallback (99% vs 95% target), all security checks passed (8/8)
-  - **Status**: ⚠️ Issues Found - Feature functional, needs E2E test execution + production deployment (9-12 hours)
-  - **Validation**: [validation.md](../../specs/008-voice-query-input/validation.md)
+- ✅ **Feature 014: GraphRAG 2.0 Validation** ([014-graphrag-validation-deployment](../../specs/014-graphrag-validation-deployment)) - 2025-11-24
+  - 87/87 automated tasks complete, ready for production deployment
+  - Semantic search, graph traversal, user isolation all validated
+  - RBAC + rate limiting security hardened
 
-- ✅ **Knowledge Graph Building** ([006-knowledge-graph-building](../../specs/006-knowledge-graph-building)) - Completed 2025-11-12
-  - FalkorDB GraphRAG integration via REST API wrapper (localhost:3001)
-  - Automatic knowledge graph population from extracted entities (51ms sync time, 99% better than 5s target)
-  - Entity deduplication with hybrid fuzzy matching (100% accuracy on test pairs, exceeds 90% target)
-  - High-performance graph queries (9ms uncached, 8ms cached, exceeds targets by 92-98%)
-  - KV cache layer with 84% hit rate (Query: 87.5%, Stats: 95%, Neighborhood: 75%)
-  - User namespace isolation (10/10 security tests passed, zero data leakage)
-  - 11 REST API endpoints (graph retrieval, search, stats, CRUD operations, manual sync)
-  - Background processing via Cloudflare Queues (graph-sync-jobs, batch size 5, 3 retries)
-  - FalkorDB schema: 7 node types, 8 relationship types, 19 indexes created
-  - Production hardening: Error handling, retry logic, rollback, DLQ, comprehensive logging
-  - Complete documentation: API docs, schema, troubleshooting, analytics configuration
-  - **Metrics**: 148/188 tasks complete (79%), 25 implementation files, 8 comprehensive test suites
-  - **Performance**: All targets exceeded by 92-99%, 1,000 entity scale validated
-  - **Status**: ✅ READY FOR DEPLOYMENT
+- ✅ **Feature 013: Security Validation** ([013-security-validation](../../specs/013-security-validation)) - 2025-11-24
+  - 93% security tests passing (25/27)
+  - All injection attacks blocked (13/13)
+  - Zero data leakage confirmed
 
-- ✅ **Entity Extraction Pipeline** ([005-entity-extraction](../../specs/005-entity-extraction)) - Completed 2025-11-11
-  - Llama 3.1-8b integration for 7 entity types (Person, Project, Meeting, Topic, Technology, Location, Organization)
-  - Entity resolution with KV + D1 two-tier caching and fuzzy matching
-  - Background processing via Cloudflare Queues (batch size 10, 3 retries with exponential backoff)
-  - 4 production-ready REST API endpoints (manual/batch extraction, entity lookup, cache queries)
-  - Queue consumer worker with idempotency and dead letter queue handling
-  - Workers AI integration with confidence scoring (0.8 threshold)
-  - D1 migration (0003_entity_extraction.sql) with entity_cache table and 4 indexes
-  - Complete test suite: 72 tests (30 unit + 42 integration)
-  - Deployment script and comprehensive documentation (8 files)
-  - **Metrics**: 108/108 tasks complete (100%), 25 implementation files, 7,450+ lines of code
-  - **Status**: ✅ READY FOR PRODUCTION DEPLOYMENT
+- ✅ **Feature 012: Security Hardening** ([012-security-hardening](../../specs/012-security-hardening)) - 2025-11-24
+  - 102/102 tasks complete (100%)
+  - Cypher Injection (CVSS 9.1), Cross-Site Data Theft (CVSS 8.6) - FIXED
+  - Native parameterization, API authentication, CORS enabled
 
-- ✅ **Voice Note Capture & Transcription** ([004-voice-note-capture](../../specs/004-voice-note-capture)) - Completed 2025-11-11
-  - VoiceSessionManager Durable Object (593 lines, full WebRTC + WebSocket support)
-  - 4 REST API endpoints (start-recording, list, get, delete)
-  - Real-time transcript streaming via WebSocket
-  - Deepgram Nova-3 STT integration via Workers AI
-  - Voice notes persistence in D1 with metadata (duration, word count)
-  - 5 production-grade frontend components (React)
-  - Audio utilities with validation and transcription support
-  - Session management and D1 query utilities
-  - Structured logging system
-  - D1 migration (0002_voice_notes_enhancements.sql)
-  - 5 comprehensive documentation files (API docs, deployment guide, test plan, logging guide, completion summary)
-  - **Metrics**: 126/126 tasks complete (100%), 38 implementation files, 10,000+ lines of code
-  - **Status**: ✅ READY FOR DEPLOYMENT
-
-- ✅ **FalkorDB Connection & Pooling** ([003-falkordb-connection](../../specs/003-falkordb-connection)) - Completed 2025-11-11
-  - Durable Object connection pooling (10 connections, 5ms latency)
-  - User namespace isolation (automatic provisioning)
-  - Health check endpoint (`GET /api/health/falkordb`)
-  - Graph init endpoint (`POST /api/graph/init`)
-  - Basic graph operations (CREATE, MATCH, DELETE, relationships)
-  - Rate limiting (60/min health, 10/min init per user)
-  - Production-ready with complete documentation
-  - **Performance**: All targets exceeded (5ms vs 200ms target)
-
-- ✅ **Authentication System** ([002-auth-system](../../specs/002-auth-system)) - Deployed 2025-11-10
-  - User registration with JWT tokens
-  - Secure login with bcrypt password hashing
-  - Protected routes with authentication middleware
-  - Rate limiting (5 login attempts, 10 registrations)
-  - User data isolation (namespace per user)
-  - **Live in Production**: https://graphmind-api.apex-web-services-llc-0d4.workers.dev
-
-- ✅ **Wrangler Configuration & Project Setup** ([001-wrangler-setup](../../specs/001-wrangler-setup)) - Completed 2025-11-10
-  - Cloudflare Workers project initialized
-  - D1 database created (users, sessions, voice_notes tables)
-  - KV, R2, Workers AI bindings configured
-  - Basic Worker with health check endpoints
+- ✅ **Feature 010: TTS Responses** ([010-tts-responses](../../specs/010-tts-responses)) - Deployed 2025-11-14
+  - 157/157 tasks complete, live in production
+  - Deepgram Aura-2 integration with audio streaming
 
 ### In Progress
 
-- ⚠️ **Phase 3 Deployment** - Features 008 & 009 ready for deployment
-  - Feature 008 (Voice Query): Implementation complete, E2E tests pending (4-6 hours)
-  - Feature 009 (Answer Generation): Implementation complete, D1 migration + testing (45-90 minutes)
-  - Combined deployment: Apply migrations, test locally, deploy to production
+- 🔄 **Feature 015: Entity Role Bug Fix** ([015-entity-role-bugfix](../../specs/015-entity-role-bugfix)) - 93% complete
+  - 55/59 tasks complete, 4 remaining
+  - Pattern detection implemented (<1ms performance)
+  - Ready for local validation
+
+### Current Blocker
+
+🔄 **Feature 011 - Frontend Deployment**: Deployed but voice queries failing
+- **Bug**: Entity Role Assignment in Cypher query generation
+- **Impact**: "Who VERBS X?" queries fail (incorrect direction)
+- **Status**: Fix in progress via Feature 015 (93% complete)
+- **Fix Location**: `src/services/cypher-generator.js`
 
 ### Next Up
 
-🎯 **Phase 3 Complete!** Run `/nextspec` to get next recommendation (Feature 010 or Phase 4)
-
-**Phase 3 Completion Status**:
-- ✅ Feature 008: Voice Query Input & Graph Querying - Validated (282/282 tasks, 100%)
-- ✅ Feature 009: Answer Generation with LLM - Validated (223/223 tasks, 100%)
-- 🔲 Feature 010: Text-to-Speech Responses - Next up (dependencies satisfied)
-- 🔲 Feature 011: Conversation Context - After Feature 010
-
-**Recommended Next Steps**:
-1. **Deploy Phase 3**: Apply D1 migration, test locally, deploy Features 008 & 009 (10-18 hours total)
-2. **Continue to Feature 010**: Text-to-Speech Responses (Deepgram Aura TTS integration)
-3. **OR Start Phase 4**: Multi-source ingestion, search, error handling polish
-4. **Run `/nextspec`**: Get AI recommendation for highest-value next feature
+🎯 After Feature 015 completes:
+1. Validate local voice queries work correctly
+2. Deploy fix to production
+3. Mark Feature 011 as fully functional
+4. Continue Phase 4 features (search, entity management, PWA)
 
 ---
 
@@ -280,7 +143,8 @@ Detailed breakdown of development phases with deliverables, tasks, and acceptanc
 - PWA support & dark mode
 - Performance optimization
 
-### [Phase 5: Advanced Features (Future)](./phases/phase-5-advanced.md)
+### Phase 5: Advanced Features (Future)
+**Status:** Archived (Post-MVP planning moved to [archive/phase-5-advanced.md](./archive/phase-5-advanced.md))
 **Goal:** Additional capabilities post-MVP
 - Multi-user collaboration
 - Voice commands
@@ -463,17 +327,20 @@ See [Section 2.1 in PRD](./REQUIREMENTS-PRD.md#21-high-level-architecture) for d
 
 ##  Project Status
 
-**Current Phase:** Planning / Pre-Implementation
-**Target MVP:** 12 weeks from start
-**Status:** Requirements approved, ready for Phase 1
+**Current Phase:** Phase 4 - Polish & Features
+**Overall Progress:** ~70% complete
+**Status:** Production deployed, critical bugfix in progress
 
 ### Phase Status Overview
 - [x] **Planning Complete:** PRD approved, architecture defined
--  **Phase 1:** Ready to start (Foundation)
--  **Phase 2:** Pending (Knowledge Graph)
--  **Phase 3:** Pending (Voice Query)
--  **Phase 4:** Pending (Polish & Features)
--  **Phase 5:** Future (Advanced Features)
+- [x] **Phase 1:** Complete (Foundation) - 2025-11-11
+- [x] **Phase 2:** Complete (Knowledge Graph) - 2025-11-12
+- [x] **Phase 3:** Complete (Voice Query) - 2025-11-14
+- [x] **Phase 3.5:** Complete (Security Hardening) - 2025-11-24
+- [x] **Phase 3.6:** Complete (GraphRAG 2.0 Validation) - 2025-11-24
+- [x] **Phase 3.7:** Complete (Neo-Brutalist UI) - 2025-11-25
+- [ ] **Phase 4:** In Progress (Polish & Features) - 25% complete
+- [ ] **Phase 5:** Archived (Post-MVP)
 
 ---
 
@@ -491,8 +358,8 @@ See [Section 2.1 in PRD](./REQUIREMENTS-PRD.md#21-high-level-architecture) for d
 ##  Contact & Support
 
 **Project Owner:** Development Team
-**Documentation Version:** 1.0
-**Last Updated:** 2025-11-10
+**Documentation Version:** 1.14
+**Last Updated:** 2025-12-02
 
 **Questions?**
 - Review existing documentation
@@ -507,13 +374,14 @@ See [Section 2.1 in PRD](./REQUIREMENTS-PRD.md#21-high-level-architecture) for d
 docs/PRD/
  README_PRD.md (this file)
  REQUIREMENTS-PRD.md (complete PRD)
+ IMPLEMENTATION_REPORT.md (auto-generated status report)
+ NEXT_SPEC.md (current work item)
 
  phases/
-    phase-1-foundation.md
-    phase-2-knowledge-graph.md
-    phase-3-voice-query.md
-    phase-4-polish.md
-    phase-5-advanced.md
+    phase-1-foundation.md (COMPLETE)
+    phase-2-knowledge-graph.md (COMPLETE)
+    phase-3-voice-query.md (COMPLETE)
+    phase-4-polish.md (IN PROGRESS)
 
  requirements/
     functional/
@@ -525,10 +393,14 @@ docs/PRD/
  technical/
     database-schemas.md
     api-specifications.md
+    falkordb-deployment.md
 
  project/
      risks-and-mitigations.md
      success-metrics.md
+
+ archive/
+     phase-5-advanced.md (Post-MVP planning)
 ```
 
 ---
@@ -560,6 +432,9 @@ docs/PRD/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.14 | 2025-12-02 | PRD documentation audit: Updated phase statuses, archived Phase 5, fixed navigation map, synchronized all documentation with actual implementation state (~70% complete). |
+| 1.13 | 2025-11-24 | **Feature 012 VALIDATED & READY FOR PRODUCTION**: Security Hardening (102/102 tasks, 9/9 validation checks passed). All 3 CRITICAL vulnerabilities resolved & validated. Phase 3.5 complete (100%). |
+| 1.9 | 2025-11-24 | Feature 012 implementation complete: Security Hardening - P0 Critical Fixes (82/82 tasks, 100%). All 3 CRITICAL vulnerabilities resolved. |
 | 1.8 | 2025-11-13 | Feature 008 validated: Voice Query Input & Graph Querying (100% implementation, testing pending) |
 | 1.0 | 2025-11-10 | Initial documentation release |
 

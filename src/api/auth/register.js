@@ -59,9 +59,11 @@ export async function handleRegister(request, env) {
     // T031: Validate input
     const validation = validateRegistrationInput(body);
     if (!validation.valid) {
+      // @ts-ignore - errors is defined when valid is false
       return validationError(validation.errors);
     }
 
+    // @ts-ignore - sanitized is defined when valid is true
     const { email, password, name } = validation.sanitized;
 
     // T032: Check registration rate limit
@@ -69,9 +71,11 @@ export async function handleRegister(request, env) {
     const rateLimit = await checkRegisterRateLimit(clientIP, env.KV);
 
     if (rateLimit.blocked) {
+      // @ts-ignore - retryAfter is defined when blocked is true
       const minutes = Math.ceil(rateLimit.retryAfter / 60);
       return rateLimitError(
         `Registration limit exceeded. Please try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`,
+        // @ts-ignore - retryAfter is defined when blocked is true
         rateLimit.retryAfter
       );
     }

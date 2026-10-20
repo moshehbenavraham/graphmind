@@ -20,25 +20,26 @@ function getTraceId(request) {
 
 /**
  * Normalize FalkorDB connection config and provide sensible defaults.
- * Falls back to 443 when using https hosts and 6380 for local dev.
+ * Falls back to 443 when using https hosts and 6383 for local dev.
  * @param {Object} env
- * @returns {{host: string, port: number, username: string, password: string}}
+ * @returns {{host: string, port: number, username: string, password: string, apiKey: string}}
  */
 function buildFalkorConfig(env) {
   const host = env.FALKORDB_HOST;
   const username = env.FALKORDB_USER || 'default';
   const password = env.FALKORDB_PASSWORD || '';
+  const apiKey = env.FALKORDB_REST_API_KEY;
   const rawPort = env.FALKORDB_PORT;
   const portNumber = Number(rawPort);
 
-  const defaultPort = host && host.startsWith('http') ? 443 : 6380;
+  const defaultPort = host && host.startsWith('http') ? 443 : 6383;
   const port = Number.isFinite(portNumber) ? portNumber : defaultPort;
 
   if (!host) {
     throw new Error('FALKORDB_HOST is not configured');
   }
 
-  return { host, port, username, password };
+  return { host, port, username, password, apiKey };
 }
 
 /**
@@ -153,16 +154,17 @@ async function addSeedData(env, userId) {
   const poolStub = env.FALKORDB_POOL.get(poolId);
 
   // Step 1: Create people, projects, and technologies
+  // IMPORTANT: All nodes must include user_id for proper isolation and querying
   const query1 = `
     CREATE
-      (p1:Person {name: "Alice Johnson", role: "CEO", email: "alice@example.com"}),
-      (p2:Person {name: "Bob Smith", role: "CTO", email: "bob@example.com"}),
-      (p3:Person {name: "Carol White", role: "Designer", email: "carol@example.com"}),
-      (proj1:Project {name: "GraphMind", status: "active", priority: "high"}),
-      (proj2:Project {name: "Mobile App", status: "planning", priority: "medium"}),
-      (tech1:Technology {name: "Cloudflare Workers", category: "infrastructure"}),
-      (tech2:Technology {name: "FalkorDB", category: "database"}),
-      (tech3:Technology {name: "React", category: "frontend"}),
+      (p1:Person {name: "Alice Johnson", role: "CEO", email: "alice@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (p2:Person {name: "Bob Smith", role: "CTO", email: "bob@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (p3:Person {name: "Carol White", role: "Designer", email: "carol@example.com", user_id: $user_id, entity_id: randomUUID()}),
+      (proj1:Project {name: "GraphMind", status: "active", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (proj2:Project {name: "Mobile App", status: "planning", priority: "medium", user_id: $user_id, entity_id: randomUUID()}),
+      (tech1:Technology {name: "Cloudflare Workers", category: "infrastructure", user_id: $user_id, entity_id: randomUUID()}),
+      (tech2:Technology {name: "FalkorDB", category: "database", user_id: $user_id, entity_id: randomUUID()}),
+      (tech3:Technology {name: "React", category: "frontend", user_id: $user_id, entity_id: randomUUID()}),
       (p1)-[:LEADS]->(proj1),
       (p2)-[:WORKS_ON]->(proj1),
       (p3)-[:WORKS_ON]->(proj1),
@@ -175,18 +177,19 @@ async function addSeedData(env, userId) {
   `;
 
   // Step 2: Add meetings and topics
+  // Match by user_id to ensure we're connecting to the right nodes
   const query2 = `
     MATCH
-      (alice:Person {name: "Alice Johnson"}),
-      (bob:Person {name: "Bob Smith"}),
-      (carol:Person {name: "Carol White"}),
-      (gm:Project {name: "GraphMind"})
+      (alice:Person {name: "Alice Johnson", user_id: $user_id}),
+      (bob:Person {name: "Bob Smith", user_id: $user_id}),
+      (carol:Person {name: "Carol White", user_id: $user_id}),
+      (gm:Project {name: "GraphMind", user_id: $user_id})
     CREATE
-      (m1:Meeting {title: "GraphMind Kickoff", date: "2025-01-10", duration: 60}),
-      (m2:Meeting {title: "Design Review", date: "2025-01-15", duration: 45}),
-      (topic1:Topic {name: "Voice AI", category: "feature"}),
-      (topic2:Topic {name: "Knowledge Graph", category: "architecture"}),
-      (topic3:Topic {name: "User Interface", category: "design"}),
+      (m1:Meeting {title: "GraphMind Kickoff", date: "2025-01-10", duration: 60, user_id: $user_id, entity_id: randomUUID()}),
+      (m2:Meeting {title: "Design Review", date: "2025-01-15", duration: 45, user_id: $user_id, entity_id: randomUUID()}),
+      (topic1:Topic {name: "Voice AI", category: "feature", user_id: $user_id, entity_id: randomUUID()}),
+      (topic2:Topic {name: "Knowledge Graph", category: "architecture", user_id: $user_id, entity_id: randomUUID()}),
+      (topic3:Topic {name: "User Interface", category: "design", user_id: $user_id, entity_id: randomUUID()}),
       (alice)-[:ATTENDED]->(m1),
       (bob)-[:ATTENDED]->(m1),
       (carol)-[:ATTENDED]->(m1),
@@ -202,18 +205,19 @@ async function addSeedData(env, userId) {
   `;
 
   // Step 3: Add tasks and decisions
+  // Match by user_id to ensure we're connecting to the right nodes
   const query3 = `
     MATCH
-      (alice:Person {name: "Alice Johnson"}),
-      (bob:Person {name: "Bob Smith"}),
-      (carol:Person {name: "Carol White"}),
-      (gm:Project {name: "GraphMind"})
+      (alice:Person {name: "Alice Johnson", user_id: $user_id}),
+      (bob:Person {name: "Bob Smith", user_id: $user_id}),
+      (carol:Person {name: "Carol White", user_id: $user_id}),
+      (gm:Project {name: "GraphMind", user_id: $user_id})
     CREATE
-      (task1:Task {title: "Implement voice transcription", status: "completed", priority: "high"}),
-      (task2:Task {title: "Design dashboard UI", status: "in_progress", priority: "high"}),
-      (task3:Task {title: "Setup database", status: "completed", priority: "high"}),
-      (dec1:Decision {title: "Use FalkorDB for knowledge graph", date: "2025-01-05", rationale: "Better performance for graph queries"}),
-      (dec2:Decision {title: "Deploy on Cloudflare Workers", date: "2025-01-08", rationale: "Global edge network, low latency"}),
+      (task1:Task {title: "Implement voice transcription", status: "completed", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (task2:Task {title: "Design dashboard UI", status: "in_progress", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (task3:Task {title: "Setup database", status: "completed", priority: "high", user_id: $user_id, entity_id: randomUUID()}),
+      (dec1:Decision {title: "Use FalkorDB for knowledge graph", date: "2025-01-05", rationale: "Better performance for graph queries", user_id: $user_id, entity_id: randomUUID()}),
+      (dec2:Decision {title: "Deploy on Cloudflare Workers", date: "2025-01-08", rationale: "Global edge network, low latency", user_id: $user_id, entity_id: randomUUID()}),
       (bob)-[:ASSIGNED_TO]->(task1),
       (carol)-[:ASSIGNED_TO]->(task2),
       (bob)-[:ASSIGNED_TO]->(task3),
@@ -227,30 +231,31 @@ async function addSeedData(env, userId) {
     RETURN count(*) as count
   `;
 
-  // SIMPLIFIED ERROR DEBUGGING - Remove all complex parsing to see raw error
-  let response;
-  try {
-    response = await poolStub.fetch('http://internal/execute-batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config,
-        userId,
-        operations: [
-          { cypher: query1, params: {} },
-          { cypher: query2, params: {} },
-          { cypher: query3, params: {} }
-        ]
-      })
-    });
-  } catch (fetchError) {
-    throw new Error(`FETCH_ERROR: ${fetchError.message || fetchError.toString()}`);
-  }
+    // SIMPLIFIED ERROR DEBUGGING - Remove all complex parsing to see raw error
+    let response;
+    try {
+      response = await poolStub.fetch('http://internal/execute-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config,
+          userId,
+          operations: [
+            { cypher: query1, params: { user_id: userId } },
+            { cypher: query2, params: { user_id: userId } },
+            { cypher: query3, params: { user_id: userId } }
+          ]
+        })
+      });
+    } catch (fetchError) {
+      throw new Error(`FETCH_ERROR: ${fetchError.message || fetchError.toString()}`);
+    }
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
-    throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
-  }
+    if (!response.ok) {
+      const errorText = await response.text().catch(e => 'ERROR_READING_BODY');
+      // DO NOT THROW "Failed to add seed data" here to avoid duplication
+      throw new Error(`POOL_ERROR_${response.status}: ${errorText}`);
+    }
 
   // Get final count
   const countResponse = await poolStub.fetch('http://internal/execute', {
@@ -313,20 +318,24 @@ async function addSeedData(env, userId) {
   // But for now, let's just run raw SQL inserts to avoid import issues if the lib isn't fully compatible with this worker context yet.
   // Actually, let's try to use the D1 binding directly for simplicity and reliability in this seed script.
 
+  // Include user_id_normalized for efficient indexed lookups (migration 0007)
   const stmt = env.DB.prepare(`
     INSERT OR REPLACE INTO entity_cache (
-      entity_key, user_id, canonical_name, entity_type, 
-      aliases, properties, confidence, mention_count, 
+      entity_key, user_id, user_id_normalized, canonical_name, entity_type,
+      aliases, properties, confidence, mention_count,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `);
 
   const batch = [];
+  const normalizedUserId = userId.replace(/-/g, '');  // Pre-normalize for indexed column
+
   for (const entity of entitiesToCache) {
-    const key = `${entity.type}:${entity.name} `.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const key = `${entity.type}:${entity.name}`.toLowerCase().replace(/[^a-z0-9]/g, '');
     batch.push(stmt.bind(
       key,
       userId,
+      normalizedUserId,  // user_id_normalized for efficient lookups
       entity.name,
       entity.type,
       '[]', // aliases
@@ -349,10 +358,10 @@ async function addSeedData(env, userId) {
  * Handle POST /api/seed-data
  * Add test knowledge graph data to authenticated user's namespace
  */
-export async function handleSeedData(request, env) {
+export async function handleSeedDataV2(request, env) {
   try {
     const traceId = getTraceId(request);
-    console.log('[SeedData v2.0] Function entry point - CODE_UPDATED_20251124');
+    console.log('[SeedData V2] Function entry point - FORCED UPDATE');
     // Validate FalkorDB configuration early for clearer errors
     buildFalkorConfig(env);
 
@@ -417,7 +426,7 @@ export async function handleSeedData(request, env) {
     });
 
     return errorResponse(
-      '[CODE_v2.0] Failed to add seed data: ' + (error?.message || 'Unknown error'),
+      '[V2_ERROR] Failed to add seed data: ' + (error?.message || 'Unknown error'),
       'SERVER_ERROR',
       500,
       { trace_id: traceId }

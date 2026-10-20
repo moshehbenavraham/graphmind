@@ -6,6 +6,8 @@ import DashboardPage from './pages/DashboardPage';
 import QueryPage from './pages/QueryPage';
 import HistoryPage from './pages/HistoryPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import AudioErrorBoundary from './components/AudioErrorBoundary';
+import WebSocketErrorBoundary from './components/WebSocketErrorBoundary';
 import DebugPanel from './components/DebugPanel';
 
 // Protected route wrapper - redirects to login if not authenticated
@@ -60,7 +62,15 @@ function App() {
               path="/query"
               element={
                 <ProtectedRoute>
-                  <QueryPage />
+                  <WebSocketErrorBoundary
+                    maxRetries={3}
+                    baseRetryDelay={1000}
+                    maxRetryDelay={10000}
+                  >
+                    <AudioErrorBoundary>
+                      <QueryPage />
+                    </AudioErrorBoundary>
+                  </WebSocketErrorBoundary>
                 </ProtectedRoute>
               }
             />

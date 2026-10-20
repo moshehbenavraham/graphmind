@@ -1,3 +1,7 @@
+// @ts-check
+/// <reference types="node" />
+/// <reference types="express" />
+
 /**
  * FalkorDB REST API Wrapper
  *
@@ -5,28 +9,85 @@
  * Forwards requests to FalkorDB using Redis protocol
  */
 
+require('dotenv').config(); // Load environment variables from .env
 const express = require('express');
 const { createClient } = require('redis');
+
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ */
 
 const app = express();
 app.use(express.json());
 
-// CORS for local development
+// API Key Authentication - REQUIRED
+const API_KEY = process.env.FALKORDB_REST_API_KEY;
+
+if (!API_KEY) {
+  console.error('FATAL: FALKORDB_REST_API_KEY not set in environment');
+  console.error('Generate with: openssl rand -hex 32');
+  console.error('Then add to .env: FALKORDB_REST_API_KEY=<generated_key>');
+  process.exit(1);
+}
+
+// CORS + Authentication Middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  // 1. CORS origin restriction
+  const allowedOrigins = [
+    'http://localhost:5176',           // Vite dev server
+    'http://localhost:8787',           // Wrangler dev server
+    'https://graphmind.pages.dev',     // Cloudflare Pages production
+    /^https:\/\/.*\.graphmind\.pages\.dev$/  // Preview deployments
+  ];
+
+  const origin = req.headers.origin;
+  const isAllowed = allowedOrigins.some(pattern => {
+    if (!origin) return false;
+    return typeof pattern === 'string' ? pattern === origin : pattern.test(origin);
+  });
+
+  if (isAllowed && origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests (no auth required)
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
+
+  // 2. Authentication check (all non-OPTIONS requests)
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+
+  const token = authHeader.substring(7); // Remove "Bearer " prefix
+  if (token !== API_KEY) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid authentication token'
+    });
+  }
+
   next();
 });
 
 // Redis/FalkorDB connection
+// Note: FALKORDB_REDIS_PORT is for direct Redis connection (default 6383)
+// FALKORDB_PORT is used by Workers to connect to this REST API (typically 3013)
 const redisClient = createClient({
   socket: {
     host: process.env.FALKORDB_HOST || 'localhost',
-    port: parseInt(process.env.FALKORDB_PORT || '6380')
+    port: parseInt(process.env.FALKORDB_REDIS_PORT || '6383')
   },
   username: process.env.FALKORDB_USER || 'default',
   password: process.env.FALKORDB_PASSWORD || ''
@@ -39,7 +100,7 @@ redisClient.on('error', err => console.error('[Redis] Error:', err));
   await redisClient.connect();
   console.log('[FalkorDB REST API] Connected to FalkorDB:', {
     host: process.env.FALKORDB_HOST || 'localhost',
-    port: process.env.FALKORDB_PORT || '6380',
+    port: process.env.FALKORDB_PORT || '6383',
     username: process.env.FALKORDB_USER || 'default'
   });
 })();
@@ -100,31 +161,43 @@ app.post('/api/graph/:graphName/query', async (req, res) => {
   }
 
   try {
-    // Interpolate parameters into query
-    let finalQuery = query;
-    for (const [key, value] of Object.entries(params)) {
-      const paramPlaceholder = `$${key}`;
-      let paramValue;
-
-      if (value === null || value === undefined) {
-        paramValue = 'null';
-      } else if (typeof value === 'string') {
-        paramValue = `"${value.replace(/"/g, '\\"')}"`;
-      } else if (typeof value === 'number' || typeof value === 'boolean') {
-        paramValue = String(value);
-      } else if (Array.isArray(value)) {
-        paramValue = '[' + value.map(v =>
-          typeof v === 'string' ? `"${v.replace(/"/g, '\\"')}"` : String(v)
-        ).join(', ') + ']';
-      } else {
-        paramValue = JSON.stringify(value);
-      }
-
-      finalQuery = finalQuery.replaceAll(paramPlaceholder, paramValue);
+    // Build CYPHER prefix for parameters
+    // FalkorDB requires params in "CYPHER key=value key2=value2" prefix format
+    let cypherPrefix = '';
+    if (params && Object.keys(params).length > 0) {
+      const paramStrings = Object.entries(params).map(([key, value]) => {
+        if (value === null || value === undefined) {
+          return `${key}=NULL`;
+        }
+        if (typeof value === 'string') {
+          // Escape double quotes in strings
+          return `${key}="${value.replace(/"/g, '\\"')}"`;
+        }
+        if (Array.isArray(value)) {
+          // Arrays (like embeddings) need special handling
+          // FalkorDB expects list format: [1,2,3]
+          return `${key}=${JSON.stringify(value)}`;
+        }
+        if (typeof value === 'boolean') {
+          return `${key}=${value}`;
+        }
+        // Numbers
+        return `${key}=${value}`;
+      });
+      cypherPrefix = 'CYPHER ' + paramStrings.join(' ') + ' ';
     }
 
+    const fullQuery = cypherPrefix + query;
+    const args = [
+      'GRAPH.QUERY',
+      graphName,
+      fullQuery
+      // Removed --compact: non-compact format returns readable property names
+      // instead of indexes that require schema lookup to decode
+    ];
+
     const startTime = Date.now();
-    const result = await redisClient.sendCommand(['GRAPH.QUERY', graphName, finalQuery]);
+    const result = await redisClient.sendCommand(args);
     const latency = Date.now() - startTime;
 
     // Parse FalkorDB result
@@ -167,22 +240,131 @@ app.delete('/api/graph/:graphName', async (req, res) => {
 });
 
 /**
- * Parse FalkorDB result from Redis protocol format
+ * Parse FalkorDB result from Redis protocol format (non-compact mode)
+ *
+ * Non-compact format uses [key, value] pairs for nodes/edges/maps:
+ * - Node: [["id", 1], ["labels", ["Person"]], ["properties", [[...pairs...]]]]
+ * - Edge: [["id", 1], ["type", "WORKS_ON"], ["src_node", 1], ["dest_node", 3], ["properties", [...]]]
+ * - Map: [[key, value], [key, value], ...]
+ */
+
+/**
+ * Check if an array looks like a [key, value] pair
+ */
+function isKeyValuePair(arr) {
+  return Array.isArray(arr) && arr.length === 2 && typeof arr[0] === 'string';
+}
+
+/**
+ * Convert an array of [key, value] pairs to an object
+ */
+function pairsToObject(pairs) {
+  const obj = {};
+  for (const pair of pairs) {
+    if (isKeyValuePair(pair)) {
+      const [key, value] = pair;
+      obj[key] = extractValue(value);
+    }
+  }
+  return obj;
+}
+
+/**
+ * Check if the value looks like a FalkorDB node structure
+ * Nodes have: id, labels, properties
+ */
+function isNodeStructure(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return false;
+  // Check if first element is ["id", number]
+  const first = arr[0];
+  return isKeyValuePair(first) && first[0] === 'id';
+}
+
+/**
+ * Check if the value looks like a FalkorDB edge structure
+ * Edges have: id, type, src_node, dest_node, properties
+ */
+function isEdgeStructure(arr) {
+  if (!Array.isArray(arr) || arr.length < 4) return false;
+  const keys = arr.filter(isKeyValuePair).map(p => p[0]);
+  return keys.includes('type') && keys.includes('src_node');
+}
+
+/**
+ * Extract a value from FalkorDB's non-compact format
+ * Recursively converts nested structures to JavaScript objects
+ */
+function extractValue(val) {
+  if (val === null || val === undefined) return null;
+
+  // If it's a primitive, return as-is
+  if (!Array.isArray(val)) return val;
+
+  // Empty array
+  if (val.length === 0) return [];
+
+  // Check if this is a node structure (has id, labels, properties)
+  if (isNodeStructure(val)) {
+    return pairsToObject(val);
+  }
+
+  // Check if this is an edge structure (has type, src_node, dest_node)
+  if (isEdgeStructure(val)) {
+    return pairsToObject(val);
+  }
+
+  // Check if this looks like an array of key-value pairs (map/properties)
+  if (val.every(isKeyValuePair)) {
+    return pairsToObject(val);
+  }
+
+  // Otherwise, recursively process array elements
+  return val.map(extractValue);
+}
+
+/**
+ * Extract column name from FalkorDB header format
+ * In non-compact mode, headers are just strings: ["source", "r", "target"]
+ */
+function extractColumnName(col, index) {
+  if (typeof col === 'string') {
+    return col;
+  }
+  if (Array.isArray(col) && col.length >= 2) {
+    return col[1]; // Fallback for compact format
+  }
+  return `col_${index}`;
+}
+
+/**
+ * @typedef {Object} ParsedFalkorDBResult
+ * @property {any[]} data - Parsed result rows
+ * @property {{columns?: string[], rawColumns?: any[]}} metadata - Query metadata
+ * @property {Record<string, string|number>} statistics - Query statistics
+ */
+
+/**
+ * @param {any} result
+ * @returns {ParsedFalkorDBResult}
  */
 function parseFalkorDBResult(result) {
   if (!result || !Array.isArray(result)) {
     return { data: [], metadata: {}, statistics: {} };
   }
 
+  /** @type {ParsedFalkorDBResult} */
   const parsed = {
     data: [],
     metadata: {},
     statistics: {},
   };
 
-  // Extract column headers
+  // Extract column headers - store both raw and extracted names
   if (result.length > 0 && Array.isArray(result[0])) {
-    parsed.metadata.columns = result[0];
+    const rawColumns = result[0];
+    // Extract clean column names for use as object keys
+    parsed.metadata.columns = rawColumns.map((col, idx) => extractColumnName(col, idx));
+    parsed.metadata.rawColumns = rawColumns; // Keep raw for debugging
   }
 
   // Extract result rows
@@ -194,7 +376,8 @@ function parseFalkorDBResult(result) {
       const rowObj = {};
       row.forEach((value, index) => {
         const columnName = columns[index] || `col_${index}`;
-        rowObj[columnName] = value;
+        // Extract the actual value from [type, value] format
+        rowObj[columnName] = extractValue(value);
       });
       return rowObj;
     });
@@ -210,7 +393,8 @@ function parseFalkorDBResult(result) {
           if (match) {
             const [, key, value] = match;
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
-            parsed.statistics[normalizedKey] = isNaN(value) ? value : parseFloat(value);
+            const numValue = parseFloat(value);
+            parsed.statistics[normalizedKey] = isNaN(numValue) ? value : numValue;
           }
         }
       });
@@ -221,7 +405,7 @@ function parseFalkorDBResult(result) {
 }
 
 // Start server
-const PORT = process.env.REST_API_PORT || 3001;
+const PORT = process.env.REST_API_PORT || 3013;
 app.listen(PORT, () => {
   console.log(`[FalkorDB REST API] Server listening on http://localhost:${PORT}`);
   console.log(`[FalkorDB REST API] Health check: http://localhost:${PORT}/health`);

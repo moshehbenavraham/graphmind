@@ -83,6 +83,7 @@ export async function handleCreateRelationship(request, env, user) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       }),
@@ -98,6 +99,7 @@ export async function handleCreateRelationship(request, env, user) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       }),
@@ -151,6 +153,7 @@ export async function handleCreateRelationship(request, env, user) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });

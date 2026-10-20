@@ -58,6 +58,7 @@ export async function handleGraphInit(request, env) {
           port: env.FALKORDB_PORT,
           username: env.FALKORDB_USER || env.FALKORDB_USERNAME,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY, // Feature 012 - Security Hardening
         },
         userId,
       }),

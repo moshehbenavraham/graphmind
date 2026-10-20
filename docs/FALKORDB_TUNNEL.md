@@ -23,9 +23,9 @@ GraphMind uses **Cloudflare Tunnel** to securely expose a local FalkorDB instanc
 Production Cloudflare Workers
     ↓ HTTPS
 Cloudflare Tunnel (falkordb-tunnel.aiwithapex.com)
-    ↓ HTTP (port 3001)
+    ↓ HTTP (port 3013)
 Local REST API Wrapper (scripts/falkordb-rest-api.js)
-    ↓ Redis Protocol (port 6380)
+    ↓ Redis Protocol (port 6383)
 Local FalkorDB Docker Container
 ```
 
@@ -91,7 +91,7 @@ credentials-file: /home/<YOUR_USERNAME>/.cloudflared/<YOUR_TUNNEL_ID>.json
 
 ingress:
   - hostname: falkordb-tunnel.aiwithapex.com
-    service: http://localhost:3001
+    service: http://localhost:3013
   - service: http_status:404
 ```
 
@@ -137,7 +137,7 @@ Or if container doesn't exist:
 ```bash
 docker run -d \
   --name falkordb-local \
-  -p 6380:6379 \
+  -p 6383:6379 \
   -v $(pwd)/falkordb-data:/data \
   falkordb/falkordb:latest
 ```
@@ -166,7 +166,7 @@ cloudflared tunnel run falkordb-tunnel &
 
 ```bash
 # Check local REST API
-curl http://localhost:3001/health
+curl http://localhost:3013/health
 # Expected: {"status":"healthy","redis":"connected",...}
 
 # Check tunnel (replace with your tunnel hostname)
@@ -208,7 +208,7 @@ bash scripts/stop-tunnel-services.sh
 
 ### REST API Connection Refused
 
-**Symptom**: `[Redis] Error: connect ECONNREFUSED 127.0.0.1:6380`
+**Symptom**: `[Redis] Error: connect ECONNREFUSED 127.0.0.1:6383`
 
 **Fixes**:
 1. Check FalkorDB container: `docker ps | grep falkordb`
@@ -221,7 +221,7 @@ bash scripts/stop-tunnel-services.sh
 
 **Fixes**:
 1. Verify all 3 services running (Docker, REST API, Tunnel)
-2. Test local health: `curl http://localhost:3001/health`
+2. Test local health: `curl http://localhost:3013/health`
 3. Test tunnel: `curl https://YOUR_TUNNEL_HOSTNAME/health`
 4. Check Workers secret: `npx wrangler secret list` (must have `FALKORDB_HOST`)
 5. Verify `FALKORDB_HOST` matches tunnel hostname exactly
@@ -397,7 +397,7 @@ The REST API wrapper approach (`scripts/falkordb-rest-api.js`) works with:
 A: Yes, for production Workers to access FalkorDB. Consider migrating to VPS for always-on deployment.
 
 **Q: Can I use this for development?**
-A: Yes! Just connect to `http://localhost:3001` instead of the tunnel hostname.
+A: Yes! Just connect to `http://localhost:3013` instead of the tunnel hostname.
 
 **Q: What happens if the tunnel disconnects?**
 A: Cloudflare auto-reconnects. If it fails, systemd will restart the service (if configured).

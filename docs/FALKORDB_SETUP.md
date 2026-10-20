@@ -10,7 +10,7 @@
 
 ### Recommended Setup by Environment:
 
-- **Development** (CURRENT): Self-hosted Docker on localhost:6380
+- **Development** (CURRENT): Self-hosted Docker on localhost:6383
   - ✅ Sub-millisecond performance (<1ms connection, 0.32ms node creation)
   - ✅ Zero cost, no API limits
   - ✅ See [FalkorDB Deployment Options](PRD/technical/falkordb-deployment.md) for setup

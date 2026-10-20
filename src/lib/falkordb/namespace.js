@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB Namespace Management
  *
@@ -9,6 +12,11 @@
 
 import { executeCypher, listGraphs, graphExists } from './client.js';
 import { normalizeError } from './errors.js';
+
+/**
+ * @typedef {import('./types.js').RestClient} RestClient
+ * @typedef {import('./types.js').GraphStats} GraphStats
+ */
 
 /**
  * Generate namespace (graph name) for a user
@@ -137,7 +145,7 @@ export function sanitizeUserId(userId) {
  * Creates a graph by executing a simple query on it. This is idempotent -
  * if the graph already exists, the query succeeds without error.
  *
- * @param {Object} client - Redis client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph database to create
  * @returns {Promise<boolean>} True if created, false if already exists
  * @throws {Error} If creation fails
@@ -189,7 +197,7 @@ export async function createGraphDatabase(client, graphName) {
 /**
  * Check if a graph database exists
  *
- * @param {Object} client - Redis client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph database to check
  * @returns {Promise<boolean>} True if graph exists
  */
@@ -211,7 +219,7 @@ export async function graphDatabaseExists(client, graphName) {
  * Instead, you specify the graph name in each GRAPH.QUERY command.
  * This function validates that the graph exists before allowing operations.
  *
- * @param {Object} client - Redis client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph to switch to
  * @returns {Promise<boolean>} True if graph exists and is accessible
  * @throws {Error} If graph doesn't exist
@@ -241,7 +249,7 @@ export async function switchToGraph(client, graphName) {
  * Permanently deletes a user's graph database and all its data.
  * This operation cannot be undone.
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph database to delete
  * @returns {Promise<boolean>} True if deleted successfully
  * @throws {Error} If deletion fails
@@ -272,15 +280,15 @@ export async function deleteGraphDatabase(client, graphName) {
  *
  * Returns information about nodes, relationships, and properties in a graph.
  *
- * @param {Object} client - FalkorDB client instance
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph database
- * @returns {Promise<Object>} Graph statistics
+ * @returns {Promise<GraphStats>} Graph statistics
  *
  * @example
  * const stats = await getGraphStats(client, 'user_123_graph');
- * // { nodeCount: 42, relationshipCount: 15, propertyCount: 128 }
+ * // { graphName: 'user_123_graph', nodeCount: 42, relationshipCount: 15, exists: true }
  */
-export async function getGraphStats(db, graphName) {
+export async function getGraphStats(client, graphName) {
   if (!isValidGraphName(graphName)) {
     throw new Error(`Invalid graph name format: ${graphName}`);
   }
@@ -288,13 +296,13 @@ export async function getGraphStats(db, graphName) {
   try {
     // Query for basic statistics
     const nodeCountQuery = await executeCypher(
-      db,
+      client,
       graphName,
       'MATCH (n) RETURN count(n) as count'
     );
 
     const relationshipCountQuery = await executeCypher(
-      db,
+      client,
       graphName,
       'MATCH ()-[r]->() RETURN count(r) as count'
     );

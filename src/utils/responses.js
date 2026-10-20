@@ -39,6 +39,8 @@ export function successResponse(data, status = 200, headers = {}) {
  * @param {string} user.falkordb_namespace - FalkorDB namespace
  * @param {string} user.created_at - Account creation timestamp
  * @param {string} [user.password_hash] - Password hash (WILL BE STRIPPED)
+ * @param {boolean} [user.is_deleted] - Soft delete flag (WILL BE STRIPPED)
+ * @param {string} [user.updated_at] - Update timestamp (WILL BE STRIPPED)
  * @returns {Object} Sanitized user object
  */
 export function userResponse(user) {
@@ -79,11 +81,11 @@ export function authResponse(token, user, status = 200) {
  * Add CORS headers to response
  *
  * @param {Response} response - Response object
- * @param {string} [origin] - Allowed origin (default: *)
+ * @param {string|null} [origin] - Allowed origin (default: *)
  * @returns {Response} Response with CORS headers
  */
 export function addCorsHeaders(response, origin = '*') {
-  response.headers.set('Access-Control-Allow-Origin', origin);
+  response.headers.set('Access-Control-Allow-Origin', origin || '*');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   response.headers.set('Access-Control-Max-Age', '86400'); // 24 hours
@@ -94,7 +96,7 @@ export function addCorsHeaders(response, origin = '*') {
 /**
  * Handle OPTIONS preflight request
  *
- * @param {string} [origin] - Allowed origin (default: *)
+ * @param {string|null} [origin] - Allowed origin (default: *)
  * @returns {Response} 204 No Content with CORS headers
  */
 export function corsPreflightResponse(origin = '*') {
@@ -107,7 +109,7 @@ export function corsPreflightResponse(origin = '*') {
  *
  * @param {Response} response - Response object
  * @param {number} remaining - Remaining attempts
- * @param {number} [limit] - Total limit (optional)
+ * @param {number|null} [limit] - Total limit (optional)
  * @returns {Response} Response with rate limit headers
  */
 export function addRateLimitHeaders(response, remaining, limit = null) {

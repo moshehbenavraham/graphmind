@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB REST API Client
  *
@@ -8,17 +11,19 @@
  */
 
 /**
+ * @typedef {import('./types.js').FalkorDBConfig} FalkorDBConfig
+ * @typedef {import('./types.js').RestClient} RestClient
+ * @typedef {import('./types.js').RestApiResponse} RestApiResponse
+ */
+
+/**
  * Create a FalkorDB REST API client
  *
- * @param {Object} config - Connection configuration
- * @param {string} config.host - FalkorDB host
- * @param {number} config.port - FalkorDB port
- * @param {string} config.username - FalkorDB username
- * @param {string} config.password - FalkorDB password
- * @returns {Object} REST API client with query methods
+ * @param {FalkorDBConfig} config - Connection configuration
+ * @returns {RestClient} REST API client with query methods
  */
 export function createRestClient(config) {
-  const { host, port, username, password } = config;
+  const { host, port, username, password, apiKey } = config;
 
   if (!host) {
     throw new Error('FalkorDB host is not configured');
@@ -41,9 +46,18 @@ export function createRestClient(config) {
         : 'http';
 
   const needsPort = portNumber && ![80, 443].includes(portNumber);
-  const baseUrl = hasProtocol
-    ? sanitizedHost
-    : `${protocol}://${sanitizedHost}${needsPort ? `:${portNumber}` : ''}`;
+
+  let baseUrl;
+  if (hasProtocol) {
+    // Check if port is explicitly part of the host string already
+    const hostHasPort = /:\d+$/.test(sanitizedHost);
+    baseUrl = sanitizedHost;
+    if (needsPort && !hostHasPort) {
+      baseUrl = `${baseUrl}:${portNumber}`;
+    }
+  } else {
+    baseUrl = `${protocol}://${sanitizedHost}${needsPort ? `:${portNumber}` : ''}`;
+  }
 
   // Create Basic Auth header
   const authHeader = 'Basic ' + btoa(`${username}:${password}`);
@@ -75,11 +89,18 @@ export function createRestClient(config) {
       });
 
       try {
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add authentication header if API key is provided (Feature 012 - Security Hardening)
+        if (apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
         const response = await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             query: cypher,
             params: params
@@ -133,9 +154,12 @@ export function createRestClient(config) {
       if (command === 'PING') {
         // Health check - matches scripts/falkordb-rest-api.js endpoint
         try {
-          const response = await fetch(`${baseUrl}/health`, {
-            headers: { 'Content-Type': 'application/json' },
-          });
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(`${baseUrl}/health`, { headers });
 
           if (!response.ok) {
             throw new Error(`Health check failed: ${response.statusText}`);
@@ -155,9 +179,12 @@ export function createRestClient(config) {
       if (command === 'GRAPH.LIST') {
         // List all graphs - matches GET /api/graphs
         try {
-          const response = await fetch(`${baseUrl}/api/graphs`, {
-            headers: { 'Content-Type': 'application/json' },
-          });
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(`${baseUrl}/api/graphs`, { headers });
 
           if (!response.ok) {
             throw new Error(`Failed to list graphs: ${response.statusText}`);
@@ -175,9 +202,14 @@ export function createRestClient(config) {
         // Delete graph - matches DELETE /api/graph/:graphName
         const [graphName] = args;
         try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+
           const response = await fetch(`${baseUrl}/api/graph/${graphName}`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
           });
 
           if (!response.ok) {
@@ -257,8 +289,8 @@ function convertRestResultToRedisFormat(restResult) {
 /**
  * Connect to FalkorDB via REST API
  *
- * @param {Object} config - Connection configuration
- * @returns {Promise<Object>} Connected REST client
+ * @param {FalkorDBConfig} config - Connection configuration
+ * @returns {Promise<RestClient>} Connected REST client
  */
 export async function connectRest(config) {
   const client = createRestClient(config);

@@ -129,7 +129,7 @@ export function validateEntity(entity) {
  * Validate an array of entities
  *
  * @param {Array} entities - Array of entity objects
- * @returns {{ valid: boolean, validEntities: Array, invalidEntities: Array }}
+ * @returns {{ valid: boolean, validEntities: Array, invalidEntities: Array, errors?: string[] }}
  */
 export function validateEntities(entities) {
   if (!Array.isArray(entities)) {

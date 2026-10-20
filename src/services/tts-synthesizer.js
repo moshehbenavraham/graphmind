@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Text-to-Speech Synthesizer Service
  *
@@ -9,6 +11,20 @@
 
 import { sanitizeTextForTTS } from '../lib/audio/text-sanitizer.js';
 import { validateAudioData } from '../lib/validation/audio-validator.js';
+
+/**
+ * TTS synthesis result
+ * @typedef {Object} TTSSynthesisResult
+ * @property {ArrayBuffer} audio - Synthesized audio data
+ * @property {string} format - Audio format (e.g., 'webm/opus')
+ * @property {number} duration_ms - Estimated duration in milliseconds
+ * @property {string} [sanitized_text] - Sanitized text that was synthesized
+ */
+
+/**
+ * Error with optional code property for TTS errors
+ * @typedef {Error & { code?: string; originalError?: Error }} TTSError
+ */
 
 /**
  * TTS Configuration
@@ -42,7 +58,7 @@ export class TTSSynthesizer {
    *
    * @param {string} text - Answer text to synthesize
    * @param {Object} options - Synthesis options
-   * @returns {Promise<{audio: ArrayBuffer, format: string, duration_ms: number}>}
+   * @returns {Promise<TTSSynthesisResult>}
    */
   async synthesize(text, options = {}) {
     try {
@@ -163,28 +179,32 @@ export class TTSSynthesizer {
    * Handle TTS errors with appropriate error codes
    *
    * @param {Error} error - Original error
-   * @returns {Error} Formatted error with code
+   * @returns {TTSError} Formatted error with code
    */
   handleError(error) {
     if (error.message.includes('timeout')) {
+      /** @type {TTSError} */
       const formattedError = new Error('TTS synthesis timeout');
       formattedError.code = 'TTS_TIMEOUT';
       return formattedError;
     }
 
     if (error.message.includes('Workers AI')) {
+      /** @type {TTSError} */
       const formattedError = new Error('TTS service unavailable');
       formattedError.code = 'TTS_SERVICE_UNAVAILABLE';
       return formattedError;
     }
 
     if (error.message.includes('Invalid audio')) {
+      /** @type {TTSError} */
       const formattedError = new Error('Invalid audio data received');
       formattedError.code = 'TTS_INVALID_AUDIO';
       return formattedError;
     }
 
     // Generic error
+    /** @type {TTSError} */
     const formattedError = new Error('TTS synthesis failed');
     formattedError.code = 'TTS_FAILED';
     formattedError.originalError = error;
@@ -194,12 +214,12 @@ export class TTSSynthesizer {
   /**
    * Check if error is recoverable
    *
-   * @param {Error} error - Error to check
+   * @param {TTSError} error - Error to check
    * @returns {boolean} True if retry might succeed
    */
   isRecoverableError(error) {
     const recoverableCodes = ['TTS_TIMEOUT', 'TTS_SERVICE_UNAVAILABLE'];
-    return recoverableCodes.includes(error.code);
+    return error.code ? recoverableCodes.includes(error.code) : false;
   }
 }
 

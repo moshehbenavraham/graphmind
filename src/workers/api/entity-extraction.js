@@ -18,7 +18,7 @@ import { getExtractionJobStatus } from '../../lib/kv/entity-cache-utils.js';
  * @param {Object} params - URL parameters
  * @param {string} params.userId - User ID from JWT
  * @param {string} params.noteId - Note ID from URL
- * @returns {Response} HTTP response
+ * @returns {Promise<Response>} HTTP response
  */
 export async function extractEntitiesForNote(request, env, params) {
   const { userId, noteId } = params;
@@ -74,7 +74,7 @@ export async function extractEntitiesForNote(request, env, params) {
  * @param {Object} env - Worker environment bindings
  * @param {Object} params - Parameters
  * @param {string} params.userId - User ID from JWT
- * @returns {Response} HTTP response
+ * @returns {Promise<Response>} HTTP response
  */
 export async function extractEntitiesBatch(request, env, params) {
   const { userId } = params;

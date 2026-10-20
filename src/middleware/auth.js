@@ -72,6 +72,15 @@ async function isTokenBlacklisted(token, kv) {
 }
 
 /**
+ * @typedef {Object} UserContext
+ * @property {string} user_id - User UUID
+ * @property {string} email - User email
+ * @property {string} namespace - FalkorDB namespace
+ * @property {string} [role] - User role (e.g., 'admin')
+ * @property {boolean} [is_admin] - Alternative admin flag
+ */
+
+/**
  * Authenticate request and extract user context
  *
  * Validates JWT token and returns user information.
@@ -80,10 +89,7 @@ async function isTokenBlacklisted(token, kv) {
  * @param {Object} env - Worker environment bindings
  * @param {string} env.JWT_SECRET - JWT signing secret
  * @param {Object} [env.KV] - Optional KV binding for token blacklist
- * @returns {Promise<Object|null>} User context or null if authentication fails
- * @returns {string} user.user_id - User UUID
- * @returns {string} user.email - User email
- * @returns {string} user.namespace - FalkorDB namespace
+ * @returns {Promise<UserContext|null>} User context or null if authentication fails
  */
 export async function authenticateRequest(request, env) {
   try {
@@ -106,10 +112,15 @@ export async function authenticateRequest(request, env) {
     }
 
     // Extract user context from claims
+    // @ts-ignore - claims may include additional fields from JWT
     const user = {
       user_id: claims.sub,
       email: claims.email,
-      namespace: claims.namespace
+      namespace: claims.namespace,
+      // @ts-ignore - role and is_admin are optional extended claims
+      role: claims.role,       // Admin role check
+      // @ts-ignore - role and is_admin are optional extended claims
+      is_admin: claims.is_admin // Alternative admin flag
     };
 
     return user;
@@ -183,4 +194,54 @@ export async function optionalAuth(request, env) {
     // Ignore authentication errors for optional auth
     return null;
   }
+}
+
+/**
+ * Check if user has admin role
+ *
+ * @param {Object} user - User context from authenticateRequest
+ * @returns {boolean} True if user has admin role
+ */
+export function isAdmin(user) {
+  return user && (user.role === 'admin' || user.is_admin === true);
+}
+
+/**
+ * Require admin role middleware
+ *
+ * Validates that the authenticated user has admin privileges.
+ *
+ * @param {Request} request - Fetch API Request object
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object>} User context or Response with error
+ *
+ * Usage:
+ *   const authResult = await requireAdmin(request, env);
+ *   if (authResult instanceof Response) {
+ *     return authResult;  // Not admin, return error response
+ *   }
+ *   const user = authResult;  // User is admin
+ */
+export async function requireAdmin(request, env) {
+  // First check authentication
+  const authResult = await requireAuth(request, env);
+
+  if (authResult instanceof Response) {
+    return authResult; // Return auth error
+  }
+
+  const user = authResult;
+
+  // Check admin role
+  if (!isAdmin(user)) {
+    return new Response(JSON.stringify({
+      error: 'Forbidden',
+      message: 'Admin role required. Contact system administrator for access.'
+    }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  return user;
 }

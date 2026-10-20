@@ -268,10 +268,10 @@ export function validateParameters(cypher, parameters) {
  * Use this as the primary validation function
  *
  * @param {string} cypher - Cypher query
- * @param {Object} options - Validation options
- * @param {string} options.userNamespace - User's FalkorDB graph namespace
- * @param {Object} options.parameters - Query parameters
- * @param {boolean} options.sanitize - Auto-sanitize query (default: true)
+ * @param {Object} [options={}] - Validation options
+ * @param {string} [options.userNamespace] - User's FalkorDB graph namespace (required for most validations)
+ * @param {Object} [options.parameters] - Query parameters
+ * @param {boolean} [options.sanitize] - Auto-sanitize query (default: true)
  * @returns {Object} { valid: true, cypher: sanitizedCypher }
  * @throws {CypherValidationError} If validation fails
  */

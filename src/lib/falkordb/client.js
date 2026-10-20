@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference path="./types.js" />
+
 /**
  * FalkorDB Client Wrapper
  *
@@ -12,16 +15,19 @@ import { createRestClient } from './rest-client.js';
 import { normalizeError } from './errors.js';
 
 /**
+ * @typedef {import('./types.js').FalkorDBConfig} FalkorDBConfig
+ * @typedef {import('./types.js').RestClient} RestClient
+ * @typedef {import('./types.js').QueryResult} QueryResult
+ * @typedef {import('./types.js').ConnectionValidationResult} ConnectionValidationResult
+ * @typedef {import('./types.js').VectorSearchOptions} VectorSearchOptions
+ * @typedef {import('./types.js').VectorSearchResult} VectorSearchResult
+ */
+
+/**
  * Create and configure a FalkorDB client connection using REST API
  *
- * @param {Object} config - Connection configuration
- * @param {string} config.host - FalkorDB host
- * @param {number} config.port - FalkorDB port
- * @param {string} config.username - FalkorDB username
- * @param {string} config.password - FalkorDB password
- * @param {number} [config.connectTimeout=5000] - Connection timeout in ms (unused for REST)
- * @param {number} [config.commandTimeout=10000] - Command timeout in ms (unused for REST)
- * @returns {Promise<Object>} Connected REST client
+ * @param {FalkorDBConfig} config - Connection configuration
+ * @returns {Promise<RestClient>} Connected REST client
  * @throws {Error} If connection fails or credentials are invalid
  */
 export async function connect(config) {
@@ -81,7 +87,7 @@ export async function connect(config) {
 /**
  * Disconnect from FalkorDB gracefully
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient|null} client - REST client instance
  * @returns {Promise<void>}
  */
 export async function disconnect(client) {
@@ -102,12 +108,12 @@ export async function disconnect(client) {
  *
  * FalkorDB uses the GRAPH.QUERY command with Cypher syntax.
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of the graph database
  * @param {string} cypher - Cypher query string
  * @param {Object} [params={}] - Query parameters (will be interpolated)
- * @param {number} [timeout=10000] - Query timeout in ms
- * @returns {Promise<Object>} Query result
+ * @param {number} [timeout=10000] - Query timeout in ms (unused for REST)
+ * @returns {Promise<QueryResult>} Query result
  * @throws {Error} If query fails or times out
  *
  * @example
@@ -165,6 +171,64 @@ export async function executeCypher(client, graphName, cypher, params = {}, time
 }
 
 /**
+ * Execute a vector similarity search on FalkorDB
+ *
+ * Uses the db.idx.vector.queryNodes procedure.
+ *
+ * @param {RestClient} client - REST client instance
+ * @param {string} graphName - Name of the graph database
+ * @param {string} label - Node label to search (e.g., 'Person')
+ * @param {string} property - Vector property name (e.g., 'embedding')
+ * @param {Array<number>} vector - Query vector
+ * @param {VectorSearchOptions} [options] - Search options
+ * @returns {Promise<Array<VectorSearchResult>>} Array of matches with scores and IDs
+ */
+export async function queryNodesByVector(client, graphName, label, property, vector, options = {}) {
+  const { limit = 10, threshold = 0.7 } = options;
+
+  if (!vector || !Array.isArray(vector)) {
+    throw new Error('Vector is required and must be an array');
+  }
+
+  // Construct the vector query procedure call
+  // Use vecf32() wrapper for the query vector (required by FalkorDB vector indexes)
+  // Return ID(node) for traversal operations
+  const cypher = `
+    CALL db.idx.vector.queryNodes($label, $property, $limit, vecf32($vector))
+    YIELD node, score
+    WHERE score >= $threshold
+    RETURN ID(node) as nodeId, node, score
+  `;
+
+  const params = {
+    label,
+    property,
+    limit,
+    vector,
+    threshold
+  };
+
+  const result = await executeCypher(client, graphName, cypher, params);
+
+  // Format results - handle both array and object response formats
+  return (result.data || []).map(row => {
+    // Handle array format [nodeId, node, score] or object format {nodeId, node, score}
+    if (Array.isArray(row)) {
+      return {
+        nodeId: row[0],
+        node: row[1],
+        score: row[2]
+      };
+    }
+    return {
+      nodeId: row.nodeId,
+      node: row.node,
+      score: row.score
+    };
+  });
+}
+
+/**
  * Parse FalkorDB query result from Redis protocol format
  *
  * FalkorDB returns results in a specific array format via Redis protocol.
@@ -178,6 +242,7 @@ function parseFalkorDBResult(result) {
     return { data: [], metadata: {}, statistics: {} };
   }
 
+  /** @type {{ data: any[], metadata: { columns?: string[] }, statistics: Record<string, any> }} */
   const parsed = {
     data: [],
     metadata: {},
@@ -221,7 +286,8 @@ function parseFalkorDBResult(result) {
           if (match) {
             const [, key, value] = match;
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
-            parsed.statistics[normalizedKey] = isNaN(value) ? value : parseFloat(value);
+            const numericValue = parseFloat(value);
+            parsed.statistics[normalizedKey] = isNaN(numericValue) ? value : numericValue;
           }
         }
       });
@@ -235,7 +301,7 @@ function parseFalkorDBResult(result) {
 /**
  * List all graphs in FalkorDB using GRAPH.LIST Redis command
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient} client - REST client instance
  * @returns {Promise<Array<string>>} Array of graph names
  */
 export async function listGraphs(client) {
@@ -255,7 +321,7 @@ export async function listGraphs(client) {
 /**
  * Check if a graph exists using GRAPH.LIST
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient} client - REST client instance
  * @param {string} graphName - Name of graph to check
  * @returns {Promise<boolean>} True if graph exists
  */
@@ -274,11 +340,11 @@ export async function graphExists(client, graphName) {
  * Tests connection by executing a PING command
  * and optionally a test query.
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient} client - REST client instance
  * @param {Object} [options] - Validation options
  * @param {boolean} [options.testQuery=false] - Execute test query
  * @param {string} [options.graphName] - Graph name for test query
- * @returns {Promise<Object>} Validation result
+ * @returns {Promise<ConnectionValidationResult>} Validation result
  *
  * @example
  * const health = await validateConnection(client, {
@@ -290,6 +356,7 @@ export async function graphExists(client, graphName) {
 export async function validateConnection(client, options = {}) {
   const { testQuery = false, graphName } = options;
 
+  /** @type {ConnectionValidationResult} */
   const result = {
     valid: false,
     latency: null,
@@ -335,7 +402,7 @@ export async function validateConnection(client, options = {}) {
  * - PING fails
  * - Connection has been idle for too long
  *
- * @param {Object} client - Redis client instance (from redis-on-workers)
+ * @param {RestClient|null} client - REST client instance
  * @returns {Promise<boolean>} True if connection is stale
  */
 export async function isConnectionStale(client) {

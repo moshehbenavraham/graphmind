@@ -110,10 +110,11 @@ export async function createSession(env, userId, sessionId) {
 
   // Create session metadata
   const now = Date.now();
+  /** @type {SessionMetadata} */
   const metadata = {
     user_id: userId,
     created_at: now,
-    status: 'active',
+    status: /** @type {SessionStatus} */ ('active'),
     expires_at: now + (SESSION_TTL * 1000)
   };
 

@@ -16,9 +16,7 @@
  * Checks for basic email structure: local@domain.tld
  *
  * @param {string} email - Email address to validate
- * @returns {Object} Validation result
- * @returns {boolean} result.valid - True if email is valid
- * @returns {string} [result.error] - Error message if invalid
+ * @returns {{valid: boolean, error?: string}} Validation result
  *
  * Validation Rules:
  * - Must match email pattern (local@domain.tld)
@@ -54,9 +52,7 @@ export function isValidEmail(email) {
  * - Maximum 128 characters (prevent bcrypt DoS)
  *
  * @param {string} password - Password to validate
- * @returns {Object} Validation result
- * @returns {boolean} result.valid - True if password is valid
- * @returns {string} [result.error] - Error message if invalid
+ * @returns {{valid: boolean, error?: string}} Validation result
  */
 export function isValidPassword(password) {
   if (!password || typeof password !== 'string') {
@@ -127,7 +123,7 @@ export function sanitizeEmail(email) {
  * - Limits to 100 characters
  * - Returns null if empty after trimming
  *
- * @param {string} name - Name to sanitize
+ * @param {string|undefined} name - Name to sanitize
  * @returns {string|null} Sanitized name or null if empty
  */
 export function sanitizeName(name) {
@@ -154,23 +150,21 @@ export function sanitizeName(name) {
  * @param {string} input.email - Email address
  * @param {string} input.password - Password
  * @param {string} [input.name] - Optional user name
- * @returns {Object} Validation result
- * @returns {boolean} result.valid - True if all inputs are valid
- * @returns {Object} [result.sanitized] - Sanitized inputs if valid
- * @returns {Array<string>} [result.errors] - Array of error messages if invalid
+ * @returns {{valid: boolean, sanitized?: {email: string, password: string, name: string|null}, errors?: string[]}} Validation result
  */
 export function validateRegistrationInput(input) {
+  /** @type {string[]} */
   const errors = [];
 
   // Validate email
   const emailValidation = isValidEmail(input.email);
-  if (!emailValidation.valid) {
+  if (!emailValidation.valid && emailValidation.error) {
     errors.push(emailValidation.error);
   }
 
   // Validate password
   const passwordValidation = isValidPassword(input.password);
-  if (!passwordValidation.valid) {
+  if (!passwordValidation.valid && passwordValidation.error) {
     errors.push(passwordValidation.error);
   }
 
@@ -197,17 +191,15 @@ export function validateRegistrationInput(input) {
  * @param {Object} input - Login input
  * @param {string} input.email - Email address
  * @param {string} input.password - Password
- * @returns {Object} Validation result
- * @returns {boolean} result.valid - True if inputs are valid
- * @returns {Object} [result.sanitized] - Sanitized inputs if valid
- * @returns {Array<string>} [result.errors] - Array of error messages if invalid
+ * @returns {{valid: boolean, sanitized?: {email: string, password: string}, errors?: string[]}} Validation result
  */
 export function validateLoginInput(input) {
+  /** @type {string[]} */
   const errors = [];
 
   // Validate email format (basic check)
   const emailValidation = isValidEmail(input.email);
-  if (!emailValidation.valid) {
+  if (!emailValidation.valid && emailValidation.error) {
     errors.push(emailValidation.error);
   }
 

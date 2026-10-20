@@ -9,6 +9,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TTSSynthesizer, createTTSSynthesizer } from '../../src/services/tts-synthesizer.js';
 
+/**
+ * Create a valid mock WebM audio buffer for testing
+ * Must have WebM signature and meet minimum size requirements
+ */
+function createMockWebMAudio(size = 1024) {
+  const buffer = new ArrayBuffer(size);
+  const bytes = new Uint8Array(buffer);
+  // WebM signature: 0x1A, 0x45, 0xDF, 0xA3
+  bytes[0] = 0x1A;
+  bytes[1] = 0x45;
+  bytes[2] = 0xDF;
+  bytes[3] = 0xA3;
+  // Fill with non-zero data to pass corruption check
+  for (let i = 4; i < size; i++) {
+    bytes[i] = (i % 255) + 1;
+  }
+  return buffer;
+}
+
 describe('TTSSynthesizer', () => {
   let mockAI;
   let synthesizer;
@@ -24,7 +43,7 @@ describe('TTSSynthesizer', () => {
 
   describe('synthesize', () => {
     it('should synthesize text to audio successfully', async () => {
-      const mockAudio = new ArrayBuffer(1024);
+      const mockAudio = createMockWebMAudio();
       mockAI.run.mockResolvedValue(mockAudio);
 
       const result = await synthesizer.synthesize('Hello, this is a test answer.');
@@ -36,7 +55,7 @@ describe('TTSSynthesizer', () => {
     });
 
     it('should sanitize text before synthesis', async () => {
-      const mockAudio = new ArrayBuffer(1024);
+      const mockAudio = createMockWebMAudio();
       mockAI.run.mockResolvedValue(mockAudio);
 
       const markdownText = '## Header\n\nThis is **bold** text with [link](https://example.com).';
@@ -54,7 +73,7 @@ describe('TTSSynthesizer', () => {
     });
 
     it('should handle very short text', async () => {
-      const mockAudio = new ArrayBuffer(1024);
+      const mockAudio = createMockWebMAudio();
       mockAI.run.mockResolvedValue(mockAudio);
 
       const result = await synthesizer.synthesize('Hi');
@@ -79,7 +98,7 @@ describe('TTSSynthesizer', () => {
 
   describe('callWorkersAI', () => {
     it('should call Workers AI with correct parameters', async () => {
-      const mockAudio = new ArrayBuffer(1024);
+      const mockAudio = createMockWebMAudio();
       mockAI.run.mockResolvedValue(mockAudio);
 
       await synthesizer.callWorkersAI('Test text');
@@ -95,7 +114,7 @@ describe('TTSSynthesizer', () => {
     });
 
     it('should handle Response object from Workers AI', async () => {
-      const mockAudio = new ArrayBuffer(1024);
+      const mockAudio = createMockWebMAudio();
       const mockResponse = new Response(mockAudio);
       mockAI.run.mockResolvedValue(mockResponse);
 

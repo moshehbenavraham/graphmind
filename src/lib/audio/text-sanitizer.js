@@ -11,8 +11,8 @@
  * Sanitize text for TTS
  *
  * @param {string} text - Raw answer text (may contain markdown)
- * @param {Object} options - Sanitization options
- * @param {number} options.maxWords - Maximum words to include (default: 500)
+ * @param {Object} [options={}] - Sanitization options
+ * @param {number} [options.maxWords=500] - Maximum words to include
  * @returns {string} Sanitized text ready for TTS
  */
 export function sanitizeTextForTTS(text, options = {}) {

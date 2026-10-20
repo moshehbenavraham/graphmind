@@ -15,11 +15,11 @@ import { validateEntities } from '../models/entity.model.js';
  *
  * @param {Object} env - Worker environment bindings
  * @param {string} transcript - Voice note transcript
- * @param {Object} options - Extraction options
- * @param {number} options.confidenceThreshold - Minimum confidence (default: 0.8)
- * @param {boolean} options.strictMode - Use strict JSON formatting (default: false)
- * @param {number} options.maxTokens - Max tokens for LLM (default: 2000)
- * @param {number} options.temperature - LLM temperature (default: 0.3)
+ * @param {Object} [options={}] - Extraction options
+ * @param {number} [options.confidenceThreshold] - Minimum confidence (default: 0.8)
+ * @param {boolean} [options.strictMode] - Use strict JSON formatting (default: false)
+ * @param {number} [options.maxTokens] - Max tokens for LLM (default: 2000)
+ * @param {number} [options.temperature] - LLM temperature (default: 0.3)
  * @returns {Promise<Object>} Extraction result with entities and metadata
  */
 export async function extractEntities(env, transcript, options = {}) {

@@ -49,7 +49,7 @@ const mockKV = {
 // FalkorDB connection via REST API wrapper
 const falkordb = createRestClient({
   host: process.env.FALKORDB_REST_HOST || 'localhost',
-  port: parseInt(process.env.FALKORDB_REST_PORT || '3001'), // REST API wrapper port, not FalkorDB port
+  port: parseInt(process.env.FALKORDB_REST_PORT || '3013'), // REST API wrapper port, not FalkorDB port
   username: process.env.FALKORDB_USER || 'default',
   password: process.env.FALKORDB_PASSWORD || '',
 });

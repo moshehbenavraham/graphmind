@@ -10,7 +10,9 @@
 /**
  * Transcription configuration for Workers AI
  * @typedef {Object} TranscriptionConfig
- * @property {string} language - Language code (default: 'en')
+ * @property {string} [language='en'] - Language code (default: 'en')
+ * @property {boolean} [smart_format=true] - Enable smart formatting
+ * @property {boolean} [interim_results=false] - Return interim results
  */
 
 /**
@@ -40,7 +42,7 @@ export class TranscriptionError extends Error {
   /**
    * @param {string} message - Error message
    * @param {string} code - Error code from TranscriptionErrorCode
-   * @param {Error} [originalError] - Original error if wrapping
+   * @param {Error|null} [originalError=null] - Original error if wrapping
    */
   constructor(message, code, originalError = null) {
     super(message);

@@ -6,7 +6,7 @@ async function testLocalFalkorDB() {
 
   const socket = connect({
     hostname: 'localhost',
-    port: 6380
+    port: 6383
   });
 
   const writer = socket.writable.getWriter();

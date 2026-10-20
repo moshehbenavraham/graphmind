@@ -62,6 +62,7 @@ export async function verifyPassword(password, hash) {
  * @param {string} payload.user_id - User UUID
  * @param {string} payload.email - User email
  * @param {string} payload.namespace - FalkorDB namespace (user_{uuid})
+ * @param {string} [payload.role] - User role (e.g., 'admin', 'user')
  * @param {string} secret - JWT signing secret
  * @returns {string} Signed JWT token
  * @throws {Error} If token generation fails
@@ -71,13 +72,14 @@ export async function verifyPassword(password, hash) {
  *   sub: user_id,
  *   email: user@example.com,
  *   namespace: user_{uuid},
+ *   role: 'user' or 'admin',
  *   iat: issued_at_timestamp,
  *   exp: expiration_timestamp
  * }
  */
 export function generateToken(payload, secret) {
   try {
-    const { user_id, email, namespace } = payload;
+    const { user_id, email, namespace, role } = payload;
 
     if (!user_id || !email || !namespace) {
       throw new Error('Missing required payload fields: user_id, email, namespace');
@@ -92,6 +94,7 @@ export function generateToken(payload, secret) {
       sub: user_id,      // Subject (user ID)
       email,             // User email
       namespace,         // FalkorDB namespace
+      role: role || 'user',  // User role (default: 'user')
       iat: Math.floor(Date.now() / 1000),  // Issued at
       exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60)  // Expires in 24 hours
     };
@@ -111,12 +114,7 @@ export function generateToken(payload, secret) {
  *
  * @param {string} token - JWT token to verify
  * @param {string} secret - JWT signing secret
- * @returns {Object} Decoded token claims
- * @returns {string} claims.sub - User ID
- * @returns {string} claims.email - User email
- * @returns {string} claims.namespace - FalkorDB namespace
- * @returns {number} claims.iat - Issued at timestamp
- * @returns {number} claims.exp - Expiration timestamp
+ * @returns {{sub: string, email: string, namespace: string, iat: number, exp: number}} Decoded token claims
  * @throws {Error} If token is invalid, expired, or signature doesn't match
  *
  * Error Codes:
@@ -134,7 +132,9 @@ export function verifyToken(token, secret) {
     }
 
     // Verify signature and expiration
-    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+    const decoded = /** @type {{sub: string, email: string, namespace: string, iat: number, exp: number}} */ (
+      jwt.verify(token, secret, { algorithms: ['HS256'] })
+    );
     return decoded;
 
   } catch (error) {

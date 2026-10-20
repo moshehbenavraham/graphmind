@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Result Formatter Service for Feature 008 (Voice Query Input)
  *
@@ -5,6 +7,11 @@
  * Parses nodes, relationships, and properties into entities and relationships arrays.
  *
  * @module services/result-formatter
+ */
+
+/**
+ * Error with optional code property
+ * @typedef {Error & { code?: string }} ErrorWithCode
  */
 
 /**
@@ -114,12 +121,13 @@ function isNode(value) {
  */
 function isRelationship(value) {
   // FalkorDB relationships have id, type, startNode, endNode
+  // Note: REST API returns src_node/dest_node format
   return (
     value &&
     typeof value === 'object' &&
     ('type' in value || 'relType' in value) &&
-    ('start' in value || 'startNode' in value || 'src' in value) &&
-    ('end' in value || 'endNode' in value || 'dst' in value)
+    ('start' in value || 'startNode' in value || 'src' in value || 'src_node' in value) &&
+    ('end' in value || 'endNode' in value || 'dst' in value || 'dest_node' in value)
   );
 }
 
@@ -131,7 +139,12 @@ function isRelationship(value) {
  */
 function parseNode(node) {
   // Extract node ID (handle different formats)
-  const nodeId = node.id || node.identity || node.element_id || `node_${Math.random().toString(36).substr(2, 9)}`;
+  // IMPORTANT: Use explicit !== undefined checks because node IDs can be 0 (falsy)
+  const nodeId =
+    node.id !== undefined ? node.id :
+    node.identity !== undefined ? node.identity :
+    node.element_id !== undefined ? node.element_id :
+    `node_${Math.random().toString(36).substr(2, 9)}`;
 
   // Extract node labels (handle different formats)
   let labels = [];
@@ -173,11 +186,25 @@ function parseRelationship(rel) {
   const type = rel.type || rel.relType || 'RELATED_TO';
 
   // Extract source and target node IDs
-  const source = String(rel.start || rel.startNode || rel.src || 'unknown_source');
-  const target = String(rel.end || rel.endNode || rel.dst || 'unknown_target');
+  // Note: REST API returns src_node/dest_node format
+  // IMPORTANT: Use explicit !== undefined checks because node IDs can be 0 (falsy)
+  const source = String(
+    rel.start !== undefined ? rel.start :
+    rel.startNode !== undefined ? rel.startNode :
+    rel.src !== undefined ? rel.src :
+    rel.src_node !== undefined ? rel.src_node :
+    'unknown_source'
+  );
+  const target = String(
+    rel.end !== undefined ? rel.end :
+    rel.endNode !== undefined ? rel.endNode :
+    rel.dst !== undefined ? rel.dst :
+    rel.dest_node !== undefined ? rel.dest_node :
+    'unknown_target'
+  );
 
-  // Extract properties
-  const properties = rel.properties || rel.props || {};
+  // Extract properties (handle empty array from REST API)
+  const properties = Array.isArray(rel.properties) ? {} : (rel.properties || rel.props || {});
 
   return {
     source,
@@ -245,7 +272,7 @@ export function formatCountResults(rawResults, metadata = {}) {
 /**
  * Format error results for frontend display
  *
- * @param {Error} error - Error object
+ * @param {ErrorWithCode} error - Error object (may have optional code property)
  * @param {Object} metadata - Query metadata
  * @returns {Object} Error result structure
  */

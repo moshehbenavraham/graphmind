@@ -15,10 +15,10 @@
 /**
  * Handle POST /api/graph/sync
  *
- * @param {Request} request - HTTP request
+ * @param {Request & {user?: {user_id?: string}, userId?: string}} request - HTTP request with auth data
  * @param {Object} env - Worker environment bindings
  * @param {Object} ctx - Execution context
- * @returns {Response} - HTTP response
+ * @returns {Promise<Response>} - HTTP response
  */
 export async function handleSyncNote(request, env, ctx) {
   const startTime = Date.now();

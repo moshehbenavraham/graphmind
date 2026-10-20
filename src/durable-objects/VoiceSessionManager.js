@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference types="@cloudflare/workers-types" />
+
 /**
  * VoiceSessionManager Durable Object
  *
@@ -16,6 +19,17 @@
  * 5. Hibernates after session completion
  *
  * @module durable-objects/VoiceSessionManager
+ */
+
+/**
+ * Voice session metadata type
+ * @typedef {Object} VoiceSessionMeta
+ * @property {string|null} session_id - Session identifier
+ * @property {string|null} user_id - User identifier
+ * @property {number|null} start_time - Session start timestamp
+ * @property {number|null} last_chunk_time - Last chunk received timestamp
+ * @property {number} chunk_count - Number of chunks received
+ * @property {number} expected_sequence - Next expected sequence number
  */
 
 import { transcribeAudioChunk } from '../lib/audio/transcription.js';
@@ -90,17 +104,18 @@ export class VoiceSessionManager {
     this.state = state;
     this.env = env;
 
-    // WebSocket connection
+    /** @type {WebSocket|null} */
     this.websocket = null;
 
-    // Audio chunk buffer (for handling out-of-order delivery)
+    /** @type {Array<{sequence: number, chunk: string, timestamp: number}>} */
     this.audioBuffer = [];
 
-    // Transcript accumulation
+    /** @type {string} */
     this.transcript = '';
+    /** @type {string} */
     this.partialTranscript = '';
 
-    // Session metadata
+    /** @type {VoiceSessionMeta} */
     this.sessionMetadata = {
       session_id: null,
       user_id: null,
@@ -110,11 +125,12 @@ export class VoiceSessionManager {
       expected_sequence: 0
     };
 
-    // Timeout tracking
+    /** @type {ReturnType<typeof setTimeout>|null} */
     this.timeoutHandle = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
     this.warningTimeoutHandle = null;
 
-    // Session state
+    /** @type {boolean} */
     this.sessionActive = false;
 
     // Logger (will be initialized with context in handleWebSocketUpgrade)
@@ -485,10 +501,14 @@ export class VoiceSessionManager {
       });
 
       // Update session status
-      await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'completed');
+      if (this.sessionMetadata.session_id) {
+        await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'completed');
+      }
 
       // Close WebSocket gracefully
-      this.websocket.close(1000, 'Recording completed');
+      if (this.websocket) {
+        this.websocket.close(1000, 'Recording completed');
+      }
 
       // Cleanup
       await this.cleanup();
@@ -499,7 +519,9 @@ export class VoiceSessionManager {
 
       // Update session status to failed
       try {
-        await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'failed');
+        if (this.sessionMetadata.session_id) {
+          await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'failed');
+        }
       } catch (statusError) {
         this.logger.error('Failed to update session status', statusError);
       }
@@ -520,7 +542,7 @@ export class VoiceSessionManager {
       }
 
       // Calculate duration (based on session time)
-      const duration_seconds = this.sessionMetadata.last_chunk_time
+      const duration_seconds = (this.sessionMetadata.last_chunk_time && this.sessionMetadata.start_time)
         ? Math.round((this.sessionMetadata.last_chunk_time - this.sessionMetadata.start_time) / 1000)
         : 0;
 
@@ -530,10 +552,16 @@ export class VoiceSessionManager {
       // Generate note ID
       const note_id = generateNoteId();
 
+      // Ensure user_id is available
+      const userId = this.sessionMetadata.user_id;
+      if (!userId) {
+        throw new Error('User ID not available');
+      }
+
       // Insert into D1
       await insertVoiceNote(this.env, {
         note_id,
-        user_id: this.sessionMetadata.user_id,
+        user_id: userId,
         transcript: sanitized,
         duration_seconds,
         word_count
@@ -552,7 +580,7 @@ export class VoiceSessionManager {
         await enqueueExtractionJob(
           this.env,
           note_id,
-          this.sessionMetadata.user_id,
+          userId,
           sanitized
         );
         this.logger.info('Entity extraction job enqueued', { note_id });
@@ -616,7 +644,9 @@ export class VoiceSessionManager {
 
       // Update session status
       try {
-        await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'completed');
+        if (this.sessionMetadata.session_id) {
+          await updateSessionStatus(this.env, this.sessionMetadata.session_id, 'completed');
+        }
       } catch (error) {
         this.logger.error('Failed to update session status on timeout', error);
       }

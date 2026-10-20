@@ -1,6 +1,8 @@
+// @ts-check
+/// <reference types="node" />
 
-import { generateCypherQuery } from './src/services/cypher-generator.js';
-import { extractEntityReferences } from './src/lib/graph/cypher-templates.js';
+import { generateCypherQuery } from '../src/services/cypher-generator.js';
+import { extractEntityReferences } from '../src/lib/graph/cypher-templates.js';
 import { createClient } from 'redis';
 
 // Mock environment for generateCypherQuery
@@ -50,7 +52,7 @@ async function runDebug() {
     // 2. Test Cypher Generation
     console.log('\n2. Testing Cypher Generation...');
     try {
-        const result = await generateCypherQuery(question, userId, mockEnv);
+        const result = await generateCypherQuery(question, userId, userId, mockEnv);
         console.log('Generated Cypher:');
         console.log(result.cypher);
 
@@ -63,7 +65,7 @@ async function runDebug() {
         // 3. Test Execution against Local FalkorDB
         console.log('\n3. Testing Execution against Local FalkorDB...');
         const client = createClient({
-            url: 'redis://localhost:6380'
+            url: 'redis://localhost:6383'
         });
         await client.connect();
 

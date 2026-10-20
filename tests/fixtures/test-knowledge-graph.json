@@ -1,0 +1,301 @@
+{
+  "nodes": {
+    "people": [
+      {
+        "id": "P001",
+        "name": "Alice Chen",
+        "description": "Senior AI Engineer working on machine learning and vector embeddings for semantic search",
+        "user_id_normalized": "test_user_001",
+        "mention_count": 15,
+        "properties": {
+          "role": "Senior AI Engineer",
+          "expertise": ["machine learning", "vector embeddings", "semantic search"],
+          "projects": ["GraphMind", "VectorSearch"]
+        }
+      },
+      {
+        "id": "P002",
+        "name": "Bob Martinez",
+        "description": "Backend developer specializing in graph databases and FalkorDB integration",
+        "user_id_normalized": "test_user_001",
+        "mention_count": 12,
+        "properties": {
+          "role": "Backend Developer",
+          "expertise": ["graph databases", "FalkorDB", "Cypher queries"],
+          "projects": ["GraphMind"]
+        }
+      },
+      {
+        "id": "P003",
+        "name": "Carol White",
+        "description": "Voice AI specialist working on speech recognition and natural language understanding",
+        "user_id_normalized": "test_user_001",
+        "mention_count": 8,
+        "properties": {
+          "role": "Voice AI Specialist",
+          "expertise": ["speech recognition", "NLU", "voice interfaces"],
+          "projects": ["VoiceFeatures"]
+        }
+      }
+    ],
+    "projects": [
+      {
+        "id": "PR001",
+        "name": "GraphMind",
+        "description": "Voice-first personal knowledge assistant using GraphRAG for semantic search and knowledge retrieval",
+        "user_id_normalized": "test_user_001",
+        "properties": {
+          "status": "in_progress",
+          "technology": ["Cloudflare Workers", "FalkorDB", "GraphRAG", "Workers AI"],
+          "team_size": 3
+        }
+      },
+      {
+        "id": "PR002",
+        "name": "VectorSearch",
+        "description": "Semantic search system with vector embeddings and graph traversal for context expansion",
+        "user_id_normalized": "test_user_001",
+        "properties": {
+          "status": "validation",
+          "technology": ["BAAI BGE embeddings", "cosine similarity", "vector indexes"],
+          "team_size": 2
+        }
+      },
+      {
+        "id": "PR003",
+        "name": "VoiceFeatures",
+        "description": "Voice AI integration with Deepgram for speech-to-text and text-to-speech capabilities",
+        "user_id_normalized": "test_user_001",
+        "properties": {
+          "status": "in_progress",
+          "technology": ["Deepgram Nova-3", "Deepgram Aura-2", "WebRTC"],
+          "team_size": 2
+        }
+      }
+    ],
+    "notes": [
+      {
+        "id": "N001",
+        "note_id": "test_note_001",
+        "transcript_snippet": "Today we discussed performance optimizations for FalkorDB vector search. The current latency is around 200ms but we need to get it under 100ms for cached queries.",
+        "user_id_normalized": "test_user_001",
+        "timestamp": "2025-11-20T10:30:00Z",
+        "properties": {
+          "topics": ["performance", "optimization", "FalkorDB", "vector search"],
+          "mentioned_people": ["Alice Chen", "Bob Martinez"]
+        }
+      },
+      {
+        "id": "N002",
+        "note_id": "test_note_002",
+        "transcript_snippet": "Security review completed. We need to re-enable JWT authentication on admin endpoints and add role-based access control for backfill operations.",
+        "user_id_normalized": "test_user_001",
+        "timestamp": "2025-11-21T14:15:00Z",
+        "properties": {
+          "topics": ["security", "authentication", "JWT", "RBAC"],
+          "mentioned_people": []
+        }
+      },
+      {
+        "id": "N003",
+        "note_id": "test_note_003",
+        "transcript_snippet": "Voice AI integration is working well with Deepgram. Speech recognition accuracy is above 95% for clear audio. Need to test with background noise.",
+        "user_id_normalized": "test_user_001",
+        "timestamp": "2025-11-22T09:45:00Z",
+        "properties": {
+          "topics": ["voice AI", "speech recognition", "Deepgram", "testing"],
+          "mentioned_people": ["Carol White"]
+        }
+      },
+      {
+        "id": "N004",
+        "note_id": "test_note_004",
+        "transcript_snippet": "GraphRAG implementation complete. The semantic search can now find relevant knowledge across all node types with 90%+ accuracy.",
+        "user_id_normalized": "test_user_001",
+        "timestamp": "2025-11-23T16:20:00Z",
+        "properties": {
+          "topics": ["GraphRAG", "semantic search", "accuracy", "validation"],
+          "mentioned_people": ["Alice Chen"]
+        }
+      }
+    ],
+    "topics": [
+      {
+        "id": "T001",
+        "name": "Cloud Infrastructure",
+        "category": "Infrastructure",
+        "description": "Cloudflare Workers, edge computing, serverless architecture, and distributed systems",
+        "user_id_normalized": "test_user_001"
+      },
+      {
+        "id": "T002",
+        "name": "Vector Embeddings",
+        "category": "AI/ML",
+        "description": "Semantic search, BAAI BGE models, cosine similarity, and vector indexes",
+        "user_id_normalized": "test_user_001"
+      },
+      {
+        "id": "T003",
+        "name": "Graph Databases",
+        "category": "Databases",
+        "description": "FalkorDB, Neo4j, Cypher queries, graph traversal, and relationship modeling",
+        "user_id_normalized": "test_user_001"
+      },
+      {
+        "id": "T004",
+        "name": "Voice AI",
+        "category": "AI/ML",
+        "description": "Speech-to-text, text-to-speech, Deepgram integration, and voice interfaces",
+        "user_id_normalized": "test_user_001"
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "from": "P001",
+      "to": "PR001",
+      "type": "WORKS_ON",
+      "properties": {
+        "role": "Lead Engineer",
+        "since": "2025-09-01"
+      }
+    },
+    {
+      "from": "P001",
+      "to": "PR002",
+      "type": "WORKS_ON",
+      "properties": {
+        "role": "AI Lead",
+        "since": "2025-10-15"
+      }
+    },
+    {
+      "from": "P002",
+      "to": "PR001",
+      "type": "WORKS_ON",
+      "properties": {
+        "role": "Backend Lead",
+        "since": "2025-09-01"
+      }
+    },
+    {
+      "from": "P003",
+      "to": "PR003",
+      "type": "WORKS_ON",
+      "properties": {
+        "role": "Voice AI Lead",
+        "since": "2025-10-01"
+      }
+    },
+    {
+      "from": "P001",
+      "to": "P002",
+      "type": "WORKED_WITH",
+      "properties": {
+        "project": "GraphMind",
+        "frequency": "daily"
+      }
+    },
+    {
+      "from": "PR001",
+      "to": "T001",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "high"
+      }
+    },
+    {
+      "from": "PR002",
+      "to": "T002",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "high"
+      }
+    },
+    {
+      "from": "PR001",
+      "to": "T003",
+      "type": "USES_TECHNOLOGY",
+      "properties": {
+        "primary": true
+      }
+    },
+    {
+      "from": "N001",
+      "to": "P001",
+      "type": "MENTIONS",
+      "properties": {
+        "context": "performance discussion"
+      }
+    },
+    {
+      "from": "N001",
+      "to": "P002",
+      "type": "MENTIONS",
+      "properties": {
+        "context": "performance discussion"
+      }
+    },
+    {
+      "from": "N003",
+      "to": "P003",
+      "type": "MENTIONS",
+      "properties": {
+        "context": "voice AI progress"
+      }
+    },
+    {
+      "from": "N004",
+      "to": "P001",
+      "type": "MENTIONS",
+      "properties": {
+        "context": "GraphRAG completion"
+      }
+    },
+    {
+      "from": "N001",
+      "to": "T003",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "high"
+      }
+    },
+    {
+      "from": "N002",
+      "to": "T001",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "medium"
+      }
+    },
+    {
+      "from": "N003",
+      "to": "T004",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "high"
+      }
+    },
+    {
+      "from": "N004",
+      "to": "T002",
+      "type": "DISCUSSES",
+      "properties": {
+        "relevance": "high"
+      }
+    }
+  ],
+  "metadata": {
+    "totalNodes": 14,
+    "totalRelationships": 16,
+    "nodeTypes": {
+      "Person": 3,
+      "Project": 3,
+      "Note": 4,
+      "Topic": 4
+    },
+    "created": "2025-11-24",
+    "purpose": "Test knowledge graph for semantic search validation",
+    "userId": "test_user_001"
+  }
+}

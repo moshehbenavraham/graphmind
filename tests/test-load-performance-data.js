@@ -272,10 +272,10 @@ async function main() {
   console.log('⚡ Performance Data Loader\n');
   console.log('=' .repeat(60) + '\n');
 
-  // Create REST client (use REST API wrapper on port 3001)
+  // Create REST client (use REST API wrapper on port 3013)
   const client = createRestClient({
     host: 'localhost',
-    port: 3001,
+    port: 3013,
     username: 'default',
     password: ''
   });

@@ -14,7 +14,7 @@ import { connect, disconnect, executeCypher } from '../src/lib/falkordb/client.j
 
 const config = {
   host: process.env.FALKORDB_HOST || 'localhost',
-  port: 3001, // REST API wrapper port (not FalkorDB direct port 6380)
+  port: 3013, // REST API wrapper port (not FalkorDB direct port 6383)
   username: process.env.FALKORDB_USER || 'default',
   password: process.env.FALKORDB_PASSWORD || '',
 };

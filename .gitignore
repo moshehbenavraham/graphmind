@@ -226,7 +226,7 @@ specs/
 .workflow/
 
 # Test data (sample transcripts, ground truth datasets)
-test-data/
+tests/test-data/
 
 # Claude Code
 # Claude Code local configuration and commands
@@ -235,3 +235,6 @@ CLAUDE.md
 AGENTS.md
 .mcp.json
 falkordb-data/
+
+# Test coverage output
+coverage/

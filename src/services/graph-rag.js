@@ -12,6 +12,7 @@ import { inferRelationships } from '../lib/graph/relationship-inferrer.js';
 import { buildMergeNode, buildCreateRelationship } from '../lib/graph/cypher-builder.js';
 import { findDuplicateCandidates, mergeEntities } from './entity-merger.js';
 import { createLogger, createPerformanceTracker } from '../lib/utils/logger.js';
+import { EmbeddingService } from './embedding.js';
 
 /**
  * Process entities from a voice note and create graph nodes/relationships
@@ -25,7 +26,7 @@ import { createLogger, createPerformanceTracker } from '../lib/utils/logger.js';
 export async function processEntities(env, userId, entities, transcript) {
   // T138: Structured logging for GraphRAG service
   const logger = createLogger('GraphRAG', { userId, operation: 'processEntities' });
-  const perfTracker = createPerformanceTracker('processEntities', logger);
+  const perfTracker = createPerformanceTracker('processEntities', /** @type {any} */ (logger));
 
   logger.info('Process entities started', {
     input_entities_count: entities.length,
@@ -210,23 +211,49 @@ async function createNodes(env, userId, nodes) {
   const doStub = env.FALKORDB_POOL.get(doId);
   console.log('[GraphRAG] Durable Object stub obtained');
 
+  // Initialize embedding service for vector generation
+  const embeddingService = new EmbeddingService(env.AI);
+
   // Batch process nodes (10 at a time)
   const batchSize = 10;
   for (let i = 0; i < nodes.length; i += batchSize) {
     const batch = nodes.slice(i, i + batchSize);
     console.log(`[GraphRAG] Processing batch ${i / batchSize + 1}, size:`, batch.length);
 
-    const operations = batch.map(node => {
+    // Generate embeddings for the batch
+    // Build text to embed from node properties (name + description/bio/summary)
+    const textsToEmbed = batch.map(node => {
+      const { name, description, bio, summary } = node.properties;
+      return `${name || ''}. ${description || bio || summary || ''}`.trim();
+    });
+
+    let embeddings = [];
+    try {
+      embeddings = await embeddingService.generateEmbeddingsBatch(textsToEmbed);
+      console.log(`[GraphRAG] Generated ${embeddings.length} embeddings for batch`);
+    } catch (err) {
+      console.warn('[GraphRAG] Batch embedding generation failed, continuing without embeddings:', err.message);
+      embeddings = new Array(batch.length).fill(null);
+    }
+
+    const operations = batch.map((node, idx) => {
+      // Add embedding to properties if available
+      const propsWithEmbedding = { ...node.properties };
+      if (embeddings[idx]) {
+        propsWithEmbedding.embedding = embeddings[idx];
+      }
+
       const { cypher, params } = buildMergeNode(
         node.nodeType,
         node.entityId,
-        node.properties,
-        node.properties // Use same properties for update
+        propsWithEmbedding,
+        propsWithEmbedding // Use same properties for update
       );
 
       console.log('[GraphRAG] Built operation:', {
         nodeType: node.nodeType,
         entityId: node.entityId,
+        hasEmbedding: !!embeddings[idx],
         cypher: cypher.substring(0, 150),
         params: JSON.stringify(params).substring(0, 200)
       });
@@ -247,6 +274,7 @@ async function createNodes(env, userId, nodes) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -341,6 +369,7 @@ async function createRelationships(env, userId, relationships) {
           port: parseInt(env.FALKORDB_PORT),
           username: env.FALKORDB_USER,
           password: env.FALKORDB_PASSWORD,
+          apiKey: env.FALKORDB_REST_API_KEY,
         },
       }),
     });
@@ -405,6 +434,7 @@ export async function updateNode(env, userId, entityId, properties) {
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+        apiKey: env.FALKORDB_REST_API_KEY,
       },
     }),
   });
@@ -441,6 +471,7 @@ export async function createRelationship(env, userId, fromEntityId, toEntityId, 
         port: parseInt(env.FALKORDB_PORT),
         username: env.FALKORDB_USER,
         password: env.FALKORDB_PASSWORD,
+        apiKey: env.FALKORDB_REST_API_KEY,
       },
     }),
   });
@@ -499,6 +530,7 @@ async function rollbackNodes(env, userId, nodeIds) {
             port: parseInt(env.FALKORDB_PORT),
             username: env.FALKORDB_USER,
             password: env.FALKORDB_PASSWORD,
+            apiKey: env.FALKORDB_REST_API_KEY,
           },
         }),
       });

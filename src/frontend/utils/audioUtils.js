@@ -177,7 +177,7 @@ export const createMediaRecorder = (stream, options = {}) => {
 
   try {
     return new MediaRecorder(stream, recorderOptions);
-  } catch (error) {
+  } catch (_error) {
     console.error('Failed to create MediaRecorder with options:', recorderOptions);
     // Fallback to default settings
     return new MediaRecorder(stream);

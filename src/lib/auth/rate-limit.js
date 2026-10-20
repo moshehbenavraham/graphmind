@@ -13,10 +13,7 @@
  *
  * @param {string} email - Email address to check
  * @param {Object} kv - Cloudflare KV namespace binding
- * @returns {Promise<Object>} Rate limit status
- * @returns {boolean} result.blocked - True if rate limited
- * @returns {number} [result.remainingAttempts] - Attempts remaining before block
- * @returns {number} [result.retryAfter] - Seconds until rate limit expires
+ * @returns {Promise<{blocked: boolean, remainingAttempts?: number, retryAfter?: number}>} Rate limit status
  *
  * Rate Limit: 5 attempts per 15 minutes (900 seconds)
  * KV Key: ratelimit:login:{email}
@@ -129,10 +126,7 @@ export async function resetLoginAttempts(email, kv) {
  *
  * @param {string} ip - IP address to check
  * @param {Object} kv - Cloudflare KV namespace binding
- * @returns {Promise<Object>} Rate limit status
- * @returns {boolean} result.blocked - True if rate limited
- * @returns {number} [result.remainingAttempts] - Attempts remaining before block
- * @returns {number} [result.retryAfter] - Seconds until rate limit expires
+ * @returns {Promise<{blocked: boolean, remainingAttempts?: number, retryAfter?: number}>} Rate limit status
  *
  * Rate Limit: 10 attempts per 1 hour (3600 seconds)
  * KV Key: ratelimit:register:{ip}
