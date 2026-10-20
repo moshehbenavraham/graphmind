@@ -97,3 +97,20 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
+
+  frontend-security:
+    name: Frontend Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Run npm audit (src/frontend)
+        working-directory: src/frontend
+        run: npm audit --audit-level=high
